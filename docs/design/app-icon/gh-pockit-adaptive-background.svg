@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+ <linearGradient id="bg" gradientUnits="userSpaceOnUse" x1="80" y1="0" x2="944" y2="1024">
+   <stop offset="0" stop-color="#E3906F"/><stop offset="1" stop-color="#BC5B39"/>
+ </linearGradient>
+ <radialGradient id="glow" gradientUnits="userSpaceOnUse" cx="270" cy="230" r="820">
+   <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.20"/>
+   <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+ </radialGradient>
+ <linearGradient id="pocket" gradientUnits="userSpaceOnUse" x1="512" y1="470" x2="512" y2="800">
+   <stop offset="0" stop-color="#F2F0E9"/><stop offset="1" stop-color="#E4E0D4"/>
+ </linearGradient>
+ <linearGradient id="card" gradientUnits="userSpaceOnUse" x1="512" y1="220" x2="512" y2="570">
+   <stop offset="0" stop-color="#F3E7CE"/><stop offset="1" stop-color="#DFCBA6"/>
+ </linearGradient>
+ <linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="512" y1="486" x2="512" y2="606">
+   <stop offset="0" stop-color="#000000" stop-opacity="0.20"/>
+   <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+ </linearGradient>
+ <clipPath id="clipPocket"><path d="M208,488 Q512,584 816,488 L816,700 Q816,792 724,792 L300,792 Q208,792 208,700 Z"/></clipPath>
+</defs><rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#glow)"/></svg>

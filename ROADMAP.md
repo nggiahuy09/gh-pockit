@@ -68,6 +68,8 @@ Timeline này chỉ hữu ích nếu bạn tin nó. Vài luật để nó không
 | ------------------------------------- | ------------------------------------------------------------------------ |
 | Flutter SDK                           | `3.35.6` (stable, Dart 3.9.2) — pin trong `.fvmrc`, `.fvm/` đã gitignore |
 | Dart SDK constraint                   | `^3.9.2` (`pubspec.yaml`)                                                |
+| App display name                       | **Pockit** (`android:label`, `CFBundleDisplayName`, `CFBundleName`)       |
+| App icon                              | Đã cài cho android + ios; nguồn chuẩn ở `docs/design/app-icon/`           |
 | Package name (pubspec)                | `ghpockit`                                                               |
 | Android `namespace` / `applicationId` | `com.nggiahuy.ghpockit`                                                  |
 | iOS `PRODUCT_BUNDLE_IDENTIFIER`       | `com.nggiahuy.ghpockit`                                                  |
