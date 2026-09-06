@@ -61,21 +61,27 @@ Timeline này chỉ hữu ích nếu bạn tin nó. Vài luật để nó không
 | T5             | `get_it` setup: `configureCoreDependencies()`, đăng ký `Clock`, `UuidGenerator`, `Logger` (3 abstraction này sẽ cứu bạn ở phần test sync)                   | ⬜                                                                      |
 | T6             | `go_router` shell + 5 route rỗng (`/home`, `/accounts`, `/transactions`, `/budgets`, `/settings`), bottom nav                                               | ⬜                                                                      |
 | Cuối tuần flex | `sealed class Failure` (Appendix B của blueprint), theme + design tokens, ADR-0001 draft                                                                    | ⬜                                                                      |
+| Ngoài kế hoạch | Chốt app name **Pockit** + cài app icon (android adaptive/themed + ios), lưu SVG master & spec vào `docs/design/app-icon/`                                  | ✅ Done                                                                 |
 
 ### Chốt hạ tầng T2 (06/09/2026)
 
-| Hạng mục                              | Giá trị                                                                  |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| Flutter SDK                           | `3.35.6` (stable, Dart 3.9.2) — pin trong `.fvmrc`, `.fvm/` đã gitignore |
-| Dart SDK constraint                   | `^3.9.2` (`pubspec.yaml`)                                                |
-| App display name                       | **Pockit** (`android:label`, `CFBundleDisplayName`, `CFBundleName`)       |
-| App icon                              | Đã cài cho android + ios; nguồn chuẩn ở `docs/design/app-icon/`           |
-| Package name (pubspec)                | `ghpockit`                                                               |
-| Android `namespace` / `applicationId` | `com.nggiahuy.ghpockit`                                                  |
-| iOS `PRODUCT_BUNDLE_IDENTIFIER`       | `com.nggiahuy.ghpockit`                                                  |
-| GitHub repo                           | `nggiahuy09/gh-pockit` (branch làm việc: `dev`)                          |
+| Hạng mục                              | Giá trị                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------ |
+| Flutter SDK                           | `3.35.6` (stable, Dart 3.9.2) — pin trong `.fvmrc`, `.fvm/` đã gitignore       |
+| Dart SDK constraint                   | `^3.9.2` (`pubspec.yaml`)                                                      |
+| App display name                      | **Pockit** (`android:label`, `CFBundleDisplayName`, `CFBundleName`)            |
+| App icon                              | android (adaptive + monochrome, 5 density) + ios (15 size, đã flatten alpha)   |
+| Nguồn icon                            | `docs/design/app-icon/` — SVG master + spec; input regenerate ở `assets/icon/` |
+| Package name (pubspec)                | `ghpockit`                                                                     |
+| Android `namespace` / `applicationId` | `com.nggiahuy.ghpockit`                                                        |
+| iOS `PRODUCT_BUNDLE_IDENTIFIER`       | `com.nggiahuy.ghpockit`                                                        |
+| GitHub repo                           | `nggiahuy09/gh-pockit` (branch làm việc: `dev`)                                |
 
 **Lệnh hằng ngày:** dùng `fvm flutter …` / `fvm dart …` để đảm bảo đúng version đã pin.
+
+**Tên vs id:** display name là **Pockit** (ngắn, không bị launcher cắt, khớp metaphor cái túi trong icon).
+Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này không cần trùng display name,
+đổi id về sau tốn công mà không được gì.
 
 **Deliverable:** app chạy, bottom nav hoạt động, CI badge xanh trong README.
 **Done khi:** `flutter analyze` = 0 issue, CI xanh, có ≥5 commit.
