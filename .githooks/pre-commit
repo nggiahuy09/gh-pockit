@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# Pre-commit gate for Pockit: format → analyze.
+# Tests are not run here (they only get slower over time) — that is CI's job in T4.
+#
+# Enable on a new machine (once per clone; git does not enable hooks for you):
+#   git config core.hooksPath .githooks
+#
+# Skip once when genuinely needed: git commit --no-verify
+
+set -e
+
+# Use the SDK pinned in .fvmrc when fvm is available; otherwise fall back to
+# whatever dart is on PATH (CI may not have fvm installed).
+if command -v fvm >/dev/null 2>&1; then
+  DART="fvm dart"
+else
+  DART="dart"
+fi
+
+fail() {
+  echo ""
+  echo "✗ pre-commit: $1"
+  echo "  Fix: $2"
+  echo ""
+  exit 1
+}
+
+# 1) Format. `--output=none` makes this a CHECK ONLY, never a rewrite — a hook
+# that rewrites files leaves unstaged changes behind, so the commit would not
+# match what you just read. To make the hook format for you instead of failing:
+# drop `--output=none` and add `git add -u` after that line.
+echo "→ dart format"
+$DART format --output=none --set-exit-if-changed . >/dev/null 2>&1 \
+  || fail "code is not formatted" "$DART format ."
+
+# 2) Analyze. `--fatal-infos` is MANDATORY: nearly all 209 very_good_analysis
+# rules report at `info` level, and `dart analyze` exits 0 when only infos are
+# present — without this flag the strict lint set blocks nothing.
+echo "→ dart analyze"
+$DART analyze --fatal-infos \
+  || fail "analyzer reported issues" "$DART fix --apply (or fix them by hand)"
+
+echo "✓ pre-commit ok"
