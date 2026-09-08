@@ -20,10 +20,12 @@ on:
   workflow_dispatch:
 
 # One run per ref. Pushing twice to a PR cancels the stale run instead of
-# queueing it — except on main, where every commit's result is kept.
+# queueing it — but never on `main` or `dev`: both are protected and `dev` is
+# where AB-test builds are cut from (CLAUDE.md §10), so every commit on them
+# must keep its own completed check result.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
 
 permissions:
   contents: read

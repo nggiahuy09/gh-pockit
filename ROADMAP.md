@@ -103,6 +103,7 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 | T5   | Domain: `Account` entity, `AccountType` enum, `AccountRepository` interface                                                                                     |
 | T6   | `AccountRepositoryImpl` + `AccountMapper` (row ↔ entity). Test mapper                                                                                           |
 | Flex | ADR-0001 _Use Drift as local source of truth_. Repository test với in-memory DB                                                                                 |
+| Flex | **Nợ từ W1 T4** — branch protection cho cả `main` và `dev` theo `CLAUDE.md` §10 (require PR + check `format → analyze → test`). Flow `dev` = staging đã định nghĩa xong ở §10 |
 
 **Done khi:** test `create → watchAccounts emit` pass.
 
