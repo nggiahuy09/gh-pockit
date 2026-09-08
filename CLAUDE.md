@@ -13,13 +13,13 @@ The goal is **not** "ship a working expense tracker". The goal is to prove the a
 
 So whenever there is a choice between:
 
-| High priority                   | Low priority       |
-| ------------------------------- | ------------------ |
-| A correct sync engine           | One more screen    |
-| Migration tests                 | Nice animations    |
-| Idempotency                     | Multi-currency     |
-| 50k-row benchmarks              | AI features        |
-| An ADR explaining the trade-off | Raw feature count  |
+| High priority                   | Low priority      |
+| ------------------------------- | ----------------- |
+| A correct sync engine           | One more screen   |
+| Migration tests                 | Nice animations   |
+| Idempotency                     | Multi-currency    |
+| 50k-row benchmarks              | AI features       |
+| An ADR explaining the trade-off | Raw feature count |
 
 → always take the left column.
 
@@ -70,12 +70,12 @@ flowchart TD
 
 ### Layer contract
 
-| Layer          | May contain                                                                                               | Must not contain                                |
-| -------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `presentation` | Page, Widget, BLoC/Cubit, UI model                                                                        | SQL, Dio, DTO, sync logic                       |
-| `domain`       | Entity, Value Object, Repository _interface_, UseCase, Failure                                            | Any Flutter import (ideally), DTO, Drift        |
-| `data`         | Repository impl, DAO, DTO, Mapper, RemoteDataSource                                                       | Widget, BuildContext                            |
-| `core`         | Database, network client, sync coordinator, logger, secure storage, `Clock`, `UuidGenerator`, connectivity | Business rules of any specific feature          |
+| Layer          | May contain                                                                                                | Must not contain                         |
+| -------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `presentation` | Page, Widget, BLoC/Cubit, UI model                                                                         | SQL, Dio, DTO, sync logic                |
+| `domain`       | Entity, Value Object, Repository _interface_, UseCase, Failure                                             | Any Flutter import (ideally), DTO, Drift |
+| `data`         | Repository impl, DAO, DTO, Mapper, RemoteDataSource                                                        | Widget, BuildContext                     |
+| `core`         | Database, network client, sync coordinator, logger, secure storage, `Clock`, `UuidGenerator`, connectivity | Business rules of any specific feature   |
 
 ### The three-model rule
 
@@ -174,16 +174,16 @@ acquire lock → push pending mutations → pull delta (cursor) → apply inside
 
 ## 8. Testing
 
-| Kind        | Required for                                                            |
-| ----------- | ----------------------------------------------------------------------- |
-| Unit        | Money, domain validation, retry policy, conflict resolver               |
-| Repository  | Every repository impl, using an in-memory Drift DB                      |
-| DB          | Aggregate queries, index behaviour                                      |
-| Migration   | **Every** schema version bump, with a fixture of the old DB             |
-| Sync engine | offline→online, app kill mid-sync, duplicate push, conflict, retry      |
-| BLoC        | `bloc_test` for non-trivial state machines                              |
-| Widget      | Loading/error/empty states                                              |
-| Integration | Golden path offline→sync→multi-device                                   |
+| Kind        | Required for                                                       |
+| ----------- | ------------------------------------------------------------------ |
+| Unit        | Money, domain validation, retry policy, conflict resolver          |
+| Repository  | Every repository impl, using an in-memory Drift DB                 |
+| DB          | Aggregate queries, index behaviour                                 |
+| Migration   | **Every** schema version bump, with a fixture of the old DB        |
+| Sync engine | offline→online, app kill mid-sync, duplicate push, conflict, retry |
+| BLoC        | `bloc_test` for non-trivial state machines                         |
+| Widget      | Loading/error/empty states                                         |
+| Integration | Golden path offline→sync→multi-device                              |
 
 Sync engine tests must use a **fake clock** and a **fake remote**, never a real `Future.delayed`.
 
@@ -278,13 +278,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 0 — Foundation**                                                                  |
-| Week                 | W1 (T3 done: strict lint + pre-commit hook)                                               |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`     |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match        |
-| Drift schema version | —                                                                                         |
-| Backend              | not set up yet                                                                            |
-| Latest ADR           | —                                                                                         |
-| Blocker              | —                                                                                         |
+| Field                | Value                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 0 — Foundation**                                                               |
+| Week                 | W1 (T4 done: CI format → analyze → test; branch protection still manual)               |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match    |
+| Drift schema version | —                                                                                      |
+| Backend              | not set up yet                                                                         |
+| Latest ADR           | —                                                                                      |
+| Blocker              | —                                                                                      |
