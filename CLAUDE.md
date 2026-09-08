@@ -223,11 +223,39 @@ flutter run --flavor dev --dart-define-from-file=env/dev.json
 
 ## 10. Git & PR
 
-- Branch: `feat/<epic>-<slug>`, `fix/…`, `chore/…`, `docs/adr-…`
+### Branch model
+
+| Branch      | Role                                                                                         | Receives                | Green        |
+| ----------- | -------------------------------------------------------------------------------------------- | ----------------------- | ------------ |
+| `main`      | Release. Tagged.                                                                             | PR from `dev` **only**  | always       |
+| `dev`       | **Staging / integration.** AB-test and manual-QA builds are cut from here.                   | PR from any work branch | always       |
+| work branch | The actual work. Naming: `task/W<n>`, `feat/<epic>-<slug>`, `fix/…`, `chore/…`, `docs/adr-…` | —                       | before merge |
+
+- **Nothing is pushed directly to `dev` or `main`.** Always a PR, always green CI.
+- A work branch never targets `main`. `main` only ever sees `dev`.
+- **Never rebase or force-push `dev` or `main`.** Both are shared, and `dev` is the ref an
+  AB-test build points at — rewriting it invalidates a build somebody is already testing.
+- `dev` is staging, not a scratchpad: it must stay green, because a red `dev` means there is
+  nothing to cut a test build from.
+
+### Merge strategy
+
+- work branch → `dev`: **merge commit** (`--no-ff`). The per-task commits are the deliverable
+  (one week = T2/T3/T4, each a distinct decision); squashing them into `chore: week N` destroys
+  exactly the history this repo exists to show.
+- `dev` → `main`: **merge commit**, then tag the release. Same reason one level up — a squash
+  here flattens a whole phase into one commit.
+- Squash is the **exception**, only for a genuinely messy WIP branch (a dozen `fix typo`
+  commits). Say so in the PR when you use it.
+
+### Rules
+
 - Commit: Conventional Commits (`feat(sync): add durable outbox`)
 - Every PR must have: **What / Why / Architecture impact / Screenshots / Testing / Risks**
-- Squash merge into `main`. `main` is always green.
-- CI gate: format → analyze → test → build.
+- CI gate: format → analyze → test → build. Runs on every PR into `main` / `dev` and on every
+  push to them (`.github/workflows/ci.yml`).
+- Branch protection required on **both** `main` and `dev`: require a PR, require the
+  `format → analyze → test` check, no force push, no deletion.
 
 ---
 
