@@ -1,28 +1,78 @@
-# This file configures the analyzer, which statically analyzes Dart code to
-# check for errors, warnings, and lints.
+# Lint config for Pockit.
 #
-# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
-# invoked from the command line by running `flutter analyze`.
+# Baseline: very_good_analysis (209 rules). A specific file version is included
+# instead of `package:very_good_analysis/analysis_options.yaml` so that bumping
+# the package cannot silently change the rule set — same version-pinning
+# principle as CLAUDE.md §5. Changing the baseline means changing the one line
+# below, which shows up as a clear diff in the PR.
+include: package:very_good_analysis/analysis_options.10.0.0.yaml
 
-# The following line activates a set of recommended lints for Flutter apps,
-# packages, and plugins designed to encourage good coding practices.
-include: package:flutter_lints/flutter.yaml
+formatter:
+  # Line width is decided in ONE place. `dart format` reads this key (Dart
+  # >=3.7), so the CLI, the hook and CI cannot drift apart. The editor reads
+  # `dart.lineLength` instead — `.vscode/settings.json` sets 180 to match.
+  # Never change one without the other.
+  page_width: 180
+
+analyzer:
+  exclude:
+    # Generated code: build_runner (freezed/json/drift/mocks) and the drift
+    # schema test helper. Not analyzed because we cannot edit generator output.
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/*.drift.dart"
+    - "**/*.mocks.dart"
+    - "lib/generated_plugin_registrant.dart"
+    - "test/core/database/generated/**"
+
+  errors:
+    # CLAUDE.md golden rule 9 — never log financial payloads. `print` is never
+    # the right way to log in this repo; raised to error so CI blocks it.
+    avoid_print: error
+
+    # Money is `int` minor units (golden rule 2). Implicit casts and calls on
+    # `dynamic` are the shortest path for a `double` to reach the domain layer.
+    avoid_dynamic_calls: error
+
+    # A missing `await` in sync/DB code means mutations commit out of order and
+    # crashes land mid-transaction. Too important to sit at info level.
+    unawaited_futures: error
+    discarded_futures: error
+
+    # If it is unused, delete it. Leftover imports and variables make the
+    # dependency direction (§3) hard to audit.
+    unused_import: error
+    unused_local_variable: error
+
+    # A TODO with no owner is a TODO nobody does.
+    flutter_style_todos: warning
+
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
 
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at https://dart.dev/lints.
-  #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # This is an app, not a package published to pub.dev. Requiring doc
+    # comments on every public member only leads to `// ignore_for_file`
+    # scattered across the repo. Doc comments are still written for hard domain
+    # logic — but that is a human decision, not an analyzer one.
+    public_member_api_docs: false
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+    # Directly contradicts `formatter.page_width: 180` above: the formatter
+    # produces lines up to 180 characters while this rule reports from
+    # character 81 onwards. Keeping both means the analyzer and the formatter
+    # fight forever.
+    #
+    # The rule is not a dependable guard either: as tested in this repo, a
+    # 113-character line with no string literal is reported, while a
+    # 109-character line whose string literal spans the 80-column mark is not.
+    # The real width guard is `dart format`.
+    lines_longer_than_80_chars: false
+
+    # Directly conflicts with CLAUDE.md §4: `Clock`, `UuidGenerator` and
+    # single-method repository interfaces are deliberate abstractions (so they
+    # can be faked in sync tests and registered in get_it). A function typedef
+    # cannot replace them.
+    one_member_abstracts: false

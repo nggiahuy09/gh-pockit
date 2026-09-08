@@ -1,0 +1,25 @@
+# GH Pockit — cấu hình flutter_launcher_icons.
+#
+# Icon đã được commit sẵn dưới dạng asset của từng platform (android/ios), nên
+# file này KHÔNG chạy trong flow build thường ngày và `flutter_launcher_icons`
+# KHÔNG nằm trong dev_dependencies. Chỉ dùng khi cần sinh lại toàn bộ icon sau
+# khi sửa `docs/design/app-icon/gh-pockit-icon.svg`:
+#
+#   dart pub add --dev flutter_launcher_icons
+#   dart run flutter_launcher_icons
+#   dart pub remove flutter_launcher_icons
+#
+# Chỉ khai báo android + ios: project không support macOS/Web/Windows
+# (xem CLAUDE.md §1 Platform).
+
+flutter_launcher_icons:
+  image_path: "assets/icon/gh-pockit-icon-1024.png"
+
+  android: "ic_launcher"
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/icon/adaptive-background.png"
+  adaptive_icon_foreground: "assets/icon/adaptive-foreground.png"
+  adaptive_icon_monochrome: "assets/icon/monochrome.png"
+
+  ios: true
+  remove_alpha_ios: true

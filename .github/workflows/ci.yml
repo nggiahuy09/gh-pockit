@@ -1,0 +1,73 @@
+# Pockit CI — the same quality gate as `.githooks/pre-commit`, plus tests.
+#
+# Order is deliberate and fail-fast: format → analyze → test.
+#   format first  — it is the cheapest check and the most common failure.
+#   analyze next  — a formatting diff would otherwise hide real lint errors.
+#   test last     — the slowest step; no point running it on code that does
+#                   not even pass the analyzer.
+#
+# `build` (CLAUDE.md §10) is intentionally NOT here yet: there is no app to
+# build beyond `flutter create` output and no Android flavors, so a build job
+# would only add ~5 minutes per run while asserting nothing. It gets added when
+# the dev/prod flavors land.
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+# One run per ref. Pushing twice to a PR cancels the stale run instead of
+# queueing it — except on main, where every commit's result is kept.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: format → analyze → test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Single source of truth for the SDK version: `.fvmrc`. CI must never
+      # hardcode 3.35.6 in parallel — that is exactly how the local SDK and the
+      # CI SDK drift apart and "works on my machine" starts.
+      - name: Read pinned Flutter version from .fvmrc
+        id: fvm
+        run: echo "version=$(jq -r .flutter .fvmrc)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Flutter ${{ steps.fvm.outputs.version }}
+        # Major tag on purpose: the action's own patches (cache handling, runner
+        # images) are wanted, while the thing that actually decides the build —
+        # the SDK version — is pinned above.
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.fvm.outputs.version }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # `--output=none` = check only, never rewrite. `--set-exit-if-changed`
+      # is what makes it fail; without it the command exits 0 and prints a diff
+      # nobody reads.
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed .
+
+      # `--fatal-infos` is MANDATORY: nearly all 209 very_good_analysis rules
+      # report at `info` level and `dart analyze` exits 0 on infos alone, so
+      # dropping this flag turns the strict lint set into decoration.
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Test
+        run: flutter test --reporter expanded
