@@ -34,6 +34,14 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # DI container (CLAUDE.md §5). Exact version, no caret: an unattended minor bump of the thing that wires the whole object graph is not something we
+  # want to discover from a red CI run.
+  get_it: 9.2.1
+
+  # Client-side ID generation (golden rule 4 — IDs never come from the server). Wrapped behind `UuidGenerator` in core/utils so the package never appears
+  # outside its one implementation file. See docs/adr/0001.
+  uuid: 4.6.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
