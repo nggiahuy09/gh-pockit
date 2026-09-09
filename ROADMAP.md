@@ -58,9 +58,9 @@ Timeline này chỉ hữu ích nếu bạn tin nó. Vài luật để nó không
 | T2             | `flutter create`, pin Flutter/Dart SDK vào `.fvmrc`, set package name, tạo repo GitHub, push commit đầu                                                     | ✅ Done                                                                 |
 | T3             | `analysis_options.yaml` strict (very_good_analysis hoặc custom), `dart format` hook, tạo `docs/` + copy blueprint vào `docs/blueprint.md`, copy `CLAUDE.md` | ✅ Done — `very_good_analysis` 10.0.0 + override, `.githooks/pre-commit` (format + analyze) |
 | T4             | GitHub Actions: format → analyze → test. Bật branch protection cho `main`                                                                                   | ✅ CI xong — `.github/workflows/ci.yml`; branch protection phải bật tay (checklist ở README §CI) |
-| T5             | `get_it` setup: `configureCoreDependencies()`, đăng ký `Clock`, `UuidGenerator`, `Logger` (3 abstraction này sẽ cứu bạn ở phần test sync)                   | ⬜                                                                      |
+| T5             | `get_it` setup: `configureCoreDependencies()`, đăng ký `Clock`, `UuidGenerator`, `Logger` (3 abstraction này sẽ cứu bạn ở phần test sync)                   | ✅ Done — `lib/app/di/injector.dart` + `bootstrap.dart`; v7 monotonic counter (ADR-0002), redaction bắt buộc trong `GPAppLogger.log`; prefix `GP` cho core type (CLAUDE.md §3) |
 | T6             | `go_router` shell + 5 route rỗng (`/home`, `/accounts`, `/transactions`, `/budgets`, `/settings`), bottom nav                                               | ⬜                                                                      |
-| Cuối tuần flex | `sealed class Failure` (Appendix B của blueprint), theme + design tokens, ADR-0001 draft                                                                    | ⬜                                                                      |
+| Cuối tuần flex | `sealed class Failure` (Appendix B của blueprint), theme + design tokens, ADR-0001 draft, **bật branch protection cho `dev`** (nợ T4 — `main` đã bật; `dev` là staging cut build AB-test nên phải require PR + check `format → analyze → test`, chặn force-push, theo `CLAUDE.md` §10) | ⬜                                                                      |
 | Ngoài kế hoạch | Chốt app name **Pockit** + cài app icon (android adaptive/themed + ios), lưu SVG master & spec vào `docs/design/app-icon/`                                  | ✅ Done                                                                 |
 
 ### Chốt hạ tầng T2 (06/09/2026)
@@ -103,7 +103,6 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 | T5   | Domain: `Account` entity, `AccountType` enum, `AccountRepository` interface                                                                                     |
 | T6   | `AccountRepositoryImpl` + `AccountMapper` (row ↔ entity). Test mapper                                                                                           |
 | Flex | ADR-0001 _Use Drift as local source of truth_. Repository test với in-memory DB                                                                                 |
-| Flex | **Nợ từ W1 T4** — branch protection cho cả `main` và `dev` theo `CLAUDE.md` §10 (require PR + check `format → analyze → test`). Flow `dev` = staging đã định nghĩa xong ở §10 |
 
 **Done khi:** test `create → watchAccounts emit` pass.
 
