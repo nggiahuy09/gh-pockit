@@ -34,6 +34,11 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Material's own localized widgets — date picker month names, the Cut/Copy/Paste menu, `MaterialLocalizations` in general. Ships with the SDK, so it
+  # is not a third-party dependency. Without it a Vietnamese user still gets an English date picker on every transaction. See docs/adr/0004.
+  flutter_localizations:
+    sdk: flutter
+
   # DI container (CLAUDE.md §5). Exact version, no caret: an unattended minor bump of the thing that wires the whole object graph is not something we
   # want to discover from a red CI run.
   get_it: 9.2.1

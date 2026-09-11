@@ -106,7 +106,7 @@ Why only `core/`: those are the types shared by every feature, and the ones whos
 ```
 lib/
 ├── app/            # app.dart, bootstrap.dart, router/, theme/, di/
-├── core/           # database/ network/ sync/ security/ error/ logging/ utils/ widgets/
+├── core/           # database/ network/ sync/ security/ error/ logging/ localization/ utils/ widgets/
 ├── features/
 │   ├── auth/       # data/ domain/ presentation/
 │   ├── accounts/
@@ -115,7 +115,7 @@ lib/
 │   │   ├── domain/        # entities/ repositories/ usecases/
 │   │   └── presentation/  # bloc/ pages/ widgets/
 │   ├── categories/ budgets/ analytics/ receipts/ recurring/ settings/
-│   ├── dashboard/  # /home — tổng quan số dư + giao dịch gần đây (blueprint §7.1), tách khỏi analytics/ (biểu đồ, P6)
+│   ├── dashboard/  # /home — balances + recent transactions (blueprint §7.1); separate from analytics/ (charts, P6)
 └── main.dart
 
 test/               # mirrors the lib/ structure
@@ -136,6 +136,7 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | Concern        | Package                                 | Version snapshot 2026-09-06 |
 | -------------- | --------------------------------------- | --------------------------- |
 | Navigation     | `go_router`                             | 17.2.3 ⚠️                   |
+| Localization   | hand-written + `flutter_localizations`  | SDK (ADR-0004)              |
 | State          | `flutter_bloc`                          | 9.1.1                       |
 | DI             | `get_it`                                | 9.2.1                       |
 | Local DB       | `drift` + `drift_flutter`               | 2.34.x / 0.3.x              |
@@ -151,6 +152,8 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | OCR            | `google_mlkit_text_recognition`         | 0.17.1                      |
 | Crash          | `sentry_flutter`                        | 9.29.0                      |
 | Test           | `mocktail` 1.0.5, `bloc_test`, `patrol` | —                           |
+
+**Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
 **Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and two rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12) and `very_good_analysis` (11.0.0 needs ≥3.10). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
 
@@ -335,10 +338,10 @@ A feature is Done only when **all** of these hold:
 | Field                | Value                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------- |
 | Current phase        | **Phase 0 — Foundation**                                                               |
-| Week                 | W1 (T6 done: `go_router` shell — 5 tab, stateful branch, deep link)                    |
+| Week                 | W1 (T6 done + hand-written EN/VI localization, unplanned)                              |
 | Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` |
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match    |
 | Drift schema version | —                                                                                      |
 | Backend              | not set up yet                                                                         |
-| Latest ADR           | 0003 — bottom nav trên `StatefulShellRoute.indexedStack` (state per tab, deep link)    |
+| Latest ADR           | 0004 — hand-written EN/VI localization; `Failure` carries a type, not a message        |
 | Blocker              | —                                                                                      |
