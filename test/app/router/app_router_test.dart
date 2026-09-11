@@ -3,11 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
+import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
+
+import '../../helpers/localization_harness.dart';
 
 /// Taps a bottom-navigation destination by its label.
 ///
@@ -21,14 +24,14 @@ Future<void> tapTab(WidgetTester tester, String label) async {
 void main() {
   group('shell', () {
     testWidgets('starts on Home', (WidgetTester tester) async {
-      await tester.pumpWidget(const GPApp());
+      await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       expect(find.byType(HomePage), findsOneWidget);
     });
 
     testWidgets('renders one destination per tab, in branch order', (WidgetTester tester) async {
-      await tester.pumpWidget(const GPApp());
+      await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
@@ -43,7 +46,7 @@ void main() {
     });
 
     testWidgets('each tab opens its page and marks itself selected', (WidgetTester tester) async {
-      await tester.pumpWidget(const GPApp());
+      await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       final tabs = <String, Type>{
@@ -68,7 +71,7 @@ void main() {
   group('deep link', () {
     testWidgets('opening a tab path directly renders that page with the right tab selected', (WidgetTester tester) async {
       // The case a hand-rolled `int _currentTab` gets wrong: the OS hands the app a path, and nothing taps anything.
-      await tester.pumpWidget(const GPApp(initialLocation: Routes.budgets));
+      await tester.pumpWidget(GPApp(initialLocation: Routes.budgets, localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       expect(find.byType(BudgetsPage), findsOneWidget);
@@ -76,7 +79,7 @@ void main() {
     });
 
     testWidgets('an unknown path does not take the shell down', (WidgetTester tester) async {
-      await tester.pumpWidget(const GPApp(initialLocation: '/nope'));
+      await tester.pumpWidget(GPApp(initialLocation: '/nope', localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       // go_router's default error page. Asserted so that replacing it with a real 404 screen later is a deliberate, visible change.
@@ -89,7 +92,7 @@ void main() {
     testWidgets('a visited tab stays alive after switching away', (WidgetTester tester) async {
       // This is the entire reason for StatefulShellRoute.indexedStack over a plain ShellRoute (ADR-0003). A plain ShellRoute has one Navigator for
       // all five tabs, so leaving Budgets would dispose its subtree — and in W5–W6 that means losing an open detail page and its scroll position.
-      await tester.pumpWidget(const GPApp());
+      await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       await tapTab(tester, 'Budgets');
@@ -103,7 +106,7 @@ void main() {
 
     testWidgets('an unvisited tab is never built', (WidgetTester tester) async {
       // Lazy branches: five tabs must not mean five database subscriptions on the first frame.
-      await tester.pumpWidget(const GPApp());
+      await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
       expect(find.byType(SettingsPage, skipOffstage: false), findsNothing);

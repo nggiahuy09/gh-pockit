@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
+import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:go_router/go_router.dart';
 
 /// One tab of the bottom navigation.
@@ -9,7 +11,8 @@ import 'package:go_router/go_router.dart';
 class ShellTab {
   const ShellTab({required this.label, required this.icon, required this.selectedIcon});
 
-  final String label;
+  /// Reads this tab's label off the active strings, rather than holding one. A tab outlives a language change, the string does not.
+  final String Function(GPLocaleBaseRootBottomNav) label;
   final IconData icon;
   final IconData selectedIcon;
 }
@@ -17,12 +20,19 @@ class ShellTab {
 /// The five tabs, in branch order. Changing this order changes which branch index each tab maps to — keep it in sync with the branch list in
 /// `app_router.dart`.
 const List<ShellTab> shellTabs = <ShellTab>[
-  ShellTab(label: 'Home', icon: Icons.home_outlined, selectedIcon: Icons.home),
-  ShellTab(label: 'Accounts', icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet),
-  ShellTab(label: 'Transactions', icon: Icons.swap_vert_outlined, selectedIcon: Icons.swap_vert),
-  ShellTab(label: 'Budgets', icon: Icons.pie_chart_outline, selectedIcon: Icons.pie_chart),
-  ShellTab(label: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings),
+  ShellTab(label: _homeLabel, icon: Icons.home_outlined, selectedIcon: Icons.home),
+  ShellTab(label: _accountsLabel, icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet),
+  ShellTab(label: _transactionsLabel, icon: Icons.swap_vert_outlined, selectedIcon: Icons.swap_vert),
+  ShellTab(label: _budgetsLabel, icon: Icons.pie_chart_outline, selectedIcon: Icons.pie_chart),
+  ShellTab(label: _settingsLabel, icon: Icons.settings_outlined, selectedIcon: Icons.settings),
 ];
+
+// Top-level functions so `shellTabs` stays `const`: a tear-off is a constant, a closure is not.
+String _homeLabel(GPLocaleBaseRootBottomNav nav) => nav.home;
+String _accountsLabel(GPLocaleBaseRootBottomNav nav) => nav.accounts;
+String _transactionsLabel(GPLocaleBaseRootBottomNav nav) => nav.transactions;
+String _budgetsLabel(GPLocaleBaseRootBottomNav nav) => nav.budgets;
+String _settingsLabel(GPLocaleBaseRootBottomNav nav) => nav.settings;
 
 /// The persistent chrome around every tab: the bottom navigation bar, and the branch [Navigator] currently on screen.
 ///
@@ -41,14 +51,18 @@ class AppShell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: navigationShell,
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: navigationShell.currentIndex,
-      onDestinationSelected: _onDestinationSelected,
-      destinations: <Widget>[
-        for (final ShellTab tab in shellTabs) NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selectedIcon), label: tab.label),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final nav = context.l10n.root.bottomNav;
+
+    return Scaffold(
+      body: navigationShell,
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: navigationShell.currentIndex,
+        onDestinationSelected: _onDestinationSelected,
+        destinations: <Widget>[
+          for (final ShellTab tab in shellTabs) NavigationDestination(icon: Icon(tab.icon), selectedIcon: Icon(tab.selectedIcon), label: tab.label(nav)),
+        ],
+      ),
+    );
+  }
 }

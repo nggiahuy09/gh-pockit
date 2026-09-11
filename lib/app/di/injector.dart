@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
+import 'package:ghpockit/core/localization/locale_store.dart';
+import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
 import 'package:ghpockit/core/utils/clock.dart';
@@ -32,5 +34,9 @@ void configureCoreDependencies({GetIt? container}) {
     ..registerLazySingleton<GPAppLogger>(
       // Debug lines are useful while developing and are noise (and a leak risk) in a shipped build, so the filter is set once, here.
       () => GPDeveloperLogger(clock: c<GPClock>(), minLevel: kReleaseMode ? GPLogLevel.info : GPLogLevel.debug),
-    );
+    )
+    // In-memory until W2 gives us a Drift `settings` table; swapping the implementation is the only change needed then (ADR-0004).
+    ..registerLazySingleton<GPLocaleStore>(GPInMemoryLocaleStore.new)
+    // Singleton, not a factory: it is the one object holding the active language, and a second instance would leave half the tree in the old one.
+    ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
 }

@@ -2,6 +2,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:ghpockit/app/di/injector.dart';
+import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 
 /// Single startup path for every flavor and entry point.
@@ -33,6 +34,9 @@ Future<void> bootstrap(Widget Function() builder) async {
     // `true` = handled; returning false would re-report it to the platform and duplicate every line once Sentry is wired in P7.
     return true;
   };
+
+  // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
+  await getIt<GPLocalization>().init(deviceLocale: PlatformDispatcher.instance.locale);
 
   logger.info('app bootstrapped');
   runApp(builder());
