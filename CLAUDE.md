@@ -115,6 +115,7 @@ lib/
 │   │   ├── domain/        # entities/ repositories/ usecases/
 │   │   └── presentation/  # bloc/ pages/ widgets/
 │   ├── categories/ budgets/ analytics/ receipts/ recurring/ settings/
+│   ├── dashboard/  # /home — tổng quan số dư + giao dịch gần đây (blueprint §7.1), tách khỏi analytics/ (biểu đồ, P6)
 └── main.dart
 
 test/               # mirrors the lib/ structure
@@ -134,7 +135,7 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 
 | Concern        | Package                                 | Version snapshot 2026-09-06 |
 | -------------- | --------------------------------------- | --------------------------- |
-| Navigation     | `go_router`                             | 18.0.1                      |
+| Navigation     | `go_router`                             | 17.2.3 ⚠️                   |
 | State          | `flutter_bloc`                          | 9.1.1                       |
 | DI             | `get_it`                                | 9.2.1                       |
 | Local DB       | `drift` + `drift_flutter`               | 2.34.x / 0.3.x              |
@@ -150,6 +151,8 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | OCR            | `google_mlkit_text_recognition`         | 0.17.1                      |
 | Crash          | `sentry_flutter`                        | 9.29.0                      |
 | Test           | `mocktail` 1.0.5, `bloc_test`, `patrol` | —                           |
+
+**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and two rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12) and `very_good_analysis` (11.0.0 needs ≥3.10). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
 
 **Drift note:** do NOT add `sqlite3_flutter_libs` as older tutorials suggest — it is EOL in the current setup. Use the native `drift_flutter` setup. For encryption, use the SQLite3MultipleCiphers build hook if needed.
 
@@ -332,10 +335,10 @@ A feature is Done only when **all** of these hold:
 | Field                | Value                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------- |
 | Current phase        | **Phase 0 — Foundation**                                                               |
-| Week                 | W1 (T5 done: `get_it` core DI — `GPClock`, `GPUuidGenerator`, `GPAppLogger`)           |
+| Week                 | W1 (T6 done: `go_router` shell — 5 tab, stateful branch, deep link)                    |
 | Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` |
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match    |
 | Drift schema version | —                                                                                      |
 | Backend              | not set up yet                                                                         |
-| Latest ADR           | 0002 — client-generated UUIDs (v7 + monotonic counter for keys, v4 for idempotency)    |
+| Latest ADR           | 0003 — bottom nav trên `StatefulShellRoute.indexedStack` (state per tab, deep link)    |
 | Blocker              | —                                                                                      |

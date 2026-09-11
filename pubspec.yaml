@@ -38,6 +38,10 @@ dependencies:
   # want to discover from a red CI run.
   get_it: 9.2.1
 
+  # Navigation (CLAUDE.md §5). Exact version, same reason as `get_it`: the router is the one place that decides which widget the OS deep link lands
+  # on, and a minor bump silently changing redirect or shell semantics is not something we want to meet in CI.
+  go_router: 17.2.3
+
   # Client-side ID generation (golden rule 4 — IDs never come from the server). Wrapped behind `UuidGenerator` in core/utils so the package never appears
   # outside its one implementation file. See docs/adr/0001.
   uuid: 4.6.0
