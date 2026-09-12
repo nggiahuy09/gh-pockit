@@ -5,8 +5,8 @@
 Accepted — 2026-09-09 (W1 T5)
 
 > Numbered 0002 to match the slot Appendix E of `docs/blueprint.md` reserves for
-> this decision. ADR 0001 (_Use Drift as local source of truth_) is planned for
-> W2 and is not written yet.
+> this decision. ADR 0001 (_Use Drift as local source of truth_) was drafted in
+> W1 flex and is accepted in W2, once an `AppDatabase` exists to accept it.
 
 ## Context
 
@@ -67,7 +67,7 @@ turns the 50k-row benchmark in P2 into a problem, and they give no ordering to
 fall back on when two rows share an `occurred_at`.
 
 **Plain `package:uuid` v7, no counter.** What the package ships: all 74 free
-bits random. RFC 9562 compliant, and it orders IDs only *between*
+bits random. RFC 9562 compliant, and it orders IDs only _between_
 milliseconds — two IDs created in the same tick sort at random. That is not a
 corner case here: a bulk insert, a sync pull applying a page, and the seed of
 default categories all create many rows inside one millisecond. Rejected once

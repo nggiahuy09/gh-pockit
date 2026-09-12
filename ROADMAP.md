@@ -26,7 +26,7 @@ Timeline này chỉ hữu ích nếu bạn tin nó. Vài luật để nó không
 - 🟢 = nice-to-have, cắt được
 - 🎄🧧 = tuần lễ/Tết, tải nhẹ có chủ đích
 
-> **Số ADR không đặt trước.** Số được cấp tuần tự lúc ADR thật sự được viết, theo `docs/adr/` — các dòng dưới chỉ ghi *tiêu đề* dự kiến. Ngoại lệ duy nhất là **0001** (_Use Drift_), một lỗ trống cố ý đã ghi trong header ADR-0002. Đặt trước số chính là cách W1 lấy mất slot 0003/0004 vốn dành cho outbox và soft-delete.
+> **Số ADR không đặt trước.** Số được cấp tuần tự lúc ADR thật sự được viết, theo `docs/adr/` — các dòng dưới chỉ ghi _tiêu đề_ dự kiến. Ngoại lệ duy nhất là **0001** (_Use Drift_), một lỗ trống cố ý đã ghi trong header ADR-0002. Đặt trước số chính là cách W1 lấy mất slot 0003/0004 vốn dành cho outbox và soft-delete.
 
 ---
 
@@ -55,16 +55,16 @@ Timeline này chỉ hữu ích nếu bạn tin nó. Vài luật để nó không
 
 **Mục tiêu:** repo chạy được, CI xanh, DI + router + theme + error abstraction xong. Chưa có feature nào.
 
-| Ngày           | Task (1–2h)                                                                                                                                                                                                                                                                            | Trạng thái                                                                                                                                                                                          |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2             | `flutter create`, pin Flutter/Dart SDK vào `.fvmrc`, set package name, tạo repo GitHub, push commit đầu                                                                                                                                                                                | ✅ Done                                                                                                                                                                                             |
-| T3             | `analysis_options.yaml` strict (very_good_analysis hoặc custom), `dart format` hook, tạo `docs/` + copy blueprint vào `docs/blueprint.md`, copy `CLAUDE.md`                                                                                                                            | ✅ Done — `very_good_analysis` 10.0.0 + override, `.githooks/pre-commit` (format + analyze)                                                                                                         |
-| T4             | GitHub Actions: format → analyze → test. Bật branch protection cho `main`                                                                                                                                                                                                              | ✅ CI xong — `.github/workflows/ci.yml`; branch protection phải bật tay (checklist ở README §CI)                                                                                                    |
-| T5             | `get_it` setup: `configureCoreDependencies()`, đăng ký `Clock`, `UuidGenerator`, `Logger` (3 abstraction này sẽ cứu bạn ở phần test sync)                                                                                                                                              | ✅ Done — `lib/app/di/injector.dart` + `bootstrap.dart`; v7 monotonic counter (ADR-0002), redaction bắt buộc trong `GPAppLogger.log`; prefix `GP` cho core type (CLAUDE.md §3)                      |
-| T6             | `go_router` shell + 5 route rỗng (`/home`, `/accounts`, `/transactions`, `/budgets`, `/settings`), bottom nav                                                                                                                                                                          | ✅ Done — `StatefulShellRoute.indexedStack` (ADR-0003), `lib/app/router/`; `go_router` **17.2.3** chứ không phải 18.0.1 (18.x cần Dart ≥3.12, ta pin 3.9.2); `/home` nằm ở feature mới `dashboard/` |
-| Cuối tuần flex | `sealed class Failure` (Appendix B của blueprint, **trừ** `ValidationFailure(this.message)` — ADR-0004 bác: Failure mang type, message do presentation map sang `l10n.error.*`), theme + design tokens, ADR-0001 draft, **bật branch protection cho `dev`** (nợ T4 — `main` đã bật; `dev` là staging cut build AB-test nên phải require PR + check `format → analyze → test`, chặn force-push, theo `CLAUDE.md` §10) | ⬜                                                                                                                                                                                                  |
-| Ngoài kế hoạch | Chốt app name **Pockit** + cài app icon (android adaptive/themed + ios), lưu SVG master & spec vào `docs/design/app-icon/`                                                                                                                                                             | ✅ Done                                                                                                                                                                                             |
-| Ngoài kế hoạch | **Localization EN/VI** — `core/localization/` viết tay (ADR-0004), `flutter_localizations`, language picker trong Settings. Làm sớm vì `Failure` (W1 flex), seed category (W3 T5) và `Money` (W3) đều bake sẵn câu trả lời nếu không chốt trước                                        | ✅ Done                                                                                                                                                                                             |
+| Ngày           | Task (1–2h)                                                                                                                                                                                                                                                                                                                                                                                                          | Trạng thái                                                                                                                                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2             | `flutter create`, pin Flutter/Dart SDK vào `.fvmrc`, set package name, tạo repo GitHub, push commit đầu                                                                                                                                                                                                                                                                                                              | ✅ Done                                                                                                                                                                                                                      |
+| T3             | `analysis_options.yaml` strict (very_good_analysis hoặc custom), `dart format` hook, tạo `docs/` + copy blueprint vào `docs/blueprint.md`, copy `CLAUDE.md`                                                                                                                                                                                                                                                          | ✅ Done — `very_good_analysis` 10.0.0 + override, `.githooks/pre-commit` (format + analyze)                                                                                                                                  |
+| T4             | GitHub Actions: format → analyze → test. Bật branch protection cho `main`                                                                                                                                                                                                                                                                                                                                            | ✅ CI xong — `.github/workflows/ci.yml`; branch protection phải bật tay (checklist ở README §CI)                                                                                                                             |
+| T5             | `get_it` setup: `configureCoreDependencies()`, đăng ký `Clock`, `UuidGenerator`, `Logger` (3 abstraction này sẽ cứu bạn ở phần test sync)                                                                                                                                                                                                                                                                            | ✅ Done — `lib/app/di/injector.dart` + `bootstrap.dart`; v7 monotonic counter (ADR-0002), redaction bắt buộc trong `GPAppLogger.log`; prefix `GP` cho core type (CLAUDE.md §3)                                               |
+| T6             | `go_router` shell + 5 route rỗng (`/home`, `/accounts`, `/transactions`, `/budgets`, `/settings`), bottom nav                                                                                                                                                                                                                                                                                                        | ✅ Done — `StatefulShellRoute.indexedStack` (ADR-0003), `lib/app/router/`; `go_router` **17.2.3** chứ không phải 18.0.1 (18.x cần Dart ≥3.12, ta pin 3.9.2); `/home` nằm ở feature mới `dashboard/`                          |
+| Cuối tuần flex | `sealed class Failure` (Appendix B của blueprint, **trừ** `ValidationFailure(this.message)` — ADR-0004 bác: Failure mang type, message do presentation map sang `l10n.error.*`), theme + design tokens, ADR-0001 draft, **bật branch protection cho `dev`** (nợ T4 — `main` đã bật; `dev` là staging cut build AB-test nên phải require PR + check `format → analyze → test`, chặn force-push, theo `CLAUDE.md` §10) | 🟨 3/4 — `GPFailure` (ADR-0004 shape, no `message`), theme + design tokens (ADR-0005, palette Claude/Anthropic, port từ `ngh09_ui_kit@dev`), ADR-0001 draft xong. **Còn: branch protection cho `dev`** — set tay trên GitHub |
+| Ngoài kế hoạch | Chốt app name **Pockit** + cài app icon (android adaptive/themed + ios), lưu SVG master & spec vào `docs/design/app-icon/`                                                                                                                                                                                                                                                                                           | ✅ Done                                                                                                                                                                                                                      |
+| Ngoài kế hoạch | **Localization EN/VI** — `core/localization/` viết tay (ADR-0004), `flutter_localizations`, language picker trong Settings. Làm sớm vì `Failure` (W1 flex), seed category (W3 T5) và `Money` (W3) đều bake sẵn câu trả lời nếu không chốt trước                                                                                                                                                                      | ✅ Done                                                                                                                                                                                                                      |
 
 ### Chốt hạ tầng T2 (06/09/2026)
 
@@ -105,21 +105,21 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 | T4   | `AccountDao`: insert / update / `watchAccounts()` / `archive()`                                                                                                 |
 | T5   | Domain: `Account` entity, `AccountType` enum, `AccountRepository` interface                                                                                     |
 | T6   | `AccountRepositoryImpl` + `AccountMapper` (row ↔ entity). Test mapper                                                                                           |
-| Flex | ADR-0001 _Use Drift as local source of truth_. Repository test với in-memory DB                                                                                |
-| Flex | Nợ từ W1: bảng `settings` local-only + `GPDriftLocaleStore` thay `GPInMemoryLocaleStore` (ADR-0004). Chưa làm = ngôn ngữ user chọn không sống qua restart  |
+| Flex | ADR-0001 _Use Drift as local source of truth_. Repository test với in-memory DB                                                                                 |
+| Flex | Nợ từ W1: bảng `settings` local-only + `GPDriftLocaleStore` thay `GPInMemoryLocaleStore` (ADR-0004). Chưa làm = ngôn ngữ user chọn không sống qua restart       |
 
 **Done khi:** test `create → watchAccounts emit` pass.
 
 ## W3 · 21–27/09 🔴 Money + Category
 
-| Ngày | Task                                                                                  |
-| ---- | ------------------------------------------------------------------------------------- |
-| T2   | `Money` value object: `minorUnits` + `currencyCode`, `add/subtract/compare`           |
-| T3   | Test `Money` kỹ: cộng khác currency phải throw, format VND vs USD, số âm, số lớn      |
+| Ngày | Task                                                                                                                                                                                                        |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | `Money` value object: `minorUnits` + `currencyCode`, `add/subtract/compare`                                                                                                                                 |
+| T3   | Test `Money` kỹ: cộng khác currency phải throw, format VND vs USD, số âm, số lớn                                                                                                                            |
 | T4   | `MoneyFormatter` dùng `intl` (promote từ transitive lên direct dep, pin cứng); format **và parse** theo locale đang bật — `1.234,56` vs `1,234.56`; `CurrencyCode` catalog (VND exponent 0, USD exponent 2) |
-| T5   | Drift table `categories` + `CategoryDao` + seed default categories (is_system = true). Tên lưu `name_key` (`category.food`) chứ không lưu text đã dịch, cột `name` do user sửa thì thắng — ADR-0004 |
-| T6   | Domain `Category` + repository + mapper + test                                        |
-| Flex | ADR _Store money as integer minor units_. UI list accounts thô (chưa cần đẹp)    |
+| T5   | Drift table `categories` + `CategoryDao` + seed default categories (is_system = true). Tên lưu `name_key` (`category.food`) chứ không lưu text đã dịch, cột `name` do user sửa thì thắng — ADR-0004         |
+| T6   | Domain `Category` + repository + mapper + test                                                                                                                                                              |
+| Flex | ADR _Store money as integer minor units_. UI list accounts thô (chưa cần đẹp)                                                                                                                               |
 
 **Done khi:** không còn `double` nào liên quan tới tiền trong codebase.
 
@@ -190,13 +190,13 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 
 ## W9 · 02–08/11 🔴 Migration
 
-| Ngày | Task                                                                                                        |
-| ---- | ----------------------------------------------------------------------------------------------------------- |
-| T2   | Setup `drift_dev schema dump` workflow, export schema v1                                                    |
-| T3   | Migration v1→v2: thêm `transactions.receipt_id`                                                             |
-| T4   | Migration v2→v3: thêm `version` + `deleted_at` (backfill giá trị mặc định)                                  |
-| T5   | Migration test với fixture DB v1 → assert data cũ còn nguyên                                                |
-| T6   | Đưa migration test vào CI                                                                                   |
+| Ngày | Task                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------ |
+| T2   | Setup `drift_dev schema dump` workflow, export schema v1                                               |
+| T3   | Migration v1→v2: thêm `transactions.receipt_id`                                                        |
+| T4   | Migration v2→v3: thêm `version` + `deleted_at` (backfill giá trị mặc định)                             |
+| T5   | Migration test với fixture DB v1 → assert data cũ còn nguyên                                           |
+| T6   | Đưa migration test vào CI                                                                              |
 | Flex | ADR _Soft delete for synchronized entities_. Viết checklist "khi đổi schema phải làm gì" vào CLAUDE.md |
 
 **🏁 Milestone P2:** DB đủ chất lượng production. **Tag `v0.2-db`.**
@@ -214,7 +214,7 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 | T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** |
 | T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                             |
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                      |
-| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`                                         |
+| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`                                              |
 
 ## W11 · 16–22/11 🔴 Auth client
 
@@ -244,7 +244,7 @@ Bundle id / repo giữ `com.nggiahuy.ghpockit` / `gh-pockit` — hai thứ này 
 | T4   | `SyncQueueRepository`: enqueue / getReadyMutations / complete / scheduleRetry / markConflict                                    |
 | T5   | **Nối outbox vào repository write path**: insert entity + insert mutation trong CÙNG `database.transaction()`                   |
 | T6   | Test invariant: entity tồn tại & cần sync ⇒ mutation tồn tại. Test crash giữa chừng (throw trong transaction → rollback cả hai) |
-| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item                                            |
+| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item                                                 |
 
 ## W13 · 30/11–06/12 🔴 Push
 
@@ -315,7 +315,7 @@ Tuần catch-up. Nếu đang on-track: viết `docs/system-design.md` phiên b�
 | T4   | Test kịch bản: request tới server thành công nhưng client timeout → retry → server **không** tạo bản ghi thứ hai |
 | T5   | Single-flight lock cho `synchronize()`                                                                           |
 | T6   | Test: 3 trigger đồng thời (resume + connectivity + manual) chỉ chạy 1 sync                                       |
-| Flex | ADR _Version-based conflict detection_                                                                      |
+| Flex | ADR _Version-based conflict detection_                                                                           |
 
 ## W19 · 11–17/01 🔴 Retry + recovery
 
@@ -330,14 +330,14 @@ Tuần catch-up. Nếu đang on-track: viết `docs/system-design.md` phiên b�
 
 ## W20 · 18–24/01 🟡 Conflict
 
-| Ngày | Task                                                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------- |
-| T2   | Server phát hiện conflict: `UPDATE ... WHERE version = ?`, affected = 0 → trả conflict + remote entity              |
-| T3   | Local: bảng `sync_conflicts` lưu localValue / remoteValue / baseVersion                                             |
+| Ngày | Task                                                                                                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Server phát hiện conflict: `UPDATE ... WHERE version = ?`, affected = 0 → trả conflict + remote entity                                                                        |
+| T3   | Local: bảng `sync_conflicts` lưu localValue / remoteValue / baseVersion                                                                                                       |
 | T4   | Conflict policy theo entity (transaction: explicit; category name: server-wins; settings: LWW; locale **không** sync, là thuộc tính thiết bị — ADR-0004) — document trong ADR |
-| T5   | Conflict UX: màn hình chọn giữ bản nào                                                                              |
-| T6   | Test conflict: 2 fake device cùng edit 1 transaction                                                                |
-| Flex | Test: A edit + B delete cùng lúc                                                                                    |
+| T5   | Conflict UX: màn hình chọn giữ bản nào                                                                                                                                        |
+| T6   | Test conflict: 2 fake device cùng edit 1 transaction                                                                                                                          |
+| Flex | Test: A edit + B delete cùng lúc                                                                                                                                              |
 
 ## W21 · 25–31/01 🔴 Triggers + integration test
 

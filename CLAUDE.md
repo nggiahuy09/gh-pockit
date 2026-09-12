@@ -336,13 +336,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                  |
-| -------------------- | -------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 0 — Foundation**                                                               |
-| Week                 | W1 (T6 + flex `GPFailure` + flex theme/tokens done; ADR-0001 draft and `dev` branch protection still owed) |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match    |
-| Drift schema version | —                                                                                      |
-| Backend              | not set up yet                                                                         |
-| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally |
-| Blocker              | —                                                                                      |
+| Field                | Value                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 0 — Foundation**                                                                    |
+| Week                 | W1 (T6 + all flex work done except `dev` branch protection, which is a GitHub-side setting) |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`      |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match         |
+| Drift schema version | —                                                                                           |
+| Backend              | not set up yet                                                                              |
+| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally     |
+| Blocker              | —                                                                                           |
