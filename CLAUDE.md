@@ -339,10 +339,10 @@ A feature is Done only when **all** of these hold:
 | Field                | Value                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------- |
 | Current phase        | **Phase 0 — Foundation**                                                               |
-| Week                 | W1 (T6 done + hand-written EN/VI localization, unplanned)                              |
+| Week                 | W1 (T6 + flex `GPFailure` + flex theme/tokens done; ADR-0001 draft and `dev` branch protection still owed) |
 | Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` |
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match    |
 | Drift schema version | —                                                                                      |
 | Backend              | not set up yet                                                                         |
-| Latest ADR           | 0004 — hand-written EN/VI localization; `Failure` carries a type, not a message        |
+| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally |
 | Blocker              | —                                                                                      |
