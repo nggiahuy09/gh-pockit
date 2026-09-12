@@ -143,6 +143,7 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | HTTP           | `dio`                                   | 5.11.1                      |
 | Backend        | `supabase_flutter`                      | 2.17.2                      |
 | Immutable      | `freezed`, `json_serializable`          | — / 6.14.1                  |
+| Annotations    | `meta`                                  | 1.16.0                      |
 | Secure storage | `flutter_secure_storage`                | —                           |
 | Biometric      | `local_auth`                            | 3.0.2                       |
 | Connectivity   | `connectivity_plus`                     | 7.3.1                       |

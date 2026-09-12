@@ -47,6 +47,11 @@ dependencies:
   # on, and a minor bump silently changing redirect or shell semantics is not something we want to meet in CI.
   go_router: 17.2.3
 
+  # `@immutable`, so `avoid_equals_and_hash_code_on_mutable_classes` is satisfied honestly on `GPFailure` rather than suppressed with an ignore. Already
+  # in the tree as a transitive dependency of the Flutter SDK; promoted to direct because `core/error/failure.dart` imports it by name, and an import
+  # of an undeclared package is exactly what `depend_on_referenced_packages` exists to catch.
+  meta: 1.16.0
+
   # Client-side ID generation (golden rule 4 — IDs never come from the server). Wrapped behind `UuidGenerator` in core/utils so the package never appears
   # outside its one implementation file. See docs/adr/0001.
   uuid: 4.6.0
