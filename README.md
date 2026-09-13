@@ -1,5 +1,7 @@
 # Pockit
 
+[![CI](https://github.com/nggiahuy09/gh-pockit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nggiahuy09/gh-pockit/actions/workflows/ci.yml)
+
 An **offline-first** personal finance app written in Flutter.
 The engineering focus is data architecture and the sync engine, not screen count.
 

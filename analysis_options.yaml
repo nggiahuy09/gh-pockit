@@ -71,7 +71,7 @@ linter:
     # The real width guard is `dart format`.
     lines_longer_than_80_chars: false
 
-    # Directly conflicts with CLAUDE.md §4: `Clock`, `UuidGenerator` and
+    # Directly conflicts with CLAUDE.md §4: `GPClock`, `GPUuidGenerator` and
     # single-method repository interfaces are deliberate abstractions (so they
     # can be faked in sync tests and registered in get_it). A function typedef
     # cannot replace them.
