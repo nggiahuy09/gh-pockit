@@ -55,11 +55,11 @@ version a second time.
 minutes per run and assert nothing. It joins the gate when the dev/prod flavors
 land.
 
-### Branch protection for `main` (manual, once)
+### Branch protection for `main` and `dev` (manual, once)
 
 GitHub cannot enable this from the repo, so set it by hand in
 **Settings → Branches → Add branch ruleset** (or classic branch protection) for
-`main`:
+**both** `main` and `dev` — the same rules on each:
 
 - [ ] Require a pull request before merging (1 approval; self-approve is fine for a solo repo)
 - [ ] Require status checks to pass → select **`format → analyze → test`**
@@ -69,6 +69,12 @@ GitHub cannot enable this from the repo, so set it by hand in
 
 The status check only appears in the list after the workflow has run at least
 once on the repo, so push this workflow first, then add the rule.
+
+**Both rulesets are in place** — `main` from the start, `dev` since 2026-09-14,
+which closes the last item W1 left open. The checklist above is the recipe for a
+fresh fork, not an open to-do. `dev` needs it as much as `main` does: it is the ref
+an AB-test build is cut from (`CLAUDE.md` §10), so a force-push there invalidates a
+build someone is already testing.
 
 **Line width is 180**, declared in `formatter.page_width` in `analysis_options.yaml`
 (read by the CLI, the hook and CI) and in `dart.lineLength` in `.vscode/settings.json`

@@ -269,6 +269,31 @@ flutter run --flavor dev --dart-define-from-file=env/dev.json
 - `dev` is staging, not a scratchpad: it must stay green, because a red `dev` means there is
   nothing to cut a test build from.
 
+### PR cadence — one PR per week, at the end of the week
+
+A work branch is pushed early and often, but its PR is opened **once the week's tasks are
+done**, not per task. `task/W2` collects T2…T6 plus the flex work and becomes a single PR into
+`dev` at the end of the week.
+
+The cost is real and worth stating: **CI does not run during the week.** `.github/workflows/ci.yml`
+triggers on PRs into `main`/`dev` and on pushes to them — a push to `task/W<n>` triggers nothing.
+So between Monday and the PR, the only gate is the local one:
+
+```bash
+fvm dart format --output=none --set-exit-if-changed .   # what .githooks/pre-commit runs
+fvm dart analyze --fatal-infos                          # likewise
+fvm flutter test                                        # the hook does NOT run this — run it yourself
+```
+
+Two consequences to keep in mind rather than rediscover:
+
+- The hook checks format and analyze only. **Tests are on you all week.** A branch that has not
+  had `fvm flutter test` run on it is not ready for Friday.
+- Anything that only breaks on a clean clone — a generated file that was never committed, a
+  missing asset, a dependency that resolves differently on Linux — stays invisible until the
+  PR. When a week touches codegen or dependencies, open the PR as a **draft** early instead of
+  waiting; a draft PR runs the same CI.
+
 ### Merge strategy
 
 - work branch → `dev`: **merge commit** (`--no-ff`). The per-task commits are the deliverable
@@ -284,7 +309,7 @@ flutter run --flavor dev --dart-define-from-file=env/dev.json
 - Commit: Conventional Commits (`feat(sync): add durable outbox`)
 - Every PR must have: **What / Why / Architecture impact / Screenshots / Testing / Risks**
 - CI gate: format → analyze → test → build. Runs on every PR into `main` / `dev` and on every
-  push to them (`.github/workflows/ci.yml`).
+  push to them (`.github/workflows/ci.yml`) — and **nowhere else**, see the PR cadence above.
 - Branch protection required on **both** `main` and `dev`: require a PR, require the
   `format → analyze → test` check, no force push, no deletion.
 
