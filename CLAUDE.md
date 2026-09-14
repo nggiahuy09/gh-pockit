@@ -139,7 +139,8 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | Localization   | hand-written + `flutter_localizations`  | SDK (ADR-0004)              |
 | State          | `flutter_bloc`                          | 9.1.1                       |
 | DI             | `get_it`                                | 9.2.1                       |
-| Local DB       | `drift` + `drift_flutter`               | 2.34.x / 0.3.x              |
+| Local DB       | `drift` + `drift_flutter`               | 2.31.0 / 0.2.8 ⚠️           |
+| Codegen        | `build_runner` + `drift_dev`            | 2.15.1 / 2.31.0             |
 | HTTP           | `dio`                                   | 5.11.1                      |
 | Backend        | `supabase_flutter`                      | 2.17.2                      |
 | Immutable      | `freezed`, `json_serializable`          | — / 6.14.1                  |
@@ -156,9 +157,9 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 
 **Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
-**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and two rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12) and `very_good_analysis` (11.0.0 needs ≥3.10). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
+**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and three rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12), `very_good_analysis` (11.0.0 needs ≥3.10) and **Drift** (`drift` 2.33+ and `drift_flutter` 0.3+ both need ≥3.10, so 2.31.0 / 0.2.8 are the ceiling — W2 T2 found this; the earlier `2.34.x / 0.3.x` here simply does not resolve). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
 
-**Drift note:** do NOT add `sqlite3_flutter_libs` as older tutorials suggest — it is EOL in the current setup. Use the native `drift_flutter` setup. For encryption, use the SQLite3MultipleCiphers build hook if needed.
+**Drift note:** do NOT add `sqlite3_flutter_libs` **directly** as older tutorials suggest. `drift_flutter` already brings it in transitively, and on this SDK that is version `0.5.42`, not the `0.6.0+eol` release — the EOL one is what Dart ≥3.10 would pull. Adding it by hand is how a project ends up pinning the EOL line by accident. For encryption, use the SQLite3MultipleCiphers build hook if needed.
 
 **Before adding any new dependency**, you must be able to answer: (1) what problem does it solve, (2) what would it cost to do it ourselves, (3) is it still maintained, (4) does it affect native setup, (5) does it lock in the architecture. If you cannot answer, do not add it.
 
@@ -221,8 +222,11 @@ Sync engine tests must use a **fake clock** and a **fake remote**, never a real 
 ```bash
 # setup
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-dart run build_runner watch --delete-conflicting-outputs   # while developing
+# `--delete-conflicting-outputs` was REMOVED in build_runner 2.15 — passing it only prints a warning.
+# `dart format` must follow: the generator writes at 80 columns, the repo formats at 180, and
+# `dart format` has no exclude option, so the pre-commit hook fails on generated files otherwise.
+dart run build_runner build && fvm dart format .
+dart run build_runner watch                                # while developing
 
 # quality gate (the pre-commit hook runs the first two; see .githooks/pre-commit)
 fvm dart format --output=none --set-exit-if-changed .   # drop --output=none to rewrite files in place
@@ -336,13 +340,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 0 — Foundation**                                                                    |
-| Week                 | W1 (T6 + all flex work done except `dev` branch protection, which is a GitHub-side setting) |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`      |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match         |
-| Drift schema version | —                                                                                           |
-| Backend              | not set up yet                                                                              |
-| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally     |
-| Blocker              | —                                                                                           |
+| Field                | Value                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                   |
+| Week                 | W2 (T2 done: Drift installed, `GPAppDatabase` + `settings` table, first query under test) |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`    |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match       |
+| Drift schema version | 1 — `settings` only; baseline dumped to `drift_schemas/drift_schema_v1.json`              |
+| Backend              | not set up yet                                                                            |
+| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally   |
+| Blocker              | —                                                                                         |

@@ -31,37 +31,42 @@ dependencies:
   # Cupertino Icons font, used with the CupertinoIcons class for iOS-style icons.
   cupertino_icons: ^1.0.8
 
+  # Local database with reactive `watch()` queries — the source of truth the UI reads (ADR-0001).
+  drift: 2.31.0
+
+  # Platform glue for `drift`: executor, database file location and the sqlite3 build per platform.
+  drift_flutter: 0.2.8
+
   flutter:
     sdk: flutter
 
-  # Material's own localized widgets — date picker month names, the Cut/Copy/Paste menu, `MaterialLocalizations` in general. Ships with the SDK, so it
-  # is not a third-party dependency. Without it a Vietnamese user still gets an English date picker on every transaction. See docs/adr/0004.
+  # Material's own localized widgets — date picker month names, the Cut/Copy/Paste menu, `MaterialLocalizations` in general (ADR-0004).
   flutter_localizations:
     sdk: flutter
 
-  # DI container (CLAUDE.md §5). Exact version, no caret: an unattended minor bump of the thing that wires the whole object graph is not something we
-  # want to discover from a red CI run.
+  # Service locator — wires the object graph in `app/di/injector.dart`.
   get_it: 9.2.1
 
-  # Navigation (CLAUDE.md §5). Exact version, same reason as `get_it`: the router is the one place that decides which widget the OS deep link lands
-  # on, and a minor bump silently changing redirect or shell semantics is not something we want to meet in CI.
+  # Navigation: the shell route and the five tabs (ADR-0003).
   go_router: 17.2.3
 
-  # `@immutable`, so `avoid_equals_and_hash_code_on_mutable_classes` is satisfied honestly on `GPFailure` rather than suppressed with an ignore. Already
-  # in the tree as a transitive dependency of the Flutter SDK; promoted to direct because `core/error/failure.dart` imports it by name, and an import
-  # of an undeclared package is exactly what `depend_on_referenced_packages` exists to catch.
+  # `@immutable` and friends, used on `GPFailure` in `core/error/`.
   meta: 1.16.0
 
-  # Client-side ID generation (golden rule 4 — IDs never come from the server). Wrapped behind `UuidGenerator` in core/utils so the package never appears
-  # outside its one implementation file. See docs/adr/0001.
+  # Client-side UUID v4/v7, wrapped behind `GPUuidGenerator` (ADR-0002).
   uuid: 4.6.0
 
 dev_dependencies:
+  # Runs the code generators.
+  build_runner: 2.15.1
+
+  # Generates Drift row classes and companions; owns the `schema dump` / `schema generate` commands (CLAUDE.md §9).
+  drift_dev: 2.31.0
+
   flutter_test:
     sdk: flutter
 
-  # Lint baseline (209 rules). The effective rule set and the overrides live in
-  # `analysis_options.yaml`. Pinned to 10.x: 11.0.0 needs Dart >=3.10, we are on 3.9.2.
+  # Lint baseline (209 rules). The effective rule set and the overrides live in `analysis_options.yaml`.
   very_good_analysis: ^10.0.0
 
 # For information on the generic Dart part of this file, see the
