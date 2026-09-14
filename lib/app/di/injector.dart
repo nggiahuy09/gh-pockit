@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
+import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
@@ -27,6 +28,9 @@ void configureCoreDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
   c
+    // The one persistent store (ADR-0001). `dispose` matters for tests more than for the app: a test that resets the locator without closing the database
+    // leaks an open sqlite connection — and with `shareAcrossIsolates` a leaked connection also leaks the isolate holding it.
+    ..registerLazySingleton<GPAppDatabase>(GPAppDatabase.new, dispose: (db) => db.close())
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
     // Singleton, not a factory: `v7()` carries a counter that keeps IDs created in the same millisecond in order, and that only holds if the
     // whole app shares one generator.
@@ -35,7 +39,7 @@ void configureCoreDependencies({GetIt? container}) {
       // Debug lines are useful while developing and are noise (and a leak risk) in a shipped build, so the filter is set once, here.
       () => GPDeveloperLogger(clock: c<GPClock>(), minLevel: kReleaseMode ? GPLogLevel.info : GPLogLevel.debug),
     )
-    // In-memory until W2 gives us a Drift `settings` table; swapping the implementation is the only change needed then (ADR-0004).
+    // The `settings` table now exists (W2 T2); this becomes `GPDriftLocaleStore` in W2 flex, and swapping this one line is the only change it needs (ADR-0004).
     ..registerLazySingleton<GPLocaleStore>(GPInMemoryLocaleStore.new)
     // Singleton, not a factory: it is the one object holding the active language, and a second instance would leave half the tree in the old one.
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
