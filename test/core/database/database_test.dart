@@ -21,8 +21,12 @@ void main() {
 
   SettingsTableCompanion setting(String key, String value, {int at = 1757800000000}) => SettingsTableCompanion.insert(key: key, value: value, updatedAt: at);
 
-  test('creates the schema at v1 and round-trips a row', () async {
-    expect(db.schemaVersion, 1);
+  test('creates the current schema and round-trips a row', () async {
+    // Deliberately not pinned to a number any more. This was `expect(db.schemaVersion, 1)` and it failed on the W2 T3 bump — correctly, but uselessly:
+    // the assertion said nothing a reader did not already know from `database.dart`, and its only effect was one extra edit per migration. What the bump
+    // must not break is the line below: `forTesting` still lands on a schema where a `settings` write round-trips. Which version that is belongs to
+    // `migration_test.dart`, which checks it against the fixtures instead of against a literal.
+    expect(db.schemaVersion, greaterThanOrEqualTo(1));
 
     await db.into(db.settingsTable).insert(setting('locale.selected', 'vi'));
 
