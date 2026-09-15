@@ -2,16 +2,20 @@
 
 ## Status
 
-**Draft** — 2026-09-12 (W1, weekend flex). Amended 2026-09-14 (W2 T2).
+**Draft** — 2026-09-12 (W1, weekend flex). Amended 2026-09-14 (W2 T2) and
+2026-09-15 (W2 T3).
 
 Becomes _Accepted_ in W2 flex, when the `create → watchAccounts emit` test
-passes. Still Draft because open question 1 (`owner_id` before auth) is
-unanswered and `accounts` does not exist yet; questions 2 and 3 were settled on
-2026-09-14 and are recorded below.
+passes. All three open questions are now answered and recorded below, so what
+keeps this a Draft is only the missing test — `AccountDao` is T4 and the
+repository is T6.
 
 W2 T2 landed the store: `pubspec.yaml` carries Drift, `GPAppDatabase` exists
-with a `settings` table at `schemaVersion` 1, and four tests in
-`test/core/database/database_test.dart` exercise the first queries.
+with a `settings` table, and four tests in
+`test/core/database/database_test.dart` exercise the first queries. W2 T3 added
+`accounts` at `schemaVersion` 2 and, with it, the first real migration — the
+claim in constraint 3 below stopped being a promise and became
+`test/core/database/migration_test.dart`.
 
 > **On the number.** 0001 is the slot Appendix E of `docs/blueprint.md` reserves
 > for this decision, and ADR-0002 recorded it as a deliberate gap rather than an
@@ -187,10 +191,39 @@ and that risk is bounded: this table is local-only and holds nothing that is
 money, an id, or anything sync reads. A setting that needs a real type earns
 its own table rather than a `switch` on this one.
 
+## Settled in W2 T3 (2026-09-15)
+
+**1. `owner_id` before auth exists — answered: a sentinel, and the column is
+`NOT NULL` from the first insert.** Synced rows written before W10 carry
+`localOwnerId` (`'local'`, in `core/database/owner_id.dart`). The alternative —
+nullable now, backfilled and tightened at W10 — was rejected on two counts. It
+would make every DAO, query and sync path written between W2 and W9 tolerate a
+null owner, which is eight weeks of code shaped around a temporary state; and
+tightening a column to `NOT NULL` in SQLite is a full table rebuild, not an
+`ALTER`. It would also leave the local schema disagreeing with the Postgres
+mirror of W10 T3 for exactly the period sync is being designed in.
+
+The risk this ADR named is not dissolved, only bounded: `NOT NULL` is enforced
+today, but _a real uid flowing through the column_ is not proven until W10.
+
+Worth stating because it changes what W10 owes: claiming these rows is **not** a
+schema migration. It needs the uid, which only exists at runtime after a
+sign-in, so it cannot live in an `onUpgrade` step — it belongs in the sign-in
+flow as `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1
+WHERE owner_id = 'local'`, after which the rows enqueue as ordinary create
+mutations. That step has to exist regardless: a user who tracks expenses offline
+for a week and only then registers must keep the week. The sentinel is not
+buying a migration on credit; it is naming work that was always required.
+
+**The v1 → v2 bump was taken the expensive way.** Golden rule 7 permits wiping
+the database during Phase 0–1 and `settings` held one language preference, so
+the cheap path was available and was refused. W9 is an entire week of migration
+work, and that week needs an earlier schema that genuinely exists. Taking the
+exception would have meant the first migration Pockit ever writes being written
+in W9, against a user's database, with no fixture to have practised on. v1
+survives in `drift_schemas/drift_schema_v1.json` as something to upgrade rather
+than something to delete.
+
 ## Still open
 
-1. **`owner_id` before auth exists.** Every synced entity needs one (§6), but
-   auth is W10. Placeholder constant, or nullable column plus a backfill
-   migration? The second is honest and costs a migration; the first is cheap and
-   risks a column that is never actually verified. Due at W2 T3, when `accounts`
-   becomes the first synced table.
+Nothing. The three questions this ADR opened are answered above.
