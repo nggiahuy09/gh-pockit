@@ -46,7 +46,7 @@ void configureCoreDependencies({GetIt? container}) {
     // It does move one thing onto the startup path: `bootstrap()` awaits `GPLocalization.init()`, which now opens the database and reads a row before the
     // first frame instead of returning null immediately. That is a primary-key lookup on a table holding one row, and it is the price of not painting
     // English and then flipping to Vietnamese.
-    ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(database: c<GPAppDatabase>(), clock: c<GPClock>()))
+    ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(database: c<GPAppDatabase>(), clock: c<GPClock>(), logger: c<GPAppLogger>()))
     // Singleton, not a factory: it is the one object holding the active language, and a second instance would leave half the tree in the old one.
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
 }

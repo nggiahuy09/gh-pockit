@@ -11,9 +11,9 @@ import 'package:go_router/go_router.dart';
 /// Root widget.
 ///
 /// Themes come from `GPAppTheme`, which folds the design tokens in `core/theme/` into one `ThemeData` per brightness. The theme follows the device:
-/// `MaterialApp` already defaults `themeMode` to `ThemeMode.system`, so passing it explicitly would only be noise. There is no in-app theme switch
-/// yet — adding one before Settings has somewhere to persist it would buy a preference that does not survive a restart, which is the trap the
-/// language picker is already in until W2 gives it a `settings` table.
+/// `MaterialApp` already defaults `themeMode` to `ThemeMode.system`, so passing it explicitly would only be noise. There is still no in-app theme switch,
+/// but the reason changed at W2 T4: the `settings` table and `GPDriftLocaleStore` exist now, so a theme choice has somewhere to live — what is missing is
+/// a `GPThemeModeStore` beside the locale one and a control to drive it, not a place to put the answer (ADR-0005).
 ///
 /// Stateful because the router is built once and kept, instead of being rebuilt inside `build`. A `GoRouter` holds the navigation stack of every
 /// branch; rebuilding it on a parent rebuild (a theme change, a language change) would throw that stack away and drop the user back on `/home`.

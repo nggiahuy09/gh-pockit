@@ -1,109 +1,45 @@
 import 'package:drift/drift.dart';
 import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/database/owner_id.dart';
-import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/data/tables/accounts_table.dart';
 
 part 'account_dao.g.dart';
 
-/// Row-level access to `accounts` (W2 T4) — the first DAO in the app, so the decisions below are the ones `CategoryDao` (W3 T5) and `TransactionDao`
-/// (W5 T4) copy rather than re-argue.
+/// Row-level access to `accounts` (W2 T4) — the first DAO in the app, written to the shape `docs/patterns/local-storage-with-drift.md` §6.2 already
+/// prescribes, so `CategoryDao` (W3 T5) and `TransactionDao` (W5 T4) copy one design rather than three.
 ///
-/// **What a DAO owns, and what it does not.** This type owns row integrity: the columns §6 demands, the `deleted_at IS NULL` filter golden rule 5 requires
-/// of every read, and the `updated_at` stamp W12's pull cursor is built on. It does not own mapping, validation or the outbox — those belong to the
-/// repository at T6 (§12.2), which is also the layer that wraps a write and its `sync_mutations` row in one `database.transaction()` at W11 T5. Everything
-/// here is stated in rows and companions, never in an `Account` entity: T5 has not written one yet, and the three-model rule (§3) means this class would
-/// not accept one even after it exists.
+/// **It speaks SQL and rows, and holds no policy**: no clock, no UUIDs, no outbox, no opinion about whether something should sync. Those live one layer up,
+/// in the repository at T6 (§12.2). Two consequences that look like awkwardness and are not:
 ///
-/// **Why it holds a `GPClock` rather than taking timestamps from the caller.** `updated_at` is half the pull cursor (`updated_at, id`) of W12 T2, so a
-/// mutating path that forgets to move it writes a row that is locally correct and permanently invisible to sync — a bug that surfaces two phases later as
-/// "this account never reached the other device". Stamping it in one place makes forgetting it impossible rather than merely discouraged. The
-/// counter-argument — that T6 needs the same instant for its outbox payload — is answered by every mutating method returning the row it actually wrote, so
-/// the repository builds its mutation from what landed instead of from what it hoped would land.
+/// - **`now` is a required argument on every mutating method.** The repository reads `GPClock` once per operation and passes the same instant here and into
+///   the `sync_mutations` row it writes in the same transaction (golden rule 3) — so the entity and the mutation describe the same moment. A DAO that read
+///   its own clock would produce two instants inside one transaction and no way to reconcile them. Making it required is also what stops `updated_at` from
+///   being forgotten: forget it and the code does not compile, rather than writing a row that is locally correct and permanently invisible to the pull
+///   cursor of W12 T2.
+/// - **Writes take a companion the mapper built**, not a list of fields. `AccountMapper` at T6 is the one place that knows how an `Account` becomes a row,
+///   and duplicating that knowledge in a parameter list here is the three-model rule (§3) leaking.
 ///
-/// **Deliberately not listed in `@DriftDatabase(daos: ...)`.** That annotation generates `late final AccountDao accountDao = AccountDao(this)`, which has
-/// nowhere to pass a clock — so the generated getter would only compile if this class fell back to `DateTime.now()`, the one thing the table's own doc
-/// forbids. It is constructed explicitly instead, by DI at T6.
+/// **Deliberately not listed in `@DriftDatabase(daos: ...)`.** That generates `late final AccountDao accountDao = AccountDao(this)`, a second DAO instance
+/// separate from the one DI hands the repository. Drift resolves a transaction by comparing `attachedDatabase`, so two instances are survivable — but two
+/// ways to reach the same DAO is not, and the pattern doc's trap table names a foreign DAO committing outside your transaction as the failure mode. It is
+/// constructed once, by DI, at T6.
 @DriftAccessor(tables: [AccountsTable])
 class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin {
-  AccountDao(super.attachedDatabase, {required GPClock clock}) : _clock = clock;
-
-  final GPClock _clock;
-
-  /// Inserts a new account and returns the row as SQLite stored it.
-  ///
-  /// [id] is a parameter rather than something minted here: golden rule 4 and ADR-0002 put id generation at the caller, who needs the value before the
-  /// insert in order to reference it from the outbox mutation and from whatever else the same transaction writes. A DAO that minted its own id would force
-  /// exactly the read-back round trip client-side ids exist to remove.
-  ///
-  /// Every §6 column is stated explicitly because the table has no SQL defaults — see `accounts_table.dart` for why that is deliberate. `version` starts at
-  /// 1 and is never touched by this class again; the server owns it from the first push onwards (§7). `isArchived` is false because an account is never
-  /// born archived, and `ownerId` is [localOwnerId] until the W10 sign-in flow claims these rows (ADR-0001), at which point it becomes a parameter fed by
-  /// the session rather than a constant.
-  Future<AccountRow> insertAccount({
-    required String id,
-    required String name,
-    required String type,
-    required String currencyCode,
-    required int initialBalance,
-  }) {
-    // One read of the clock, used for both columns: `created_at == updated_at` on a fresh row is an invariant worth having, and two calls could straddle a
-    // millisecond boundary and break it for no reason.
-    final now = _clock.nowEpochMillis();
-
-    return into(accountsTable).insertReturning(
-      AccountsTableCompanion.insert(
-        id: id,
-        ownerId: localOwnerId,
-        name: name,
-        type: type,
-        currencyCode: currencyCode,
-        initialBalance: initialBalance,
-        isArchived: false,
-        createdAt: now,
-        updatedAt: now,
-        version: 1,
-      ),
-    );
-  }
-
-  /// Edits the user-editable columns. Returns the updated row, or null when [id] matches nothing alive.
-  ///
-  /// A null argument means "leave this column alone", which is why the parameters are optional rather than a companion: a companion would also let a caller
-  /// pass `version:`, `ownerId:` or `deletedAt:`, and the whole point of naming the editable set here is that those four are *not* in it.
-  ///
-  /// **`version` is not incremented.** It is the optimistic-concurrency token of §7: the client pushes it as `baseVersion`, the server runs
-  /// `UPDATE ... WHERE version = ?` and hands back the next value. A client that bumped it hopefully would push a base version the server never issued, so
-  /// the guarded update would match zero rows and every edit would report a phantom conflict. Only `updated_at` moves here.
-  ///
-  /// `isArchived` is absent on purpose — it has [archive] and [unarchive], which say what they do at the call site.
-  Future<AccountRow?> updateAccount(
-    String id, {
-    String? name,
-    String? type,
-    String? currencyCode,
-    int? initialBalance,
-  }) async {
-    // `deleted_at IS NULL` in the WHERE, not just in reads: editing a tombstone would move its `updated_at` and push a resurrected row at the next sync.
-    final rows = await (update(accountsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).writeReturning(
-      AccountsTableCompanion(
-        name: Value.absentIfNull(name),
-        type: Value.absentIfNull(type),
-        currencyCode: Value.absentIfNull(currencyCode),
-        initialBalance: Value.absentIfNull(initialBalance),
-        updatedAt: Value(_clock.nowEpochMillis()),
-      ),
-    );
-
-    return rows.isEmpty ? null : rows.single;
-  }
+  // `super.attachedDatabase`, not `super.db`: `matching_super_parameters` wants the name drift generated.
+  AccountDao(super.attachedDatabase);
 
   /// The live account list, re-emitting on every write to the table (ADR-0001, golden rule 1).
   ///
+  /// **[ownerId] is required, not implied.** Until W10 every row carries `localOwnerId` and the filter changes nothing a user could see, which is exactly
+  /// why it has to be written now: adding it after auth lands means auditing every query for the one that was never scoped, and the symptom of missing it
+  /// is one account's rows showing up under another account on a shared device. It is also what makes the index earn its keep — `accounts_owner_id_is_archived`
+  /// is keyed `(owner_id, is_archived)`, so a query filtering only on `is_archived` can scan the index but never seek into it.
+  ///
   /// **Archived rows are excluded unless [includeArchived] is set.** Archiving exists to get an account out of the way — out of pickers, out of the list —
-  /// while keeping its history and keeping it syncing, so a default that still showed it would leave the feature doing nothing. The composite index
-  /// `accounts_owner_id_is_archived` created at T3 is what keeps that filter off a table scan; the archived-inclusive branch is for the settings screen
-  /// that un-archives, which is also why [unarchive] exists at all — a default this narrow with no way back would strand rows.
+  /// while keeping its history and keeping it syncing, so a default that still showed it would leave the feature doing nothing. The opt-in branch is for
+  /// the screen that un-archives, which is also why [unarchive] exists at all: a default this narrow with no way back would strand rows.
+  ///
+  /// Soft-deleted rows are filtered here, once, so no caller can forget — the pattern doc names that the most common source of "I deleted it and it came
+  /// back".
   ///
   /// Ordered by creation, not by name. SQLite's default `BINARY` collation sorts by UTF-8 code point, so "Ăn uống" lands after "Ví", and `NOCASE` only
   /// folds ASCII — locale-aware collation needs ICU, which this app does not ship. A list that claims to be alphabetical and is not is worse than one that
@@ -112,9 +48,9 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
   ///
   /// No `.distinct()`. Drift invalidates a stream query per table, so this re-runs on any write to `accounts` even when no visible row moved — measured and
   /// written down in `database_test.dart`. At a handful of accounts that is not worth a filter; `watchTransactions` at W8 is where it starts to be.
-  Stream<List<AccountRow>> watchAccounts({bool includeArchived = false}) {
+  Stream<List<AccountRow>> watchAccounts(String ownerId, {bool includeArchived = false}) {
     final query = select(accountsTable)
-      ..where((t) => t.deletedAt.isNull())
+      ..where((t) => t.ownerId.equals(ownerId) & t.deletedAt.isNull())
       ..orderBy([(t) => OrderingTerm.asc(t.createdAt), (t) => OrderingTerm.asc(t.id)]);
 
     if (!includeArchived) {
@@ -125,21 +61,49 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
     return query.watch();
   }
 
-  /// Hides an account from [watchAccounts] without deleting it. Returns the updated row, or null when [id] matches nothing alive.
+  /// One row by id, tombstone included.
   ///
-  /// Archived is not deleted (§6, golden rule 5): the row keeps its transactions, keeps its balance history and keeps syncing, and `deleted_at` stays null.
-  /// Soft delete is a different operation and lands with the repository at T6.
-  Future<AccountRow?> archive(String id) => _setArchived(id, archived: true);
+  /// The one read that does **not** filter `deleted_at IS NULL`, and the exception is load bearing: `RemoteChangeApplier` at W13 has to find a row it
+  /// already soft-deleted in order to reconcile it against the server's tombstone. A lookup that hid it would make the applier insert a duplicate.
+  Future<AccountRow?> findById(String id) => (select(accountsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  /// Inserts a row the mapper built.
+  ///
+  /// No `insertReturning`: the caller already holds every value it wrote — it minted the id (golden rule 4, ADR-0002) and the instant — so reading the row
+  /// back would be a round trip to learn what it just said.
+  Future<void> insertAccount(AccountsTableCompanion row) => into(accountsTable).insert(row);
+
+  /// Applies [patch] to a live row, guarded on [baseVersion]. Returns the number of rows written — **0 means the row moved under us**, which is the whole
+  /// point of the guard and the local half of the optimistic-concurrency scheme in §7.
+  ///
+  /// `version` itself is never written here. It is the server's: the client pushes it as `baseVersion`, the server runs `UPDATE ... WHERE version = ?` and
+  /// hands back the next value. A client that bumped it hopefully would push a base version the server never issued, so the guarded update would match zero
+  /// rows and every edit would report a conflict that is not one.
+  ///
+  /// [now] is stamped onto `updated_at` here rather than trusted to [patch], so a caller cannot build a patch that silently skips the pull cursor.
+  Future<int> updateAccount(String id, {required int baseVersion, required AccountsTableCompanion patch, required int now}) {
+    // `deleted_at IS NULL` in the WHERE, not just in reads: editing a tombstone would move its `updated_at` and push a resurrected row at the next sync.
+    return (update(accountsTable)..where((t) => t.id.equals(id) & t.version.equals(baseVersion) & t.deletedAt.isNull())).write(
+      patch.copyWith(updatedAt: Value(now)),
+    );
+  }
+
+  /// Hides an account from [watchAccounts] without deleting it. Returns the number of rows written; 0 means no live row with that id.
+  ///
+  /// Archived is not deleted (§6, golden rule 5): the row keeps its transactions, keeps its history and keeps syncing, and `deleted_at` stays null. Soft
+  /// delete is a different operation and lands with the repository at T6.
+  ///
+  /// Unguarded by `version`, unlike [updateAccount]. Archiving is idempotent — the second call writes the value already there — so a stale base version
+  /// costs nothing, and failing a user's "hide this" because a sync landed a rename a moment earlier would be a conflict invented for no benefit.
+  Future<int> archive(String id, {required int now}) => _setArchived(id, archived: true, now: now);
 
   /// Brings an archived account back into [watchAccounts].
-  Future<AccountRow?> unarchive(String id) => _setArchived(id, archived: false);
+  Future<int> unarchive(String id, {required int now}) => _setArchived(id, archived: false, now: now);
 
-  Future<AccountRow?> _setArchived(String id, {required bool archived}) async {
-    final rows = await (update(accountsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).writeReturning(
+  Future<int> _setArchived(String id, {required bool archived, required int now}) {
+    return (update(accountsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).write(
       // `updated_at` moves, `version` does not — same reasoning as [updateAccount]. Archiving is an ordinary field change as far as sync is concerned.
-      AccountsTableCompanion(isArchived: Value(archived), updatedAt: Value(_clock.nowEpochMillis())),
+      AccountsTableCompanion(isArchived: Value(archived), updatedAt: Value(now)),
     );
-
-    return rows.isEmpty ? null : rows.single;
   }
 }

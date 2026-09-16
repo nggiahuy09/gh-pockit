@@ -6,8 +6,10 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/localization/drift_locale_store.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/localization.dart';
+import 'package:ghpockit/core/logging/app_logger.dart';
 
 import '../../helpers/fake_clock.dart';
+import '../../helpers/recording_logger.dart';
 
 /// The W1 debt from ADR-0004, paid at W2 (§ROADMAP W2 flex).
 ///
@@ -17,12 +19,14 @@ import '../../helpers/fake_clock.dart';
 void main() {
   late GPAppDatabase db;
   late FakeClock clock;
+  late RecordingLogger logger;
   late GPDriftLocaleStore store;
 
   setUp(() {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
     clock = FakeClock();
-    store = GPDriftLocaleStore(database: db, clock: clock);
+    logger = RecordingLogger(clock: clock);
+    store = GPDriftLocaleStore(database: db, clock: clock, logger: logger);
   });
 
   tearDown(() async {
@@ -38,7 +42,7 @@ void main() {
     await store.write(GPLocale.vi);
 
     // A second instance stands in for the next app launch: nothing is cached in the object, so what comes back came from SQLite.
-    final afterRestart = GPDriftLocaleStore(database: db, clock: clock);
+    final afterRestart = GPDriftLocaleStore(database: db, clock: clock, logger: logger);
 
     expect(await afterRestart.read(), GPLocale.vi);
   });
@@ -79,7 +83,7 @@ void main() {
     await store.write(GPLocale.vi);
 
     final localization = GPLocalization(
-      store: GPDriftLocaleStore(database: db, clock: clock),
+      store: GPDriftLocaleStore(database: db, clock: clock, logger: logger),
     );
     await localization.init(deviceLocale: const Locale('en'));
 
@@ -87,5 +91,33 @@ void main() {
     // app paint English first.
     expect(localization.locale, GPLocale.vi);
     expect(localization.isExplicit, isTrue);
+  });
+
+  group('when storage is unreachable', () {
+    // A dropped table stands in for a database that cannot answer — a corrupt file, a failed migration, a revoked directory. It surfaces as the same
+    // `SqliteException` those do, which is what both paths below are written against.
+    setUp(() => db.customStatement('DROP TABLE settings'));
+
+    test('read degrades to no stored choice instead of taking the app down', () async {
+      // The regression this guards. `bootstrap()` awaits `GPLocalization.init()` before `runApp`, so an escaping exception here is a dead app with no UI
+      // to explain itself — and the state being read is a language preference. Behaving like a fresh install is the correct degradation.
+      expect(await store.read(), isNull);
+      expect(logger.last.level, GPLogLevel.warn);
+    });
+
+    test('write logs and swallows, so a tapped language does not become an uncaught error', () async {
+      // `SettingsPage` fires `changeLocale` through `unawaited`, so a throw here would surface as an uncaught async error with no idea which setting it
+      // was. `error` level, not `warn`: the user did something deliberate and it did not stick.
+      await expectLater(store.write(GPLocale.vi), completes);
+      expect(logger.last.level, GPLogLevel.error);
+    });
+
+    test('logs nothing a language choice could leak', () async {
+      await store.write(GPLocale.vi);
+
+      // Golden rule 9 is about financial payloads, and a locale is not one — but the habit of logging the key rather than the value is what keeps the
+      // rule cheap to follow when the same shape reaches a store that does hold money.
+      expect(logger.last.fields, {'key': 'locale.selected'});
+    });
   });
 }
