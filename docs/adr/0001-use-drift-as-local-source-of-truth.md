@@ -2,13 +2,17 @@
 
 ## Status
 
-**Draft** — 2026-09-12 (W1, weekend flex). Amended 2026-09-14 (W2 T2) and
-2026-09-15 (W2 T3).
+**Accepted** — 2026-09-16 (W2 T4). Drafted 2026-09-12 (W1, weekend flex);
+amended 2026-09-14 (W2 T2) and 2026-09-15 (W2 T3).
 
-Becomes _Accepted_ in W2 flex, when the `create → watchAccounts emit` test
-passes. All three open questions are now answered and recorded below, so what
-keeps this a Draft is only the missing test — `AccountDao` is T4 and the
-repository is T6.
+The condition this ADR set for itself is met: `create → watchAccounts emit`
+passes, as the first test in
+`test/features/accounts/data/daos/account_dao_test.dart`. A row written through
+`AccountDao.insertAccount` reaches a `watch()` subscriber with nothing
+invalidating the query by hand — which is the whole claim golden rule 1 rests
+on, and the one thing that would have made this decision wrong if it had not
+held. All three open questions were answered at T2 and T3 and are recorded
+below.
 
 W2 T2 landed the store: `pubspec.yaml` carries Drift, `GPAppDatabase` exists
 with a `settings` table, and four tests in
@@ -19,8 +23,7 @@ claim in constraint 3 below stopped being a promise and became
 
 > **On the number.** 0001 is the slot Appendix E of `docs/blueprint.md` reserves
 > for this decision, and ADR-0002 recorded it as a deliberate gap rather than an
-> oversight. This fills the gap with a draft; the gap closes when the status
-> line above changes.
+> oversight. The gap is now closed.
 
 ## Context
 

@@ -111,7 +111,7 @@ lib/
 │   ├── auth/       # data/ domain/ presentation/
 │   ├── accounts/
 │   ├── transactions/
-│   │   ├── data/          # datasources/ dto/ mapper/ repositories/
+│   │   ├── data/          # tables/ daos/ datasources/ dto/ mapper/ repositories/
 │   │   ├── domain/        # entities/ repositories/ usecases/
 │   │   └── presentation/  # bloc/ pages/ widgets/
 │   ├── categories/ budgets/ analytics/ receipts/ recurring/ settings/
@@ -365,13 +365,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| Current phase        | **Phase 1 — Local-only vertical slice**                                                    |
-| Week                 | W2 (T2 + T3 done: `GPAppDatabase`, `settings`, `accounts`, first real migration v1→v2)     |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`     |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match        |
-| Drift schema version | 2 — `settings` + `accounts`; v1 and v2 both dumped to `drift_schemas/`, migration tested   |
-| Backend              | not set up yet                                                                             |
-| Latest ADR           | 0005 — design tokens as `ThemeExtension`; 0001 amended at W2 T3, all open questions closed |
-| Blocker              | —                                                                                          |
+| Field                | Value                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                  |
+| Week                 | W2 (T2–T4 done: `GPAppDatabase`, `settings`, `accounts`, migration v1→v2, `AccountDao`)  |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`   |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match      |
+| Drift schema version | 2 — `settings` + `accounts`; v1 and v2 both dumped to `drift_schemas/`, migration tested |
+| Backend              | not set up yet                                                                           |
+| Latest ADR           | 0005 — design tokens as `ThemeExtension`; **0001 Accepted at W2 T4** (gate test passes)  |
+| Blocker              | —                                                                                        |
