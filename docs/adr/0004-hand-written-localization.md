@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-11 (W1, unplanned)
+Accepted — 2026-09-11 (W1, unplanned). Amended 2026-09-16 (W2 T4), when the
+persistence this ADR deferred actually landed — see the closing section.
 
 ## Context
 
@@ -21,7 +22,7 @@ already on the calendar bake in an answer whether or not one has been chosen:
    repository and use case that constructs one is a place English is baked
    into the domain layer.
 2. **W3 T5 — `seed default categories (is_system = true)`.** How a system
-   category's name is stored is a *schema* decision. Get it wrong and the fix
+   category's name is stored is a _schema_ decision. Get it wrong and the fix
    is a migration, on a table that by then has rows.
 3. **W3 — the `Money` value object.** `1.234,56 ₫` and `₫1,234.56` are the same
    amount. Parsing a typed amount is locale-dependent in the other direction,
@@ -47,11 +48,11 @@ is a runtime fallback to English that ships silently.
 The shape follows the pattern already in use in `~/UTS/xperisemapp`, with three
 deliberate departures, each of which is a gap in that implementation:
 
-| There | Here | Why |
-| --- | --- | --- |
-| No `localizationsDelegates` / `supportedLocales` | `flutter_localizations` wired in `GPApp` | Otherwise Material's own widgets — the date picker on every transaction screen, the text-selection menu — stay English inside a Vietnamese app |
-| `XMLocalization.instance` static singleton | `GPLocalization` registered in `get_it` | Same reason as `GPClock` and `GPUuidGenerator` in ADR-0002: a global cannot be faked, so tests either all run in English or leak language into each other |
-| Strings read from the singleton inside `build()` | `GPLocalizationScope`, an `InheritedNotifier` | A plain field read compiles and then leaves the old language on screen; a dependency makes the rebuild automatic |
+| There                                            | Here                                          | Why                                                                                                                                                       |
+| ------------------------------------------------ | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `localizationsDelegates` / `supportedLocales` | `flutter_localizations` wired in `GPApp`      | Otherwise Material's own widgets — the date picker on every transaction screen, the text-selection menu — stay English inside a Vietnamese app            |
+| `XMLocalization.instance` static singleton       | `GPLocalization` registered in `get_it`       | Same reason as `GPClock` and `GPUuidGenerator` in ADR-0002: a global cannot be faked, so tests either all run in English or leak language into each other |
+| Strings read from the singleton inside `build()` | `GPLocalizationScope`, an `InheritedNotifier` | A plain field read compiles and then leaves the old language on screen; a dependency makes the rebuild automatic                                          |
 
 `GPLocalizationScope` is an `InheritedNotifier`, not an `InheritedWidget`
 holding the strings. A plain inherited widget would compare
@@ -60,7 +61,7 @@ mutable object on both sides, so always equal and never a rebuild. This was not
 a hypothetical: the first implementation had that bug and two widget tests
 caught it.
 
-The scope carries the *controller*, not just the strings, so a language picker
+The scope carries the _controller_, not just the strings, so a language picker
 calls `context.localization.changeLocale(...)` and no page has to reach into
 `getIt`.
 
@@ -83,11 +84,13 @@ calls `context.localization.changeLocale(...)` and no page has to reach into
   adding `shared_preferences` for one key today would mean owning two settings
   stores once Drift lands. W2 adds a local-only `settings` table and a
   `GPDriftLocaleStore`; nothing outside that file changes.
+  _Landed at W2 T4, and the last clause held literally: one line in
+  `injector.dart`._
 - **The locale does not sync.** It is a property of a device, not of an
   account: a phone kept in Vietnamese and a work tablet kept in English must
   not fight, and no sync round trip may sit between a tap and the repaint.
   This answers the Definition-of-Done question (`CLAUDE.md` §11) for this piece
-  of state: *decided, and the decision is "does not sync"*.
+  of state: _decided, and the decision is "does not sync"_.
 
 ### Consequences for the three items that forced this ADR
 
@@ -159,8 +162,52 @@ Negative:
 - Plurals and gendered forms have no built-in support. Not needed for
   English + Vietnamese; a third language may force a rethink, and this ADR is
   the place that rethink starts.
-- No persistence until W2: in W1 a language choice does not survive a restart.
-  Acceptable because W1 has no settings entry point other than the picker added
-  with this change.
+- ~~No persistence until W2: in W1 a language choice does not survive a
+  restart.~~ **Closed at W2 T4** — `GPDriftLocaleStore` is bound in production
+  and the choice survives a restart.
 - The blueprint's §47 (`gen_l10n`) and Appendix B (`ValidationFailure(message)`)
   are both now out of date. This ADR is the newer decision on both points.
+
+## Settled in W2 T4 (2026-09-16)
+
+**Persistence landed**, in `core/localization/drift_locale_store.dart`. The
+choice is one row in the local-only `settings` table under `locale.selected`,
+written as an upsert because `key` is the primary key and a second language
+change in one session would otherwise throw. The trade this ADR made in W1 —
+wait for Drift rather than add `shared_preferences` for a single key — is
+settled in its favour: the only wiring change outside the new file was the one
+registration line in `injector.dart`, exactly as predicted — the rest of the
+diff is doc comments that had gone stale and tests.
+
+Two decisions had to be made to finish it, neither of which W1 had the
+information to make:
+
+**1. An unrecognised stored code reads as `null`, not as English.**
+`GPLocale.fromLanguageCode` falls back to `GPLocale.en`, which is right where it
+is used — resolving a device locale we do not ship — and wrong when reading back
+our own storage. `null` from the store means _follow the device_ while `en`
+means _the user chose English_, and `GPLocalization.isExplicit` turns that
+difference into whether the device language is ever consulted again. A row left
+behind by a language we drop, or corrupted by anything, must degrade to "no
+usable choice" rather than silently become an explicit choice the user never
+made. So the store matches exactly and returns `null` on anything else.
+
+**2. A storage failure degrades; it never reaches the caller.** This is new risk
+created by this change rather than a pre-existing one. `bootstrap()` awaits
+`GPLocalization.init()` before `runApp`, so while the in-memory store was bound
+that call could not fail; reading sqlite, it can — and an escaping exception
+would be a dead app, with no UI to explain itself, over a language preference.
+A failed read therefore degrades to "no stored choice", which is exactly what a
+fresh install looks like, and a failed write degrades to a choice that applies
+now and is forgotten later. Both are logged (read at `warn`, write at `error` —
+the write case is a deliberate user action that did not stick), and the fields
+carry the key rather than the value.
+
+Swallowing on write also has a caller-shaped reason: `SettingsPage` fires
+`changeLocale` through `unawaited`, so an exception escaping there becomes an
+uncaught async error routed to `PlatformDispatcher.onError`, which logs the same
+failure with a worse message and no idea which setting produced it.
+
+What is explicitly _not_ bought here: this is not a general "swallow storage
+errors" policy. It is specific to a preference whose loss costs the user one
+tap. Anything holding money or an id fails loudly.

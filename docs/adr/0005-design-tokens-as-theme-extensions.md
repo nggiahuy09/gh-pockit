@@ -123,9 +123,11 @@ widgets inherit the palette through `toColorScheme()` / `toTextTheme()`, so a
 new role touches four places. `freezed` would remove it but cannot generate a
 `ThemeExtension`. Accepted as the cost of the analyzer knowing the role set.
 
-**Owed.** No in-app light/dark switch: `themeMode` follows the device until
-Settings has a `settings` table to persist a choice in (W2 flex) — the same
-debt the language picker carries. `GPMoneyText` is not built; it needs `Money`
+**Owed.** No in-app light/dark switch: `themeMode` follows the device. Half of
+this was paid at W2 — the `settings` table landed at T2 and `GPDriftLocaleStore`
+at T4 — so a theme choice now has somewhere to live, and the language picker is
+out of the debt it shared. What is left is a `GPThemeModeStore` beside the
+locale one plus the control to drive it, which is scope rather than a blocker. `GPMoneyText` is not built; it needs `Money`
 and tabular figures, which arrive in W3.
 
 ## Alternatives rejected
