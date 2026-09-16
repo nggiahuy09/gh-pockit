@@ -1,6 +1,10 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:ghpockit/app/di/injector.dart';
+import 'package:ghpockit/core/database/database.dart';
+import 'package:ghpockit/core/localization/drift_locale_store.dart';
+import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
 import 'package:ghpockit/core/utils/clock.dart';
@@ -49,6 +53,23 @@ void main() {
       container<GPAppLogger>().info('probe');
 
       expect(container<GPClock>(), isA<GPSystemClock>());
+    });
+
+    test('binds the locale store to Drift, not to the in-memory one', () async {
+      // The W1 debt ADR-0004 left open: with `GPInMemoryLocaleStore` bound, a chosen language did not survive a restart. Asserted on the container rather
+      // than trusted to the one-line swap, because nothing else in the app would fail if that line were reverted — the symptom is a setting quietly
+      // forgetting itself between launches, which no other test would notice.
+      //
+      // The database is swapped for an in-memory one first: the production registration reaches `path_provider` for a file path, and a plain unit test has
+      // no platform side to answer it. Swapping it is possible at all because every registration here is lazy — the store resolves the database when it is
+      // first asked for rather than when it is registered, which is the same property that keeps sqlite setup off the path to the first frame.
+      await container.unregister<GPAppDatabase>();
+      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
+
+      expect(container<GPLocaleStore>(), isA<GPDriftLocaleStore>());
+      // Against the interface, like every other registration here, so a test can still substitute the in-memory store.
+      expect(container.isRegistered<GPLocaleStore>(), isTrue);
+      expect(container.isRegistered<GPDriftLocaleStore>(), isFalse);
     });
 
     test('a reset container can be configured again', () async {

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
 import 'package:ghpockit/core/database/database.dart';
+import 'package:ghpockit/core/localization/drift_locale_store.dart';
 import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
@@ -39,8 +40,13 @@ void configureCoreDependencies({GetIt? container}) {
       // Debug lines are useful while developing and are noise (and a leak risk) in a shipped build, so the filter is set once, here.
       () => GPDeveloperLogger(clock: c<GPClock>(), minLevel: kReleaseMode ? GPLogLevel.info : GPLogLevel.debug),
     )
-    // The `settings` table now exists (W2 T2); this becomes `GPDriftLocaleStore` in W2 flex, and swapping this one line is the only change it needs (ADR-0004).
-    ..registerLazySingleton<GPLocaleStore>(GPInMemoryLocaleStore.new)
+    // Persistent since W2: before this the binding was `GPInMemoryLocaleStore` and a chosen language did not survive a restart (ADR-0004's W1 debt).
+    // Swapping this one line was indeed the only change the app needed, which was the claim `GPLocaleStore` existed to make good on.
+    //
+    // It does move one thing onto the startup path: `bootstrap()` awaits `GPLocalization.init()`, which now opens the database and reads a row before the
+    // first frame instead of returning null immediately. That is a primary-key lookup on a table holding one row, and it is the price of not painting
+    // English and then flipping to Vietnamese.
+    ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(database: c<GPAppDatabase>(), clock: c<GPClock>()))
     // Singleton, not a factory: it is the one object holding the active language, and a second instance would leave half the tree in the old one.
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
 }

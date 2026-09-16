@@ -591,9 +591,11 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   /// is read. VND has exponent 0 and USD exponent 2, so a malformed code makes the integer next to it un-interpretable rather than merely invalid. That is
   /// a storage-integrity property, and W3 T4's `CurrencyCode` catalog layers the business meaning — which codes actually exist — on top of it.
   ///
-  /// `check()` rather than the shorter `withLength(min: 3, max: 3)`: `withLength` compiles to a Dart-side validator only — the dumped SQL for such a column
-  /// is a bare `TEXT NOT NULL`, verified in `drift_schemas/drift_schema_v2.json` — so it would hold for a companion insert and evaporate for a raw upsert or
-  /// a migration. `check()` is written into the `CREATE TABLE`, which means it also survives into the schema fixtures W9 migrates against.
+  /// `check()` rather than the shorter `withLength(min: 3, max: 3)`, which is what this column was written as first. `withLength` compiles to a Dart-side
+  /// validator and nothing else: the column reached the schema dump as a bare `TEXT NOT NULL`, so it would have held for a companion insert and evaporated
+  /// for a raw upsert or a migration. `check()` is written into the `CREATE TABLE` instead, which also carries it into the fixtures W9 migrates against.
+  /// Both paths are asserted in `test/features/accounts/data/tables/accounts_table_test.dart` — the second test is there precisely to fail if someone
+  /// "simplifies" this back.
   final String currencyCode;
 
   /// Minor units, `int` — golden rule 2. 1.500.000 ₫ is `1500000`; $12.34 is `1234`. There is no `double` anywhere on the path from here to the UI.
