@@ -365,13 +365,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 1 — Local-only vertical slice**                                                       |
-| Week                 | W2 (T2–T4 + cả 2 flex done: Drift, `accounts`, migration v1→v2, `AccountDao`, locale persist) |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`        |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match           |
-| Drift schema version | 2 — `settings` + `accounts`; v1 and v2 both dumped to `drift_schemas/`, migration tested      |
-| Backend              | not set up yet                                                                                |
-| Latest ADR           | 0005 — design tokens as `ThemeExtension`; **0001 Accepted at W2 T4** (gate test passes)       |
-| Blocker              | —                                                                                             |
+| Field                | Value                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                                     |
+| Week                 | W2 (T2–T5 + cả 2 flex done: Drift, `accounts`, migration v1→v2, `AccountDao`, locale persist, domain layer) |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                      |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                         |
+| Drift schema version | 2 — `settings` + `accounts`; v1 and v2 both dumped to `drift_schemas/`, migration tested                    |
+| Backend              | not set up yet                                                                                              |
+| Latest ADR           | 0006 — repositories return `GPResult<T>`, only bugs throw (W2 T5); 0001 Accepted at W2 T4                   |
+| Blocker              | —                                                                                                           |
