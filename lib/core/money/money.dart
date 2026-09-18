@@ -40,6 +40,20 @@ final class Money implements Comparable<Money> {
 
   const Money._(this.minorUnits, this.currencyCode);
 
+  /// Parses a stored amount, returning null when [currencyCode] is malformed.
+  ///
+  /// The boundary twin of the throwing [Money.new], and the split is the same one `AccountType.fromStorage` makes. Inside the program a bad currency code
+  /// is a bug and should crash; coming back out of SQLite it is *data*, and the `accounts` row that holds it may have been written by a newer build or
+  /// corrupted outright. `AccountMapper` calls this and turns the null into a `GPDatabaseFailure`.
+  ///
+  /// Null rather than a `GPResult`, so `core/money/` keeps no dependency on `core/error/` — there is exactly one thing that can be wrong here, and the
+  /// caller already has to decide what it means in its own layer.
+  static Money? fromStorage(int minorUnits, String currencyCode) {
+    if (!_currencyCodePattern.hasMatch(currencyCode)) return null;
+
+    return Money._(minorUnits, currencyCode);
+  }
+
   /// Deliberately anchored and case-sensitive: `RegExp('[A-Z]{3}')` without anchors matches `'xxVNDxx'`, and allowing lowercase would let `'vnd'` and `'VND'`
   /// become two currencies that never compare equal.
   static final RegExp _currencyCodePattern = RegExp(r'^[A-Z]{3}$');
