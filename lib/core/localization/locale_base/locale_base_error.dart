@@ -11,7 +11,15 @@ abstract class GPLocaleBaseError {
   String get timeout;
   String get authentication;
   String get authorization;
-  String get validation;
+
+  /// One getter per `GPValidationCode`. Deliberately not one generic `validation` string: "Please check the information you entered" makes the user hunt
+  /// for the field that is wrong, and the whole reason `GPValidationCode` exists is to say which one it is.
+  ///
+  /// **No limit numbers in the copy.** `accountNameTooLong` does not read "max 100 characters": the limit lives in `Account.nameMaxLength`, presentation
+  /// must not import a feature's domain to build a sentence, and duplicating `100` in two languages is a number that goes stale silently. The form field
+  /// shows the limit with a live counter instead, which tells the user *before* they hit it rather than after.
+  String get validationAccountNameEmpty;
+  String get validationAccountNameTooLong;
   String get conflict;
   String get database;
   String get unknown;

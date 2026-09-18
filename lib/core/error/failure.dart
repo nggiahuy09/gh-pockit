@@ -51,13 +51,45 @@ final class GPAuthorizationFailure extends GPFailure {
   const GPAuthorizationFailure();
 }
 
+/// Which domain rule said no.
+///
+/// One constant per rule, and one `l10n.error.*` getter per constant. The enum is what turns "Please check the information you entered" into "Account name
+/// can't be empty" — a generic validation message makes the user hunt for the field, which is the whole cost this type exists to remove.
+///
+/// It appeared at W2 T5 rather than W4 as [GPValidationFailure] originally predicted: `Account` is the first entity with a rule, and it has two. The
+/// constraint that kept it honest still holds — a constant is added when a rule is written, never in anticipation of one (§12.11).
+///
+/// Named `<entity><Field><Problem>` so the list stays sorted by entity as it grows across features.
+enum GPValidationCode {
+  /// An account name that is empty, or only whitespace. Names are trimmed before the check, so `'   '` lands here rather than being stored as a blank name.
+  accountNameEmpty,
+
+  /// An account name past `Account.nameMaxLength`.
+  accountNameTooLong,
+}
+
 /// A domain rule said no. The write never reached persistence.
 ///
-/// Fieldless today because there are no domain rules yet — W1 has no entities. The first real rule lands in W4 ("a transfer needs a destination
-/// account, and it must differ from the source"), and that is the moment to add a `GPValidationCode` enum with one `l10n.error.*` getter per code.
-/// Inventing that enum now would mean guessing the rules, which is the day-one over-engineering CLAUDE.md §12.11 rejects.
+/// The only failure a *correct* user can produce by ordinary typing, which is why it is the one that has to be specific: [code] names the rule, and
+/// `failure_message.dart` turns it into a sentence about that rule.
+///
+/// It is still a failure and not an exception, because form validation is precisely the case ADR-0006 was written for — the user pressed Save, nothing
+/// was written, and the screen has to say why rather than sit still.
 final class GPValidationFailure extends GPFailure {
-  const GPValidationFailure();
+  const GPValidationFailure(this.code);
+
+  final GPValidationCode code;
+
+  /// Value equality, for the same reason [GPConflictFailure] has it: these are built at runtime from whichever rule tripped, so without it every
+  /// `expect(result, GPErr(GPValidationFailure(...)))` would compare identities and fail.
+  @override
+  bool operator ==(Object other) => identical(this, other) || other is GPValidationFailure && other.code == code;
+
+  @override
+  int get hashCode => Object.hash(GPValidationFailure, code);
+
+  @override
+  String toString() => 'GPValidationFailure(code: ${code.name})';
 }
 
 /// The server refused a write because the row moved on since this client last read it.
