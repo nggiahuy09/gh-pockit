@@ -15,7 +15,10 @@ const allFailures = <GPFailure>[
   GPTimeoutFailure(),
   GPAuthenticationFailure(),
   GPAuthorizationFailure(),
-  GPValidationFailure(),
+  // Every code, not one representative: each maps to its own sentence, so the "no two failures share a message" check below is what proves a new code did
+  // not quietly reuse an existing string.
+  GPValidationFailure(GPValidationCode.accountNameEmpty),
+  GPValidationFailure(GPValidationCode.accountNameTooLong),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPDatabaseFailure(),
   GPUnknownFailure(),
@@ -37,6 +40,35 @@ void main() {
           expect(allFailures[i], isNot(allFailures[j]), reason: '${allFailures[i].runtimeType} must not equal ${allFailures[j].runtimeType}');
         }
       }
+    });
+  });
+
+  group('GPValidationFailure', () {
+    test('every validation code appears in allFailures', () {
+      // The same manual-mirror problem the `allFailures` doc describes, one level down: a code with no row above ships with an untested message.
+      final covered = allFailures.whereType<GPValidationFailure>().map((failure) => failure.code).toSet();
+
+      expect(covered, GPValidationCode.values.toSet());
+    });
+
+    test('is equal by value, not by identity', () {
+      // Built without `const` on purpose, for the same reason as GPConflictFailure below: `const` would hand back one canonicalised object and the
+      // `identical` check would pass without saying anything about `operator ==`.
+      // ignore: prefer_const_constructors
+      final first = GPValidationFailure(GPValidationCode.accountNameEmpty);
+      // Same reason as above.
+      // ignore: prefer_const_constructors
+      final second = GPValidationFailure(GPValidationCode.accountNameEmpty);
+
+      expect(identical(first, second), isFalse);
+      expect(first, second);
+      expect(first.hashCode, second.hashCode);
+      expect(first, isNot(const GPValidationFailure(GPValidationCode.accountNameTooLong)));
+    });
+
+    test('toString carries the code and nothing else', () {
+      // Golden rule 9: a code is exactly what a log line may hold, and the field name it refers to is not user data.
+      expect(const GPValidationFailure(GPValidationCode.accountNameEmpty).toString(), 'GPValidationFailure(code: accountNameEmpty)');
     });
   });
 
@@ -99,6 +131,24 @@ void main() {
       // getter exists.
       for (final failure in allFailures) {
         expect(failure.message(const GPLocaleEn()), isNot(failure.message(const GPLocaleVi())), reason: '${failure.runtimeType} is not translated');
+      }
+    });
+
+    test('a validation message names the rule that broke, not just "invalid"', () {
+      // The reason GPValidationCode exists: a single generic sentence makes the user hunt for the field that is wrong. If these two ever converge, that
+      // has been given up.
+      const empty = GPValidationFailure(GPValidationCode.accountNameEmpty);
+      const tooLong = GPValidationFailure(GPValidationCode.accountNameTooLong);
+
+      expect(empty.message(const GPLocaleEn()), isNot(tooLong.message(const GPLocaleEn())));
+      expect(empty.message(const GPLocaleVi()), isNot(tooLong.message(const GPLocaleVi())));
+    });
+
+    test('a validation message carries no limit number', () {
+      // `Account.nameMaxLength` lives in a feature's domain and presentation must not import it to build a sentence; a hard-coded 100 in two languages is
+      // a number that goes stale silently. The form field shows the limit with a live counter instead.
+      for (final locale in locales) {
+        expect(const GPValidationFailure(GPValidationCode.accountNameTooLong).message(locale), isNot(contains('100')));
       }
     });
 
