@@ -16,7 +16,7 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 /// a screen, and the day one of them passes the wrong one is the day a shared device shows another user's rows.
 ///
 /// **Not a pass-through (§12.2).** The implementation at T6 owns what the DAO deliberately does not: minting the id (`GPUuidGenerator`, golden rule 4),
-/// reading `GPClock` once per operation, mapping row ↔ entity, and — from W7 — writing the outbox mutation inside the *same* transaction as the entity
+/// reading `GPClock` once per operation, mapping row ↔ entity, and — from W12 T5 — writing the outbox mutation inside the *same* transaction as the entity
 /// (golden rule 3). None of that is visible here, which is the point: the domain states the capability, the data layer owns the policy.
 ///
 /// **Failures, and which ones a caller must expect.** Every write returns `GPResult` (ADR-0006):

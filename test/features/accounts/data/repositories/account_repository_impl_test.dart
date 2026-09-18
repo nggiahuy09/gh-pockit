@@ -169,9 +169,12 @@ void main() {
       await insertUnmappableRow('broken');
       await repository.watchAccounts().first.catchError((Object _) => <AccountEntity>[]);
 
-      // Golden rule 9: an id and an entity type are exactly what a log line may hold. `Ví hỏng` is the row's name and must not appear.
+      // Golden rule 9: an id, an entity type and an **error code** are exactly what a log line may hold. `Ví hỏng` is the row's name and must not appear.
+      //
+      // The reason is what keeps P7 usable: the user gets one sentence for all three rejection causes, so without this the crash reports would hold a
+      // single undifferentiated cluster and no way to tell a schema drift from a corrupted file.
       expect(logger.last.level, GPLogLevel.error);
-      expect(logger.last.fields, {'entity': 'account', 'id': 'broken'});
+      expect(logger.last.fields, {'entity': 'account', 'id': 'broken', 'reason': 'unknownType'});
     });
   });
 
@@ -316,17 +319,90 @@ void main() {
     });
   });
 
-  test('a rejected write surfaces as a database failure, not as a crash', () async {
-    await create();
-    // A second repository with its own generator, so it mints the id the first one already used. A primary-key collision is the most realistic local
-    // write failure there is, and it arrives as a `SqliteException` — an `Exception`, which is exactly the class this layer is allowed to swallow.
-    final collides = AccountRepositoryImpl(dao: dao, clock: clock, uuidGenerator: FakeUuidGenerator(), logger: logger, ownerId: localOwnerId);
+  group('a write the database refuses', () {
+    /// Builds a repository whose DAO fails every write with [thrown].
+    ///
+    /// **The one place this file uses a double**, and the reason is narrow: a real in-memory database does not fail on request, so the three `catch` sites
+    /// in the repository would otherwise be unreachable from a test. That is the honest cost of testing against real SQL, and a fake this small pays it
+    /// without turning the rest of the file into an assertion that the repository calls the methods it calls.
+    AccountRepositoryImpl repositoryFailingWith(Object thrown) => AccountRepositoryImpl(
+      dao: ThrowingAccountDao(db, thrown),
+      clock: clock,
+      uuidGenerator: uuid,
+      logger: logger,
+      ownerId: localOwnerId,
+    );
 
-    final result = await collides.createAccount(name: 'Ví', type: AccountType.cash, initialBalance: Money.zero('VND'));
+    test('createAccount reports it and logs an id, not the row', () async {
+      final result = await repositoryFailingWith(Exception('disk full')).createAccount(
+        name: 'Ví tiền mặt',
+        type: AccountType.cash,
+        initialBalance: Money(1500000, 'VND'),
+      );
 
-    expect(result, const GPErr<AccountEntity>(GPDatabaseFailure()));
-    expect(logger.last.level, GPLogLevel.error);
-    // Rule 9, on the path where dumping the whole row into the log is most tempting: an id and an entity type, nothing else.
-    expect(logger.last.fields.keys, ['entity', 'id']);
+      expect(result, const GPErr<AccountEntity>(GPDatabaseFailure()));
+      expect(logger.last.level, GPLogLevel.error);
+      // Golden rule 9, on the path where dumping the whole row into the log is most tempting: an id and an entity type, nothing else. The name and the
+      // 1500000 above are both in scope at the call site.
+      expect(logger.last.fields.keys, ['entity', 'id']);
+    });
+
+    test('updateAccount reports it, rolling the transaction back', () async {
+      final created = await create();
+
+      final result = await repositoryFailingWith(Exception('locked')).updateAccount(created);
+
+      expect(result, const GPErr<AccountEntity>(GPDatabaseFailure()));
+      // The guarded update runs inside a transaction, so a throw there must leave the row exactly as it was rather than half-applied.
+      expect((await dao.findById(created.id))!.name, created.name);
+    });
+
+    test('the unguarded writes report it too', () async {
+      final failing = repositoryFailingWith(Exception('io error'));
+
+      // `archiveAccount`, `unarchiveAccount` and `deleteAccount` share one `catch` site; this covers it.
+      expect(await failing.archiveAccount('a1'), const GPErr<void>(GPDatabaseFailure()));
+      expect(logger.last.fields['id'], 'a1');
+    });
+
+    test('a real primary-key collision is a database failure like any other', () async {
+      await create();
+      // Not a double: a second repository with its own generator mints the id the first one already used. The most realistic local write failure there is,
+      // and it arrives as an `Exception` — which is the class this layer is allowed to swallow.
+      final collides = AccountRepositoryImpl(dao: dao, clock: clock, uuidGenerator: FakeUuidGenerator(), logger: logger, ownerId: localOwnerId);
+
+      final result = await collides.createAccount(name: 'Ví', type: AccountType.cash, initialBalance: Money.zero('VND'));
+
+      expect(result, const GPErr<AccountEntity>(GPDatabaseFailure()));
+    });
+
+    test('an Error is not swallowed — it is a bug and must reach the crash reporter', () async {
+      // The whole point of `on Exception` rather than `on Object`. Turning a broken invariant into "could not read local data" would hide a bug behind a
+      // message the user can do nothing about, and P7's Sentry would never see it.
+      await expectLater(
+        repositoryFailingWith(StateError('broken invariant')).createAccount(name: 'Ví', type: AccountType.cash, initialBalance: Money.zero('VND')),
+        throwsA(isA<StateError>()),
+      );
+      expect(logger.records, isEmpty);
+    });
   });
+}
+
+/// An [AccountDao] whose three write methods fail with a given object.
+///
+/// Subclasses the real DAO rather than implementing an interface: it stays attached to the same in-memory database, so `transaction()` and every read still
+/// behave, and only the write under test misbehaves. Extracting an interface just to fake it would add a file to `domain/` that nothing in production needs.
+class ThrowingAccountDao extends AccountDao {
+  ThrowingAccountDao(super.attachedDatabase, this.thrown);
+
+  final Object thrown;
+
+  @override
+  Future<void> insertAccount(AccountsTableCompanion row) => Future<void>.error(thrown);
+
+  @override
+  Future<int> updateAccount(String id, {required int baseVersion, required AccountsTableCompanion patch, required int now}) => Future<int>.error(thrown);
+
+  @override
+  Future<int> archive(String id, {required int now}) => Future<int>.error(thrown);
 }

@@ -19,7 +19,7 @@ import 'package:ghpockit/features/accounts/domain/repositories/account_repositor
 /// holds no clock, no id generator and no opinion; this class supplies all three, so exactly one layer decides:
 ///
 /// - **the id**, minted by `GPUuidGenerator.v7` before the row exists (golden rule 4, ADR-0002) — never handed back by a server;
-/// - **the instant**, read from `GPClock` **once per operation** and passed everywhere that operation writes. From W7 that same instant also lands on the
+/// - **the instant**, read from `GPClock` **once per operation** and passed everywhere that operation writes. From W12 T5 that same instant also lands on the
 ///   `sync_mutations` row written in the same transaction (golden rule 3), so the entity and its mutation describe one moment rather than two;
 /// - **the owner**, which the domain never sees (see `AccountRepository`);
 /// - **what a failure means**: zero rows written is a conflict, or a tombstone, or a row that was never there, and only this layer can tell them apart.
@@ -28,7 +28,7 @@ import 'package:ghpockit/features/accounts/domain/repositories/account_repositor
 /// the sync engine of P4 pushes it afterwards from the outbox. That is why `GPNetworkFailure` cannot come out of any method below, and why there is no
 /// `bool isOnline` branching between a local and a remote path (§12.5) — the local path is the only path.
 ///
-/// **What W7 adds, and where.** Every write below becomes a transaction containing the entity write *and* an outbox insert. [updateAccount] already opens
+/// **What W12 T5 adds, and where.** Every write below becomes a transaction containing the entity write *and* an outbox insert. [updateAccount] already opens
 /// one for a different reason, which is a useful rehearsal: the shape does not change, only what goes inside the block.
 class AccountRepositoryImpl implements AccountRepository {
   const AccountRepositoryImpl({
@@ -68,13 +68,17 @@ class AccountRepositoryImpl implements AccountRepository {
 
               for (final row in rows) {
                 switch (_mapper.toEntity(row)) {
-                  case GPOk<AccountEntity>(:final value):
-                    entities.add(value);
-                  case GPErr<AccountEntity>(:final failure):
+                  case MappedAccount(:final account):
+                    entities.add(account);
+                  case UnmappableAccountRow(:final reason, :final failure):
                     // **The whole list fails, rather than the bad row being skipped.** Skipping would drop an account from the user's list silently, and a
                     // balance that is quietly missing one account is worse than a screen that says it could not read local data. Golden rule 1 leaves no
                     // remote copy to reconcile against, so a row that will not parse is a real problem and has to look like one.
-                    _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': row.id});
+                    //
+                    // **This is also the policy with no way out yet**: one corrupt row makes the accounts screen unusable and the app offers no repair.
+                    // Named as debt in ADR-0006 rather than papered over — and `watchTransactions` at W4 T6 must decide it again from scratch, because at
+                    // 50k rows the same rule hides a year of history instead of five accounts.
+                    _logRejectedRow(row.id, reason);
                     sink.addError(failure);
                     return;
                 }
@@ -100,10 +104,10 @@ class AccountRepositoryImpl implements AccountRepository {
               }
 
               switch (_mapper.toEntity(row)) {
-                case GPOk<AccountEntity>(:final value):
-                  sink.add(value);
-                case GPErr<AccountEntity>(:final failure):
-                  _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': row.id});
+                case MappedAccount(:final account):
+                  sink.add(account);
+                case UnmappableAccountRow(:final reason, :final failure):
+                  _logRejectedRow(row.id, reason);
                   sink.addError(failure);
               }
             },
@@ -113,7 +117,7 @@ class AccountRepositoryImpl implements AccountRepository {
 
   @override
   Future<GPResult<AccountEntity>> createAccount({required String name, required AccountType type, required Money initialBalance}) async {
-    // One read of the clock for the whole operation — `created_at` and `updated_at` must be the same instant on a fresh row, and from W7 the outbox
+    // One read of the clock for the whole operation — `created_at` and `updated_at` must be the same instant on a fresh row, and from W12 T5 the outbox
     // mutation joins them.
     final now = _clock.nowUtc();
 
@@ -201,6 +205,16 @@ class AccountRepositoryImpl implements AccountRepository {
       return _databaseFailure<void>(failureMessage, id, error, stackTrace);
     }
   }
+
+  /// Logs a row the mapper refused.
+  ///
+  /// The user gets one sentence for all three reasons; the log gets the reason. That asymmetry is the point (see [UnmappableAccountRow.failure]): without
+  /// it, P7's crash reports would hold one undifferentiated "could not map a row" cluster covering a schema drift, a corrupted file and a row written by a
+  /// build that predates a rule.
+  ///
+  /// An id, an entity type and an error code — exactly the three things golden rule 9 allows. The row's name, balance and currency are all in scope at the
+  /// call sites and none of them is logged.
+  void _logRejectedRow(String id, AccountMapperReason reason) => _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': id, 'reason': reason.name});
 
   /// Logs a local-storage failure and reports it as one.
   ///

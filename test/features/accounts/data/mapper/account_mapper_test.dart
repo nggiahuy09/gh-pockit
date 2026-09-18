@@ -60,57 +60,76 @@ void main() {
 
   group('toEntity', () {
     test('maps every column, joining the two money columns into one Money', () {
-      final result = mapper.toEntity(row()) as GPOk<AccountEntity>;
+      final result = mapper.toEntity(row()) as MappedAccount;
 
-      expect(result.value.id, 'a1');
-      expect(result.value.name, 'Ví tiền mặt');
-      expect(result.value.type, AccountType.cash);
+      expect(result.account.id, 'a1');
+      expect(result.account.name, 'Ví tiền mặt');
+      expect(result.account.type, AccountType.cash);
       // The disagreement that matters most: two columns in SQLite, one indivisible value above it.
-      expect(result.value.initialBalance, Money(1500000, 'VND'));
-      expect(result.value.isArchived, isFalse);
-      expect(result.value.version, 1);
+      expect(result.account.initialBalance, Money(1500000, 'VND'));
+      expect(result.account.isArchived, isFalse);
+      expect(result.account.version, 1);
     });
 
     test('turns epoch millis into UTC DateTimes', () {
-      final result = mapper.toEntity(row()) as GPOk<AccountEntity>;
+      final result = mapper.toEntity(row()) as MappedAccount;
 
-      expect(result.value.createdAt, DateTime.fromMillisecondsSinceEpoch(t0, isUtc: true));
-      expect(result.value.updatedAt, DateTime.fromMillisecondsSinceEpoch(t1, isUtc: true));
+      expect(result.account.createdAt, DateTime.fromMillisecondsSinceEpoch(t0, isUtc: true));
+      expect(result.account.updatedAt, DateTime.fromMillisecondsSinceEpoch(t1, isUtc: true));
       // §6 keeps timezones out of storage; a non-UTC DateTime reaching the domain would make `createdAt == createdAt` depend on the device.
-      expect(result.value.createdAt.isUtc, isTrue);
-      expect(result.value.updatedAt.isUtc, isTrue);
+      expect(result.account.createdAt.isUtc, isTrue);
+      expect(result.account.updatedAt.isUtc, isTrue);
     });
 
     test('drops owner_id and deleted_at, which the entity does not carry', () {
       // Asserted by construction: there is no field to read them from. What this pins is that a tombstone still maps — see below.
-      final result = mapper.toEntity(row(deletedAt: t1)) as GPOk<AccountEntity>;
+      final result = mapper.toEntity(row(deletedAt: t1)) as MappedAccount;
 
-      expect(result.value.id, 'a1');
+      expect(result.account.id, 'a1');
     });
 
     test('maps a tombstone rather than refusing it', () {
       // Deliberate: `AccountDao.findById` is the one read that sees tombstones, and W13's applier needs to map one in order to reconcile it. Every read a
       // user reaches already filters `deleted_at IS NULL` in SQL, so filtering here too would only break the applier.
-      expect(mapper.toEntity(row(deletedAt: t1)), isA<GPOk<AccountEntity>>());
+      expect(mapper.toEntity(row(deletedAt: t1)), isA<MappedAccount>());
     });
 
     test('reports an unknown type as a database failure, not as an "other" account', () {
       // Coercing to `AccountType.other` would hide the corruption and then write the coerced value back on the next edit, destroying the original.
-      expect(mapper.toEntity(row(type: 'savings')), const GPErr<AccountEntity>(GPDatabaseFailure()));
+      expect((mapper.toEntity(row(type: 'savings')) as UnmappableAccountRow).reason, AccountMapperReason.unknownType);
     });
 
     test('reports a malformed currency code as a database failure', () {
       // Reached through `Money.fromStorage`, so no `Error` is caught on this path — the code is data here, not a programmer mistake.
-      expect(mapper.toEntity(row(currencyCode: 'vnd')), const GPErr<AccountEntity>(GPDatabaseFailure()));
-      expect(mapper.toEntity(row(currencyCode: '')), const GPErr<AccountEntity>(GPDatabaseFailure()));
+      expect((mapper.toEntity(row(currencyCode: 'vnd')) as UnmappableAccountRow).reason, AccountMapperReason.malformedCurrencyCode);
+      expect((mapper.toEntity(row(currencyCode: '')) as UnmappableAccountRow).reason, AccountMapperReason.malformedCurrencyCode);
     });
 
     test('re-labels a broken domain rule as a database failure, not a validation failure', () {
       // The UX decision in this file: the user is looking at a list, not typing. "Account name can't be empty" would be a sentence about an input that is
       // not on screen; what actually happened is that local data cannot be read.
-      expect(mapper.toEntity(row(name: '   ')), const GPErr<AccountEntity>(GPDatabaseFailure()));
-      expect(mapper.toEntity(row(name: 'a' * (AccountEntity.nameMaxLength + 1))), const GPErr<AccountEntity>(GPDatabaseFailure()));
+      expect((mapper.toEntity(row(name: '   ')) as UnmappableAccountRow).reason, AccountMapperReason.brokenDomainRule);
+      expect((mapper.toEntity(row(name: 'a' * (AccountEntity.nameMaxLength + 1))) as UnmappableAccountRow).reason, AccountMapperReason.brokenDomainRule);
     });
+  });
+
+  test('every rejection reads the same to the user, whatever the reason', () {
+    // The asymmetry this file exists to pin: three different bugs, one sentence. The reason is for the log (and P7's triage); the failure is for the
+    // person looking at a list, and there is only one true thing to tell them — local data cannot be read.
+    for (final reason in AccountMapperReason.values) {
+      expect(UnmappableAccountRow(reason).failure, const GPDatabaseFailure(), reason: '${reason.name} should not invent its own message');
+    }
+  });
+
+  test('every reason is reachable from a real row', () {
+    // The manual mirror the compiler cannot draw: an enum value nothing produces is a branch nothing tests.
+    final produced = {
+      (mapper.toEntity(row(type: 'savings')) as UnmappableAccountRow).reason,
+      (mapper.toEntity(row(currencyCode: 'vnd')) as UnmappableAccountRow).reason,
+      (mapper.toEntity(row(name: '  ')) as UnmappableAccountRow).reason,
+    };
+
+    expect(produced, AccountMapperReason.values.toSet());
   });
 
   group('toInsert', () {
@@ -178,7 +197,7 @@ void main() {
   test('a row survives a round trip through the entity and back', () {
     // The property the three-model rule is actually for: three shapes, no information lost between them.
     final original = row(type: 'credit_card', currencyCode: 'USD', initialBalance: -4500, isArchived: true, version: 7);
-    final mapped = (mapper.toEntity(original) as GPOk<AccountEntity>).value;
+    final mapped = (mapper.toEntity(original) as MappedAccount).account;
     final companion = mapper.toInsert(mapped, ownerId: localOwnerId);
 
     expect(companion.type, Value(original.type));

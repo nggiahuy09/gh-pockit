@@ -48,6 +48,10 @@ final class Money implements Comparable<Money> {
   ///
   /// Null rather than a `GPResult`, so `core/money/` keeps no dependency on `core/error/` — there is exactly one thing that can be wrong here, and the
   /// caller already has to decide what it means in its own layer.
+  ///
+  /// **The name will need revisiting at W13.** It reads right today because the only untrusted source is SQLite, and it mirrors
+  /// `AccountType.fromStorage`. Once a DTO parses a currency code off the wire it will call this too, and "fromStorage" for something that arrived over
+  /// HTTP reads wrong. Renaming now would be guessing at the shape of code that does not exist; the trigger is the first DTO, not this comment.
   static Money? fromStorage(int minorUnits, String currencyCode) {
     if (!_currencyCodePattern.hasMatch(currencyCode)) return null;
 

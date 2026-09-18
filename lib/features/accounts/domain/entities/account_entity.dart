@@ -44,6 +44,12 @@ final class AccountEntity {
   final String id;
 
   /// Already trimmed — [create] is the only way in and it trims. So a caller never has to wonder whether `' Ví '` and `'Ví'` are two accounts.
+  ///
+  /// **Not unique, and that is a decision rather than a gap.** Two accounts may share a name: a person with two cash wallets, or one card per bank with
+  /// the same nickname, is describing their real life and the app should not argue. Uniqueness would also be the wrong shape for a synced entity — the
+  /// check would have to run against rows a pull has not delivered yet, so it could only ever be advisory, and an advisory constraint that the UI enforces
+  /// and the server does not is a rule that breaks the first time two devices are used. Telling accounts apart is [id]'s job; if duplicates turn out to
+  /// confuse a picker, that is a presentation problem with a presentation answer (show the type, show the balance).
   final String name;
 
   final AccountType type;
