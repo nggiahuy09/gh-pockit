@@ -25,6 +25,7 @@ extension GPFailureMessage on GPFailure {
       GPValidationCode.accountNameTooLong => l10n.error.validationAccountNameTooLong,
     },
     GPConflictFailure() => l10n.error.conflict,
+    GPNotFoundFailure() => l10n.error.notFound,
     GPDatabaseFailure() => l10n.error.database,
     GPUnknownFailure() => l10n.error.unknown,
   };

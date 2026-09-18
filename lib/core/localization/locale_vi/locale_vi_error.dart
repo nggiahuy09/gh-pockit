@@ -25,6 +25,9 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override
+  String get notFound => 'Mục này không còn tồn tại.';
+
+  @override
   String get database => 'Không đọc được dữ liệu trên máy.';
 
   @override

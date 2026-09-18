@@ -118,6 +118,18 @@ final class GPConflictFailure extends GPFailure {
   String toString() => 'GPConflictFailure(entityId: $entityId, localVersion: $localVersion, remoteVersion: $remoteVersion)';
 }
 
+/// The row this operation names is not there any more — deleted, or never existed.
+///
+/// Added at W2 T6, when `AccountRepositoryImpl` needed to answer a write that matched zero rows. Kept apart from [GPConflictFailure], which is the *other*
+/// zero-row case, because the two need different words and different buttons: "changed on another device" invites a reload, "no longer exists" invites
+/// closing the screen. Collapsing them would have made a deleted account report a conflict the user can never resolve.
+///
+/// Not an error condition worth a crash report: on a synced account it is the normal result of deleting something on one device and editing it on another
+/// before the pull lands.
+final class GPNotFoundFailure extends GPFailure {
+  const GPNotFoundFailure();
+}
+
 /// The local database could not be read or written.
 ///
 /// This one is louder than it looks. The local DB is the source of truth for the UI (golden rule 1), so a failure here is not a degraded-offline

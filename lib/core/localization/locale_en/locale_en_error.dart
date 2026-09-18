@@ -25,6 +25,9 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get conflict => 'This item was changed on another device.';
 
   @override
+  String get notFound => 'That item no longer exists.';
+
+  @override
   String get database => 'Could not read local data.';
 
   @override

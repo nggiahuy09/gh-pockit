@@ -21,6 +21,7 @@ abstract class GPLocaleBaseError {
   String get validationAccountNameEmpty;
   String get validationAccountNameTooLong;
   String get conflict;
+  String get notFound;
   String get database;
   String get unknown;
   String get routeNotFoundTitle;
