@@ -21,9 +21,12 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 ///
 /// **Failures, and which ones a caller must expect.** Every write returns `GPResult` (ADR-0006):
 ///
-/// - [GPValidationFailure] — a domain rule said no, with a code naming the field. Only from the two methods that take user input.
+/// - [GPValidationFailure] — a domain rule said no, with a code naming the field. Only from [createAccount], which is the only method that takes raw
+///   user input. An edit is validated earlier, by `AccountEntity.update`, so the form can answer before anything reaches storage.
 /// - [GPConflictFailure] — the row moved on since this entity was read (§7). Only from [updateAccount], which is the only guarded write.
-/// - [GPDatabaseFailure] — the local DB refused. Possible from every method, and louder than it looks: there is no remote copy to fall back to.
+/// - [GPNotFoundFailure] — there is no live row with that id: deleted elsewhere, or never there. From every write that takes an id.
+/// - [GPDatabaseFailure] — the local DB refused, or a stored row could not be parsed. Possible from every method, and louder than it looks: there is no
+///   remote copy to fall back to.
 ///
 /// Notably *not* here: a network failure. Nothing on this interface talks to a server — a write lands locally and the sync engine pushes it later, so being
 /// offline is not an error condition and there is no `bool isOnline` deciding anything (§12.5).
@@ -40,6 +43,9 @@ abstract class AccountRepository {
   ///
   /// Errors arrive on the stream's error channel rather than wrapped in a `GPResult` per emission. Unwrapping in every widget would make the common path —
   /// there are accounts, render them — pay for the rare one, and `BLoC` already routes `onError` into a state; that is where the error UI (§11) is built.
+  ///
+  /// **The error object is always a [GPFailure]**, on this stream and on [watchAccount]. So an `onError` handler reads `failure.message(l10n)` with no type
+  /// test, exactly as the `GPResult` branches do — the channel differs, the vocabulary does not.
   Stream<List<AccountEntity>> watchAccounts({bool includeArchived = false});
 
   /// One account, live. Emits null once it is deleted, which is what a detail screen needs in order to pop itself rather than render a stale copy.
@@ -54,6 +60,9 @@ abstract class AccountRepository {
   Future<GPResult<AccountEntity>> createAccount({required String name, required AccountType type, required Money initialBalance});
 
   /// Applies [account] to storage, guarded on its [AccountEntity.version], and returns the stored result with a fresh `updatedAt`.
+  ///
+  /// Takes a whole entity rather than a field list, unlike [createAccount], because the caller already holds one and `AccountEntity.update` has already
+  /// validated the change. What the caller does *not* hold is the clock, so the new `updatedAt` is stamped here and returned.
   ///
   /// A [GPConflictFailure] here is an ordinary outcome, not a crash: the row was changed elsewhere between the read and this call. The caller has the local
   /// and remote version numbers and can offer the user a reload — which is why this is a return value and not a thrown exception (ADR-0006).

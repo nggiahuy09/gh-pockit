@@ -116,21 +116,19 @@ final class AccountEntity {
   /// A copy with some fields changed, re-validated.
   ///
   /// Returns a [GPResult] for the same reason [create] does: renaming to `''` is a user action, not a bug, and it has to produce a message rather than a
-  /// thrown error. [id] and [createdAt] are absent on purpose — an entity that can change its own identity or its own birth date is one the sync engine can
-  /// no longer match against a server row.
+  /// thrown error. This is the call a form makes on submit, so the failure lands where the user is looking — under the field — before anything touches
+  /// storage.
   ///
-  /// [updatedAt] is required, not optional: every field on this entity is synced, so every edit moves the pull cursor. Making it optional would make
-  /// "forgot to bump `updated_at`" a one-character mistake that produces a row which is locally correct and permanently invisible to W12's delta pull.
+  /// [id] and [createdAt] are absent on purpose: an entity that can change its own identity or its own birth date is one the sync engine can no longer
+  /// match against a server row.
+  ///
+  /// **[updatedAt] is absent too, and that is the load-bearing one.** It was a required parameter when this was written and it was the wrong shape: the
+  /// only correct value is "now", the only holder of "now" is `GPClock`, and the only layer that has one is the repository — which meant every caller
+  /// invented a timestamp that `AccountRepositoryImpl` then threw away. A parameter whose every value is discarded is a parameter that will eventually be
+  /// believed. Restamping is [stampedAt], the repository calls it, and nothing else needs to.
   ///
   /// [version] is settable because the *server* sets it — the repository writes the number that came back on a push. Nothing else should pass it.
-  GPResult<AccountEntity> update({
-    required DateTime updatedAt,
-    String? name,
-    AccountType? type,
-    Money? initialBalance,
-    bool? isArchived,
-    int? version,
-  }) => create(
+  GPResult<AccountEntity> update({String? name, AccountType? type, Money? initialBalance, bool? isArchived, int? version}) => create(
     id: id,
     name: name ?? this.name,
     type: type ?? this.type,
@@ -139,6 +137,25 @@ final class AccountEntity {
     updatedAt: updatedAt,
     isArchived: isArchived ?? this.isArchived,
     version: version ?? this.version,
+  );
+
+  /// The same account with a new [updatedAt]. Cannot fail, because nothing validated changes.
+  ///
+  /// The repository's half of the split above: [update] decides *what* the account says, this decides *when* it last said it. Keeping them apart is what
+  /// makes "an edit always moves the pull cursor" true by construction — there is no path that changes a field without going through the repository, and
+  /// the repository has no path that writes without calling this.
+  ///
+  /// Not a [GPResult], on purpose. Wrapping an operation that cannot fail would make callers write a branch that can never be taken, and a branch that can
+  /// never be taken is one nobody keeps correct.
+  AccountEntity stampedAt(DateTime updatedAt) => AccountEntity._(
+    id: id,
+    name: name,
+    type: type,
+    initialBalance: initialBalance,
+    isArchived: isArchived,
+    createdAt: createdAt,
+    updatedAt: updatedAt.toUtc(),
+    version: version,
   );
 
   /// Value equality over every field.

@@ -61,6 +61,20 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
     return query.watch();
   }
 
+  /// One live row by id, re-emitting on every change to it, and **null once it is gone** — archived, soft-deleted, or never there.
+  ///
+  /// Added at T6 for `AccountRepositoryImpl.watchAccount`, which a detail screen subscribes to so it can pop itself instead of rendering a copy of a row
+  /// another device just deleted. That is why null is an ordinary emission here rather than an error: "it is not there any more" is the answer.
+  ///
+  /// Scoped by [ownerId] like [watchAccounts], for the same W10 reason, even though an id is already globally unique — a read that is not owner-scoped is
+  /// one more line to find and fix when auth lands, and the id being a UUID makes the omission invisible until it is not.
+  ///
+  /// Archived rows are excluded with no opt-in, unlike [watchAccounts]. A detail screen reached from a list can only be reached for a row the list showed,
+  /// and the un-archive screen works from [watchAccounts] with `includeArchived: true`.
+  Stream<AccountRow?> watchAccount(String ownerId, String id) {
+    return (select(accountsTable)..where((t) => t.id.equals(id) & t.ownerId.equals(ownerId) & t.deletedAt.isNull() & t.isArchived.equals(false))).watchSingleOrNull();
+  }
+
   /// One row by id, tombstone included.
   ///
   /// The one read that does **not** filter `deleted_at IS NULL`, and the exception is load bearing: `RemoteChangeApplier` at W13 has to find a row it
@@ -99,6 +113,24 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
 
   /// Brings an archived account back into [watchAccounts].
   Future<int> unarchive(String id, {required int now}) => _setArchived(id, archived: false, now: now);
+
+  /// Stamps the tombstone (golden rule 5). Returns the number of rows written; 0 means there was no live row with that id.
+  ///
+  /// A soft delete, never a `DELETE`: the row has to survive so the server can be told it is gone, and so a pull that still carries it can be reconciled
+  /// against a local decision rather than re-inserting it. `sync_mutations` is the only table in this app a hard delete is legal on.
+  ///
+  /// [now] lands on `deleted_at` **and** on `updated_at`, and both matter for different reasons: `deleted_at` is what every read filters on, `updated_at` is
+  /// what makes the deletion visible to W12's delta pull. Writing only the first would produce a row that is locally gone and permanently invisible to sync.
+  ///
+  /// `version` does not move, same as [updateAccount] and [_setArchived] — it is the server's number.
+  ///
+  /// Unguarded by `baseVersion`. Deleting is terminal and idempotent: there is no merge to lose, so refusing because a rename landed first would only make
+  /// the user press delete twice. Re-deleting an already-deleted row writes nothing and returns 0, which the repository reports as "not found".
+  Future<int> softDelete(String id, {required int now}) {
+    return (update(accountsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).write(
+      AccountsTableCompanion(deletedAt: Value(now), updatedAt: Value(now)),
+    );
+  }
 
   Future<int> _setArchived(String id, {required bool archived, required int now}) {
     return (update(accountsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).write(
