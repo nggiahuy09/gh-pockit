@@ -43,6 +43,36 @@ void main() {
     });
   });
 
+  group('fromStorage', () {
+    test('parses a well-formed pair', () {
+      expect(Money.fromStorage(1500000, 'VND'), Money(1500000, 'VND'));
+      expect(Money.fromStorage(-4500, 'USD'), Money(-4500, 'USD'));
+    });
+
+    test('returns null instead of throwing on a malformed code', () {
+      // The boundary twin of the throwing constructor. Inside the program a bad code is a bug; coming back out of SQLite it is data, and `AccountMapper`
+      // turns this null into a GPDatabaseFailure rather than catching an `Error`.
+      expect(Money.fromStorage(1, 'vnd'), isNull);
+      expect(Money.fromStorage(1, 'VN'), isNull);
+      expect(Money.fromStorage(1, ''), isNull);
+    });
+
+    test('agrees with the constructor on what is valid', () {
+      // Two entry points, one rule. If they ever diverge, a row that cannot be constructed becomes a row that can be read, or the reverse.
+      const valid = ['VND', 'USD', 'XYZ'];
+      const malformed = ['vnd', 'VN', 'VNDD', '', 'V N', 'xxVNDxx'];
+
+      for (final code in valid) {
+        expect(Money.fromStorage(1, code), Money(1, code), reason: '$code should parse');
+      }
+
+      for (final code in malformed) {
+        expect(Money.fromStorage(1, code), isNull, reason: '$code should not parse');
+        expect(() => Money(1, code), throwsArgumentError, reason: '$code should not construct');
+      }
+    });
+  });
+
   group('arithmetic', () {
     test('adds and subtracts within one currency', () {
       expect(Money(1500000, 'VND') + Money(500000, 'VND'), Money(2000000, 'VND'));

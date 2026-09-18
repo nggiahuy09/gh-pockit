@@ -1,5 +1,6 @@
-// `isNull` is both a drift SQL predicate and a matcher expectation; this file wants the matcher. The SQL side stays reachable as `.isNull()` on a column.
-import 'package:drift/drift.dart' hide isNull;
+// `isNull`/`isNotNull` are both drift SQL predicates and matcher expectations; this file wants the matchers. The SQL side stays reachable as `.isNull()`
+// on a column.
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
@@ -52,9 +53,16 @@ void main() {
     version: 1,
   );
 
-  /// Soft-deletes through raw SQL: the repository owns soft delete at T6, and these tests need a tombstone now in order to assert that every DAO path
-  /// already ignores one.
-  Future<void> softDelete(String id) => db.customStatement('UPDATE accounts SET deleted_at = ? WHERE id = ?', [t1, id]);
+  /// Soft-deletes through raw SQL, even though [AccountDao.softDelete] exists as of T6.
+  ///
+  /// Deliberate: every group below asserts that some *other* method ignores a tombstone, and writing that tombstone with the method under test in the same
+  /// file would make those tests pass together and fail together. Raw SQL keeps the setup independent of what is being measured.
+  ///
+  /// Written through drift's update builder rather than `customStatement`, which was the first version of this helper: a raw statement does not tell drift
+  /// which tables it touched, so every `watch()` in the file stayed silent and a stream test could not observe a deletion at all.
+  Future<void> softDelete(String id) => (db.update(db.accountsTable)..where((t) => t.id.equals(id))).write(
+    const AccountsTableCompanion(deletedAt: Value(t1), updatedAt: Value(t1)),
+  );
 
   group('watchAccounts', () {
     test('create → watchAccounts emits the new account', () async {
@@ -233,6 +241,86 @@ void main() {
 
       expect(await dao.archive('nope', now: t1), 0);
       expect(await dao.archive('a1', now: t1), 0);
+    });
+  });
+
+  group('watchAccount', () {
+    test('emits the row, then null once it is gone', () async {
+      await dao.insertAccount(row());
+
+      final emissions = <AccountRow?>[];
+      final subscription = dao.watchAccount(localOwnerId, 'a1').listen(emissions.add);
+      await pumpEventQueue();
+
+      await softDelete('a1');
+      await pumpEventQueue();
+      await subscription.cancel();
+
+      // Null is an ordinary emission here, not an error: it is how a detail screen learns the row it is showing no longer exists.
+      expect(emissions.first!.id, 'a1');
+      expect(emissions.last, isNull);
+    });
+
+    test('emits null for an unknown id', () async {
+      expect(await dao.watchAccount(localOwnerId, 'nope').first, isNull);
+    });
+
+    test('hides an archived row, with no opt-in', () async {
+      await dao.insertAccount(row(isArchived: true));
+
+      // Unlike watchAccounts: a detail screen is reached from a list, and the list does not show archived rows. Un-archiving works off watchAccounts.
+      expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
+    });
+
+    test('never reaches across owners', () async {
+      await dao.insertAccount(row(ownerId: otherOwner));
+
+      // The id is a UUID and would be unique anyway — which is exactly why the missing filter would be invisible until W10 made it matter.
+      expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
+    });
+  });
+
+  group('softDelete', () {
+    test('stamps the tombstone and moves updated_at, leaving version alone', () async {
+      await dao.insertAccount(row());
+
+      expect(await dao.softDelete('a1', now: t1), 1);
+
+      final deleted = await dao.findById('a1');
+      // Golden rule 5: the row survives, because the server has to be told it is gone.
+      expect(deleted, isNotNull);
+      expect(deleted!.deletedAt, t1);
+      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W12's delta pull. Writing only one of them loses the
+      // deletion on one side or the other.
+      expect(deleted.updatedAt, t1);
+      expect(deleted.version, 1);
+    });
+
+    test('removes the row from every user-facing read', () async {
+      await dao.insertAccount(row());
+      await dao.softDelete('a1', now: t1);
+
+      expect(await dao.watchAccounts(localOwnerId).first, isEmpty);
+      expect(await dao.watchAccounts(localOwnerId, includeArchived: true).first, isEmpty);
+      expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
+      // The one read that still sees it, and the reason it exists: W13's applier has to find the row it already deleted.
+      expect(await dao.findById('a1'), isNotNull);
+    });
+
+    test('writes nothing the second time, or for an unknown id', () async {
+      await dao.insertAccount(row());
+
+      expect(await dao.softDelete('a1', now: t1), 1);
+      // Idempotent by outcome, but the row count is what the repository turns into "not found" — so deleting twice must not report success twice.
+      expect(await dao.softDelete('a1', now: t1), 0);
+      expect(await dao.softDelete('nope', now: t1), 0);
+    });
+
+    test('deletes an archived account without un-archiving it', () async {
+      await dao.insertAccount(row(isArchived: true));
+
+      expect(await dao.softDelete('a1', now: t1), 1);
+      expect((await dao.findById('a1'))!.isArchived, true);
     });
   });
 }

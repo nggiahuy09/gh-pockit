@@ -93,12 +93,10 @@ void main() {
   });
 
   group('update', () {
-    test('changes only what it is given, and always the timestamp', () {
-      final later = DateTime.utc(2026, 9, 15, 8);
-      final account = ok(ok(build()).update(name: 'Ví mới', updatedAt: later));
+    test('changes only what it is given', () {
+      final account = ok(ok(build()).update(name: 'Ví mới'));
 
       expect(account.name, 'Ví mới');
-      expect(account.updatedAt, later);
       // Untouched: identity, birth date, and everything not named in the call.
       expect(account.id, 'acc-1');
       expect(account.createdAt, createdAt);
@@ -107,14 +105,19 @@ void main() {
       expect(account.version, 1);
     });
 
+    test("does not move updatedAt — that is the repository's job", () {
+      // The parameter used to be here and required, and every caller passed a timestamp the repository then discarded. Only `GPClock` knows "now", and
+      // only the repository holds one, so restamping is `stampedAt` and this method stays about *what* the account says.
+      expect(ok(ok(build()).update(name: 'Ví mới')).updatedAt, updatedAt);
+    });
+
     test('re-validates the new name', () {
-      // A rename is user input like any other, so it fails the same way rather than throwing.
-      expect(ok(build()).update(name: '', updatedAt: updatedAt), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
+      // A rename is user input like any other, so it fails the same way rather than throwing — and it fails here, in the form, before storage is touched.
+      expect(ok(build()).update(name: ''), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
     });
 
     test('toggles isArchived without touching anything else', () {
-      final later = DateTime.utc(2026, 9, 15, 8);
-      final archived = ok(ok(build()).update(isArchived: true, updatedAt: later));
+      final archived = ok(ok(build()).update(isArchived: true));
 
       expect(archived.isArchived, isTrue);
       // Archived is not deleted and not a new version: as far as sync is concerned it is an ordinary field change (§7, `AccountDao.archive`).
@@ -125,9 +128,28 @@ void main() {
     test('leaves the original untouched', () {
       final original = ok(build());
 
-      ok(original.update(name: 'Something else', updatedAt: DateTime.utc(2026, 9, 15, 8)));
+      ok(original.update(name: 'Something else'));
 
       expect(original.name, 'Ví tiền mặt');
+    });
+  });
+
+  group('stampedAt', () {
+    test('moves updatedAt and nothing else', () {
+      final later = DateTime.utc(2026, 9, 15, 8);
+      final account = ok(build()).stampedAt(later);
+
+      expect(account.updatedAt, later);
+      expect(account.createdAt, createdAt);
+      expect(account.name, 'Ví tiền mặt');
+      expect(account.version, 1);
+    });
+
+    test('normalises to UTC', () {
+      final local = DateTime(2026, 9, 15, 17);
+
+      expect(ok(build()).stampedAt(local).updatedAt, local.toUtc());
+      expect(ok(build()).stampedAt(local).updatedAt.isUtc, isTrue);
     });
   });
 

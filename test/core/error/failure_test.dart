@@ -20,6 +20,7 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.accountNameEmpty),
   GPValidationFailure(GPValidationCode.accountNameTooLong),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
+  GPNotFoundFailure(),
   GPDatabaseFailure(),
   GPUnknownFailure(),
 ];
