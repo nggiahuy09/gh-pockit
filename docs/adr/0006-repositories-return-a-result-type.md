@@ -136,6 +136,31 @@ test would unwrap on the path that always succeeds, and `BLoC`'s existing
 
 - Use cases (W4 flex) return `GPResult` unchanged; whether they ever _translate_
   a failure is undecided and will be decided when the first one needs to.
-- Nothing has been said about _where_ a failure is logged. `GPAppLogger` exists,
-  the redactor exists, and the sync engine at P4 is where a logging policy is
-  worth writing down.
+- No app-wide policy says _where_ a failure is logged. W2 T6 set a shape rather
+  than a rule: `AccountRepositoryImpl` logs at `error` with `{entity, id}` and,
+  for a row it could not parse, an `AccountMapperReason` code. That is what
+  golden rule 9 allows and nothing more. Whether every repository does the same,
+  and what the sync engine adds, is worth writing down at P4.
+- **A corrupt local row has no way out, and this is debt, not a decision.**
+  `AccountRepositoryImpl.watchAccounts` fails the whole list when one row will
+  not map, on the argument that an account silently missing from a list and from
+  a balance is worse than an honest error state. That argument still holds, and
+  it has a hole: there is no repair path. A user with one bad row gets an
+  accounts screen that errors forever. `deleteAccount(id)` would fix it — it is
+  a plain `UPDATE` and never touches the mapper — but nothing in the UI can
+  surface the id to delete. The id _is_ in the log, next to the reason that
+  refused it, so the information exists; what is missing is a way for anyone but
+  a developer holding logcat to act on it. A quarantine or diagnostics path
+  belongs with P4's sync engine or P7's crash reporting, and until one exists
+  this policy is a bet that local rows do not corrupt.
+- **That policy must be decided again at W4 T6, from scratch.** With five
+  accounts, one bad row taking down the list is proportionate. With 50k
+  transactions it hides a year of history, and the middle ground — emit the good
+  rows plus a non-blocking warning — needs a stream shape this interface does not
+  have. Inheriting the `accounts` answer by copy-paste is the failure mode.
+- **Conflict resolution needs no extra read, and W20 should not add one.**
+  `GPConflictFailure` carries two version numbers and not the remote entity,
+  which looks like it forces the caller to re-read. It does not: a detail screen
+  is already subscribed to `watchAccount(id)`, so the fresh row has arrived
+  before the conflict returns. Putting the remote entity in the failure would
+  also drag a feature's entity into `core/error/`.
