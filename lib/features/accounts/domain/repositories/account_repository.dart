@@ -1,14 +1,14 @@
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 
 /// What the app can do with accounts, stated in the domain and implemented in `data/` (§3, dependency inversion).
 ///
 /// **Reads are streams, writes are futures, and that split is the architecture rather than a style choice.** Golden rule 1 makes the local DB the source of
 /// truth for the UI, so a screen never asks "what are the accounts now?" — it subscribes, and every write that lands anywhere (this device, a background
-/// sync, a pull from W12) arrives through the same subscription. A `Future<List<Account>>` read would be a snapshot that goes stale the moment a sync
+/// sync, a pull from W12) arrives through the same subscription. A `Future<List<AccountEntity>>` read would be a snapshot that goes stale the moment a sync
 /// applies, and the caller would have to know to re-fetch, which is the API-driven-UI anti-pattern (§12.1) wearing a repository's clothes.
 ///
 /// **No `ownerId` parameter anywhere.** `AccountDao` requires one on every query and it is right to; the repository is the layer that *knows* it — the
@@ -40,24 +40,24 @@ abstract class AccountRepository {
   ///
   /// Errors arrive on the stream's error channel rather than wrapped in a `GPResult` per emission. Unwrapping in every widget would make the common path —
   /// there are accounts, render them — pay for the rare one, and `BLoC` already routes `onError` into a state; that is where the error UI (§11) is built.
-  Stream<List<Account>> watchAccounts({bool includeArchived = false});
+  Stream<List<AccountEntity>> watchAccounts({bool includeArchived = false});
 
   /// One account, live. Emits null once it is deleted, which is what a detail screen needs in order to pop itself rather than render a stale copy.
-  Stream<Account?> watchAccount(String id);
+  Stream<AccountEntity?> watchAccount(String id);
 
   /// Creates an account and returns it as persisted.
   ///
-  /// Takes fields rather than an [Account] because the caller cannot build one: the id comes from `GPUuidGenerator` and the timestamps from `GPClock`, both
+  /// Takes fields rather than an [AccountEntity] because the caller cannot build one: the id comes from `GPUuidGenerator` and the timestamps from `GPClock`, both
   /// of which live behind this interface. That also means a `BLoC` cannot accidentally mint an id itself and desynchronise it from the outbox row.
   ///
   /// [initialBalance] carries its own currency, so there is no separate `currencyCode` argument to get out of step with it.
-  Future<GPResult<Account>> createAccount({required String name, required AccountType type, required Money initialBalance});
+  Future<GPResult<AccountEntity>> createAccount({required String name, required AccountType type, required Money initialBalance});
 
-  /// Applies [account] to storage, guarded on its [Account.version], and returns the stored result with a fresh `updatedAt`.
+  /// Applies [account] to storage, guarded on its [AccountEntity.version], and returns the stored result with a fresh `updatedAt`.
   ///
   /// A [GPConflictFailure] here is an ordinary outcome, not a crash: the row was changed elsewhere between the read and this call. The caller has the local
   /// and remote version numbers and can offer the user a reload — which is why this is a return value and not a thrown exception (ADR-0006).
-  Future<GPResult<Account>> updateAccount(Account account);
+  Future<GPResult<AccountEntity>> updateAccount(AccountEntity account);
 
   /// Hides an account from [watchAccounts] while keeping its history and its sync.
   ///

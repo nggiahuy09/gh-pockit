@@ -35,7 +35,7 @@ final class GPOk<T> extends GPResult<T> {
   final T value;
 
   /// Value equality, so a test can write `expect(result, GPOk(expectedAccount))` and get a readable diff instead of an identity mismatch. It only holds as
-  /// far as `T` itself has value equality — which is why `Account` and `Money` both implement `==`.
+  /// far as `T` itself has value equality — which is why `AccountEntity` and `Money` both implement `==`.
   @override
   bool operator ==(Object other) => identical(this, other) || other is GPOk<T> && other.value == value;
 

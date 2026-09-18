@@ -56,7 +56,7 @@ final class GPAuthorizationFailure extends GPFailure {
 /// One constant per rule, and one `l10n.error.*` getter per constant. The enum is what turns "Please check the information you entered" into "Account name
 /// can't be empty" — a generic validation message makes the user hunt for the field, which is the whole cost this type exists to remove.
 ///
-/// It appeared at W2 T5 rather than W4 as [GPValidationFailure] originally predicted: `Account` is the first entity with a rule, and it has two. The
+/// It appeared at W2 T5 rather than W4 as [GPValidationFailure] originally predicted: `AccountEntity` is the first entity with a rule, and it has two. The
 /// constraint that kept it honest still holds — a constant is added when a rule is written, never in anticipation of one (§12.11).
 ///
 /// Named `<entity><Field><Problem>` so the list stays sorted by entity as it grows across features.
@@ -64,7 +64,7 @@ enum GPValidationCode {
   /// An account name that is empty, or only whitespace. Names are trimmed before the check, so `'   '` lands here rather than being stored as a blank name.
   accountNameEmpty,
 
-  /// An account name past `Account.nameMaxLength`.
+  /// An account name past `AccountEntity.nameMaxLength`.
   accountNameTooLong,
 }
 

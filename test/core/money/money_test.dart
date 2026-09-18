@@ -115,7 +115,7 @@ void main() {
   });
 
   test('toString carries the amount, for test output only', () {
-    // Documented hazard rather than an oversight: `Account.toString` omits its balance and `redactSensitiveFields` blanks `amount`/`balance`/`minorunits`
+    // Documented hazard rather than an oversight: `AccountEntity.toString` omits its balance and `redactSensitiveFields` blanks `amount`/`balance`/`minorunits`
     // keys, so an amount only reaches a log if somebody interpolates this by hand. The alternative — a redacted `Money(VND)` — makes every failing
     // expectation in this file unreadable.
     expect(Money(1500000, 'VND').toString(), 'Money(1500000, VND)');

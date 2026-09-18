@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 
 /// The first domain entity under test (W2 T5).
@@ -13,19 +13,20 @@ void main() {
   final createdAt = DateTime.utc(2026, 9, 14, 10);
   final updatedAt = DateTime.utc(2026, 9, 14, 10);
 
-  GPResult<Account> build({String name = 'Ví tiền mặt', AccountType type = AccountType.cash, Money? initialBalance, bool isArchived = false, int version = 1}) => Account.create(
-    id: 'acc-1',
-    name: name,
-    type: type,
-    initialBalance: initialBalance ?? Money(1500000, 'VND'),
-    createdAt: createdAt,
-    updatedAt: updatedAt,
-    isArchived: isArchived,
-    version: version,
-  );
+  GPResult<AccountEntity> build({String name = 'Ví tiền mặt', AccountType type = AccountType.cash, Money? initialBalance, bool isArchived = false, int version = 1}) =>
+      AccountEntity.create(
+        id: 'acc-1',
+        name: name,
+        type: type,
+        initialBalance: initialBalance ?? Money(1500000, 'VND'),
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+        isArchived: isArchived,
+        version: version,
+      );
 
   /// Unwraps a result the test knows is ok, so the assertions below read as assertions rather than as switch statements.
-  Account ok(GPResult<Account> result) => (result as GPOk<Account>).value;
+  AccountEntity ok(GPResult<AccountEntity> result) => (result as GPOk<AccountEntity>).value;
 
   group('create', () {
     test('keeps every field it was given', () {
@@ -45,7 +46,7 @@ void main() {
       // `version` starts at 1 rather than 0 because §7 makes it the token the server matches on, and `accounts_table.dart` deliberately gives the column
       // no SQL default — a value nobody wrote is indistinguishable from a value the server confirmed.
       final account = ok(
-        Account.create(id: 'acc-2', name: 'Vietcombank', type: AccountType.bank, initialBalance: Money.zero('VND'), createdAt: createdAt, updatedAt: updatedAt),
+        AccountEntity.create(id: 'acc-2', name: 'Vietcombank', type: AccountType.bank, initialBalance: Money.zero('VND'), createdAt: createdAt, updatedAt: updatedAt),
       );
 
       expect(account.isArchived, isFalse);
@@ -59,22 +60,22 @@ void main() {
     test('rejects a blank name with a code naming the field', () {
       // The code, not just "invalid", is the UX point: the form puts this message under the name input instead of showing "check your input" and letting
       // the user hunt.
-      expect(build(name: ''), const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
+      expect(build(name: ''), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
     });
 
     test('treats a whitespace-only name as blank, not as three characters', () {
       // Trim happens before the check, so `'   '` cannot slip through and be stored as a name that renders as nothing.
-      expect(build(name: '   '), const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
+      expect(build(name: '   '), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
     });
 
     test('accepts a name exactly at the limit and rejects one past it', () {
-      expect(ok(build(name: 'a' * Account.nameMaxLength)).name.length, Account.nameMaxLength);
-      expect(build(name: 'a' * (Account.nameMaxLength + 1)), const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameTooLong)));
+      expect(ok(build(name: 'a' * AccountEntity.nameMaxLength)).name.length, AccountEntity.nameMaxLength);
+      expect(build(name: 'a' * (AccountEntity.nameMaxLength + 1)), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameTooLong)));
     });
 
     test('measures the limit after trimming', () {
       // Otherwise a pasted name with trailing spaces is rejected for a length the user cannot see.
-      expect(build(name: '${'a' * Account.nameMaxLength}   '), isA<GPOk<Account>>());
+      expect(build(name: '${'a' * AccountEntity.nameMaxLength}   '), isA<GPOk<AccountEntity>>());
     });
 
     test('normalises timestamps to UTC', () {
@@ -82,7 +83,7 @@ void main() {
       // instead of a failed test three layers away.
       final local = DateTime(2026, 9, 14, 17);
       final account = ok(
-        Account.create(id: 'acc-3', name: 'Momo', type: AccountType.eWallet, initialBalance: Money.zero('VND'), createdAt: local, updatedAt: local),
+        AccountEntity.create(id: 'acc-3', name: 'Momo', type: AccountType.eWallet, initialBalance: Money.zero('VND'), createdAt: local, updatedAt: local),
       );
 
       expect(account.createdAt.isUtc, isTrue);
@@ -108,7 +109,7 @@ void main() {
 
     test('re-validates the new name', () {
       // A rename is user input like any other, so it fails the same way rather than throwing.
-      expect(ok(build()).update(name: '', updatedAt: updatedAt), const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
+      expect(ok(build()).update(name: '', updatedAt: updatedAt), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
     });
 
     test('toggles isArchived without touching anything else', () {
@@ -155,7 +156,7 @@ void main() {
     // exists it is too late. Same guard as `failure_test.dart` keeps on GPConflictFailure.
     final account = ok(build(name: 'Lương tháng 9'));
 
-    expect(account.toString(), 'Account(id: acc-1, type: cash, isArchived: false, version: 1)');
+    expect(account.toString(), 'AccountEntity(id: acc-1, type: cash, isArchived: false, version: 1)');
     expect(account.toString(), isNot(contains('Lương')));
     expect(account.toString(), isNot(contains('1500000')));
   });

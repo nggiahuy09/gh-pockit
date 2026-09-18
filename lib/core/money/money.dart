@@ -6,7 +6,7 @@ import 'package:meta/meta.dart';
 /// disagrees with itself after enough additions. An `int` count of the smallest indivisible unit has no such failure mode — `1500000` dong is exactly
 /// 1.500.000 ₫ forever, and `1234` cents is exactly $12.34.
 ///
-/// **Pulled forward from W3 T2 into W2 T5**, because `Account.initialBalance` is the first field in the app that holds money and giving it a bare `int`
+/// **Pulled forward from W3 T2 into W2 T5**, because `AccountEntity.initialBalance` is the first field in the app that holds money and giving it a bare `int`
 /// would mean shipping an entity whose amount travels without its currency — then finding every call site again in a week. What stayed in W3 is
 /// `MoneyFormatter` and the `CurrencyCode` catalog: formatting needs `intl`, a locale, and per-currency exponents, and none of that is needed to *hold* an
 /// amount correctly.
@@ -103,7 +103,7 @@ final class Money implements Comparable<Money> {
 
   /// **For test output, never for a log.** This is the one financial payload in the codebase that prints itself in full, because a failing
   /// `expect(balance, ...)` that says `Instance of 'Money'` is worth nothing. Golden rule 9 is held one level up instead: `redactSensitiveFields` blanks
-  /// `amount`, `balance` and `minorunits` keys, and `Account.toString()` deliberately omits its balance — so an amount only reaches a sink if somebody
+  /// `amount`, `balance` and `minorunits` keys, and `AccountEntity.toString()` deliberately omits its balance — so an amount only reaches a sink if somebody
   /// interpolates this into a log line by hand.
   @override
   String toString() => 'Money($minorUnits, $currencyCode)';

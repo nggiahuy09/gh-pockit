@@ -87,7 +87,7 @@ Types in `core/` and shared widgets carry a `GP` prefix. Nothing else does.
 
 | Prefixed                                                                         | Not prefixed                                                                         |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| everything in `core/` — `GPClock`, `GPUuidGenerator`, `GPAppLogger`, `GPFailure` | domain entities and value objects — `Transaction`, `Account`, `Money`                |
+| everything in `core/` — `GPClock`, `GPUuidGenerator`, `GPAppLogger`, `GPFailure` | domain entities and value objects — `TransactionEntity`, `AccountEntity`, `Money`    |
 | shared widgets in `core/widgets/` — `GPButton`, `GPMoneyText`, `GPEmptyState`    | DTO / row / mapper — `TransactionDto`, `TransactionRow`, `TransactionMapper`         |
 | the root widget — `GPApp`                                                        | BLoC, page, use case, repository — `TransactionListBloc`, `CreateTransactionUseCase` |
 
@@ -96,6 +96,14 @@ Rules:
 - **Types only** (class, enum, mixin, typedef, extension). Top-level functions and constants keep plain names: `configureCoreDependencies()`, `redactSensitiveFields()`.
 - **File names never carry it.** `core/utils/clock.dart` holds `GPClock`. The path already says whose code it is; `gp_` on every file only makes imports longer.
 - **Test doubles of core types stay unprefixed** — `FakeClock`, `RecordingLogger`. They never leave `test/`, so they collide with nothing.
+- **An entity in `domain/entities/` carries an `Entity` suffix — on the class _and_ on the file.** `AccountEntity` in `account_entity.dart`, and its
+  test in `account_entity_test.dart`. This is the one place a suffix is mandatory rather than optional, because it is the one place the three-model
+  rule bites: `AccountEntity` / `AccountDto` / `AccountRow` are three names a reader tells apart in an import list, where a bare `Account` reads like
+  whichever of the three the surrounding file happens to be about. It is also why the file name carries it here and nowhere else — `account.dart`,
+  `account_dto.dart` and `accounts_table.dart` sitting in one editor's tab bar is exactly the confusion the suffix removes.
+- **The suffix stops at "is it an entity".** Not at the folder: an enum or value object living beside them takes no suffix — `AccountType` stays
+  `AccountType` in `account_type.dart`, because it is a type discriminator, not a thing with identity. Nor does anything in `domain/repositories/`
+  or `domain/usecases/`: `AccountRepository` and `CreateTransactionUseCase` already say what they are.
 
 Why only `core/`: those are the types shared by every feature, and the ones whose obvious names are already taken — `Clock` by `package:clock` (a transitive dep of `flutter_test`), `LogRecord` and `LogLevel` by `package:logging`. The prefix removes the `import as` gymnastics, and inside a `build()` it separates our widgets from Material's at a glance. Prefixing `GPTransaction` would add noise without adding information: the folder and the three-model suffix already say what it is.
 
@@ -326,7 +334,7 @@ A feature is Done only when **all** of these hold:
 - [ ] Unit tests for the logic that matters
 - [ ] Migration written if the schema changed, plus a migration test
 - [ ] Zero analyzer warnings
-- [ ] Naming follows §3 — a new type in `core/` or `core/widgets/` is `GP`-prefixed
+- [ ] Naming follows §3 — a new type in `core/` or `core/widgets/` is `GP`-prefixed, a new entity in `domain/entities/` is `Entity`-suffixed in class and file
 - [ ] Docs/ADR updated
 
 ---
@@ -353,7 +361,7 @@ A feature is Done only when **all** of these hold:
 - **Ask before adding a new dependency** or changing the architecture.
 - When asked to implement a feature: read the matching section of `docs/blueprint.md` first, then write code.
 - Write code in this order: domain entity → repository interface → DAO/drift table → repository impl → use case → BLoC → UI. Never jump straight to the UI.
-- Name new types by §3 **before** writing them, not in a rename pass afterwards: anything landing in `core/` or `core/widgets/` gets `GP`; entities, DTOs, rows, mappers, BLoCs, pages and use cases do not. If a name would collide with a package or with Flutter (`Clock`, `LogRecord`, `Card`, `Route`), that is a signal it belongs in `core/` with the prefix — not a reason to invent a synonym.
+- Name new types by §3 **before** writing them, not in a rename pass afterwards: anything landing in `core/` or `core/widgets/` gets `GP`; entities, DTOs, rows, mappers, BLoCs, pages and use cases do not. An entity also takes an `Entity` suffix on both the class and the file (`AccountEntity` in `account_entity.dart`), and only an entity does. If a name would collide with a package or with Flutter (`Clock`, `LogRecord`, `Card`, `Route`), that is a signal it belongs in `core/` with the prefix — not a reason to invent a synonym.
 - Always include tests in the same PR. Never "tests later".
 - When touching the schema: call out the `schemaVersion` bump, the migration, and the fixture test. Never wipe the DB unilaterally.
 - When a trade-off is unclear: propose two options with their consequences, let the user choose, then write the ADR.

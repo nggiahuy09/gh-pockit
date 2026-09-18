@@ -20,7 +20,7 @@ import 'package:drift/drift.dart';
 ///
 /// **On the name.** `AccountsTable`, unprefixed, under `features/accounts/data/` — §3 files rows next to DTOs and mappers, not next to `core/` types, and
 /// `GPAppDatabase` importing it is the one direction that is allowed: the database is a schema registry, so it collects inert row declarations. Nothing in
-/// `core/` imports an `AccountDao`, an `AccountRepositoryImpl` or an `Account`, and that is the line that keeps §3 true.
+/// `core/` imports an `AccountDao`, an `AccountRepositoryImpl` or an `AccountEntity`, and that is the line that keeps §3 true.
 @DataClassName('AccountRow')
 // Only the composite index, which is a documented divergence from blueprint §accounts — it lists `(owner_id)` as well.
 //
@@ -41,7 +41,7 @@ class AccountsTable extends Table {
   TextColumn get ownerId => text()();
 
   /// User-facing, user-editable. No length constraint here on purpose: "an account name may not be blank" is a business rule, and §3 puts business rules in
-  /// `domain/` where T5's `Account` can state it once for every caller, not in a CHECK that only the DB path enforces.
+  /// `domain/` where T5's `AccountEntity` can state it once for every caller, not in a CHECK that only the DB path enforces.
   TextColumn get name => text()();
 
   /// `AccountType` as of T5, stored as plain text and converted by `AccountMapper` at T6 — not `textEnum<AccountType>()`.

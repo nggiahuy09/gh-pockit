@@ -145,7 +145,7 @@ void main() {
     });
 
     test('a validation message carries no limit number', () {
-      // `Account.nameMaxLength` lives in a feature's domain and presentation must not import it to build a sentence; a hard-coded 100 in two languages is
+      // `AccountEntity.nameMaxLength` lives in a feature's domain and presentation must not import it to build a sentence; a hard-coded 100 in two languages is
       // a number that goes stale silently. The form field shows the limit with a live counter instead.
       for (final locale in locales) {
         expect(const GPValidationFailure(GPValidationCode.accountNameTooLong).message(locale), isNot(contains('100')));

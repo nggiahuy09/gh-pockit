@@ -12,16 +12,16 @@ import 'package:meta/meta.dart';
 /// | Row has | Entity has | Why they differ |
 /// | --- | --- | --- |
 /// | `ownerId` | — | Row-level ownership is a persistence and RLS concern. The repository knows the owner (`localOwnerId` now, the session uid at W10) and scopes every query with it; nothing in the domain branches on it, and putting it here would invite a `BLoC` to pass one in. |
-/// | `deletedAt` | — | A tombstone is not an account. `deleted_at IS NULL` is filtered in the DAO, so an [Account] that exists is an account that exists; soft delete is an operation on the repository, not a state of the entity. |
+/// | `deletedAt` | — | A tombstone is not an account. `deleted_at IS NULL` is filtered in the DAO, so an [AccountEntity] that exists is an account that exists; soft delete is an operation on the repository, not a state of the entity. |
 /// | `int createdAt` | `DateTime createdAt` | §6 stores epoch millis; a domain that has to remember which integer is a date is a domain doing the mapper's job. `AccountMapper` (T6) converts. |
 /// | `int initialBalance` + `String currencyCode` | one [Money] | An amount and its currency travelling separately is exactly how a VND number ends up rendered as dollars. |
 /// | `version` | `version` | The one persistence field that *is* domain-visible, because §7 makes it so: an edit carries its `baseVersion`, and a conflict is a user-facing outcome. |
 ///
-/// Immutable, like every entity here. An edit produces a new instance through [update], so a `BLoC` state holding an [Account] cannot be mutated out from
+/// Immutable, like every entity here. An edit produces a new instance through [update], so a `BLoC` state holding an [AccountEntity] cannot be mutated out from
 /// under the widget that is rendering it, and `flutter_bloc`'s equality check on state stays meaningful.
 @immutable
-final class Account {
-  const Account._({
+final class AccountEntity {
+  const AccountEntity._({
     required this.id,
     required this.name,
     required this.type,
@@ -65,7 +65,7 @@ final class Account {
   /// version is a base the server never issued, so every edit after it would report a conflict that is not one.
   final int version;
 
-  /// The only way to build an [Account], and the only place the two name rules live.
+  /// The only way to build an [AccountEntity], and the only place the two name rules live.
   ///
   /// Returns a [GPResult] rather than throwing because a blank name is something a correct user does by ordinary typing — ADR-0006's dividing line. The
   /// caller gets a [GPValidationCode] that names the field, so the form can put the message under the right input instead of showing "check your input".
@@ -76,7 +76,7 @@ final class Account {
   /// [createdAt] and [updatedAt] are required with no default, for the reason `AccountDao` makes `now` required: the repository reads `GPClock` once and
   /// passes the same instant to the entity and to the `sync_mutations` row it writes in the same transaction (golden rule 3). A default here would let the
   /// entity invent a second, slightly different "now".
-  static GPResult<Account> create({
+  static GPResult<AccountEntity> create({
     required String id,
     required String name,
     required AccountType type,
@@ -90,15 +90,15 @@ final class Account {
     final trimmedName = name.trim();
 
     if (trimmedName.isEmpty) {
-      return const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameEmpty));
+      return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty));
     }
 
     if (trimmedName.length > nameMaxLength) {
-      return const GPErr<Account>(GPValidationFailure(GPValidationCode.accountNameTooLong));
+      return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameTooLong));
     }
 
-    return GPOk<Account>(
-      Account._(
+    return GPOk<AccountEntity>(
+      AccountEntity._(
         id: id,
         name: trimmedName,
         type: type,
@@ -123,7 +123,7 @@ final class Account {
   /// "forgot to bump `updated_at`" a one-character mistake that produces a row which is locally correct and permanently invisible to W12's delta pull.
   ///
   /// [version] is settable because the *server* sets it — the repository writes the number that came back on a push. Nothing else should pass it.
-  GPResult<Account> update({
+  GPResult<AccountEntity> update({
     required DateTime updatedAt,
     String? name,
     AccountType? type,
@@ -148,7 +148,7 @@ final class Account {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Account &&
+      other is AccountEntity &&
           other.id == id &&
           other.name == name &&
           other.type == type &&
@@ -163,8 +163,8 @@ final class Account {
 
   /// **Carries no name and no balance, deliberately.** Golden rule 9 allows a log line to hold an id, an entity type and an error code; an account name is
   /// user data and a balance is a financial payload. This entity will be interpolated into sync and repository logs, so the safe thing has to be the default
-  /// thing — `redactSensitiveFields` only sees maps, not a string somebody already built. `account_test.dart` guards it, the same way `failure_test.dart`
+  /// thing — `redactSensitiveFields` only sees maps, not a string somebody already built. `account_entity_test.dart` guards it, the same way `failure_test.dart`
   /// guards `GPConflictFailure.toString`.
   @override
-  String toString() => 'Account(id: $id, type: ${type.name}, isArchived: $isArchived, version: $version)';
+  String toString() => 'AccountEntity(id: $id, type: ${type.name}, isArchived: $isArchived, version: $version)';
 }

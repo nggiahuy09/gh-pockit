@@ -58,7 +58,7 @@ this?**
   should happen to a bug.
 
 **Reads stay plain streams.** `watchAccounts()` returns
-`Stream<List<Account>>`, not `Stream<GPResult<List<Account>>>`. Errors travel on
+`Stream<List<AccountEntity>>`, not `Stream<GPResult<List<AccountEntity>>>`. Errors travel on
 the stream's own error channel, which `BLoC` already routes into a state.
 Wrapping each emission would make the common path — there are accounts, render
 them — pay for the rare one, in every widget.
@@ -72,13 +72,13 @@ one requires remembering that failure conventionally sits on the left, the other
 says which is which.
 
 **`GPValidationFailure` gains a `GPValidationCode`.** Its own doc comment
-predicted this for W4; `Account` brought the first real rules forward to W2 T5,
+predicted this for W4; `AccountEntity` brought the first real rules forward to W2 T5,
 and it has two of them. One constant per rule, one `l10n.error.*` getter per
 constant, mapped through the existing exhaustive switch in
 `failure_message.dart`. The generic `l10n.error.validation` string is deleted, so
 a new rule cannot fall back to "Please check the information you entered".
 
-Validation messages carry no limit numbers: `Account.nameMaxLength` lives in a
+Validation messages carry no limit numbers: `AccountEntity.nameMaxLength` lives in a
 feature's domain, presentation must not import it to build a sentence, and a
 hard-coded `100` in two languages goes stale silently. The form field shows the
 limit with a live counter instead — which tells the user before they hit it
@@ -93,7 +93,7 @@ this architecture forgetting produces a screen that silently does nothing rather
 than a visible crash. It also makes conflict — a routine outcome — indistinguishable
 in shape from a null dereference.
 
-**Nullable returns (`Future<Account?>`).** Cheapest of all, and enough to say
+**Nullable returns (`Future<AccountEntity?>`).** Cheapest of all, and enough to say
 _that_ something failed. Rejected because it cannot say _which_ failure, so the
 UI can only ever show one message. "Account name can't be empty" and "This item
 was changed on another device" need different words and different buttons.
@@ -126,7 +126,7 @@ test would unwrap on the path that always succeeds, and `BLoC`'s existing
 
 - Every write call site is a `switch` or a pattern match. That is the noise the
   decision is buying the guarantee with, and it is real.
-- `GPErr<void>` and `GPErr<Account>` are different types, so a repository
+- `GPErr<void>` and `GPErr<AccountEntity>` are different types, so a repository
   implementation that wants to forward a failure across methods must rebuild it.
   Annoying, and an `Either` would have exactly the same problem.
 - `GPResult` has no `map`/`flatMap`. Deliberate — §12.11 — and if chaining ever

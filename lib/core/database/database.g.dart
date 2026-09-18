@@ -575,7 +575,7 @@ class AccountRow extends DataClass implements Insertable<AccountRow> {
   final String ownerId;
 
   /// User-facing, user-editable. No length constraint here on purpose: "an account name may not be blank" is a business rule, and §3 puts business rules in
-  /// `domain/` where T5's `Account` can state it once for every caller, not in a CHECK that only the DB path enforces.
+  /// `domain/` where T5's `AccountEntity` can state it once for every caller, not in a CHECK that only the DB path enforces.
   final String name;
 
   /// `AccountType` as of T5, stored as plain text and converted by `AccountMapper` at T6 — not `textEnum<AccountType>()`.
