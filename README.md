@@ -64,7 +64,11 @@ GitHub cannot enable this from the repo, so set it by hand in
 - [ ] Require a pull request before merging (1 approval; self-approve is fine for a solo repo)
 - [ ] Require status checks to pass → select **`format → analyze → test`**
 - [ ] Require branches to be up to date before merging
-- [ ] Require linear history (matches the squash-merge rule in `CLAUDE.md` §10)
+- [ ] Leave **Require linear history** OFF — `CLAUDE.md` §10 merges a work branch into `dev`
+      with a merge commit (`--no-ff`), and linear history is exactly the rule that forbids one.
+      Turning it on leaves only squash or rebase, which flattens a week of distinct decisions
+      into a single commit — the history this repo exists to show. Squash stays the exception,
+      for a genuinely messy WIP branch.
 - [ ] Do not allow force pushes / deletions
 
 The status check only appears in the list after the workflow has run at least
