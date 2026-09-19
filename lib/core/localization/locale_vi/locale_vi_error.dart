@@ -16,10 +16,16 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get authorization => 'Bạn không có quyền thực hiện thao tác này.';
 
   @override
-  String get validation => 'Vui lòng kiểm tra lại thông tin đã nhập.';
+  String get validationAccountNameEmpty => 'Tên tài khoản không được để trống.';
+
+  @override
+  String get validationAccountNameTooLong => 'Tên tài khoản quá dài.';
 
   @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
+
+  @override
+  String get notFound => 'Mục này không còn tồn tại.';
 
   @override
   String get database => 'Không đọc được dữ liệu trên máy.';

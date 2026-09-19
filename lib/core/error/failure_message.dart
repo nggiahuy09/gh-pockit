@@ -18,8 +18,14 @@ extension GPFailureMessage on GPFailure {
     GPTimeoutFailure() => l10n.error.timeout,
     GPAuthenticationFailure() => l10n.error.authentication,
     GPAuthorizationFailure() => l10n.error.authorization,
-    GPValidationFailure() => l10n.error.validation,
+    // The one failure whose message is not a function of the type alone: the *code* picks the sentence, so a user reads which rule they broke instead of
+    // "check your input". Nested switch over a non-sealed enum, so adding a code without a message is still a compile error.
+    GPValidationFailure(:final code) => switch (code) {
+      GPValidationCode.accountNameEmpty => l10n.error.validationAccountNameEmpty,
+      GPValidationCode.accountNameTooLong => l10n.error.validationAccountNameTooLong,
+    },
     GPConflictFailure() => l10n.error.conflict,
+    GPNotFoundFailure() => l10n.error.notFound,
     GPDatabaseFailure() => l10n.error.database,
     GPUnknownFailure() => l10n.error.unknown,
   };

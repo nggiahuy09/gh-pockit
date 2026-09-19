@@ -16,6 +16,7 @@ Future<void> bootstrap(Widget Function() builder) async {
   WidgetsFlutterBinding.ensureInitialized();
 
   configureCoreDependencies();
+  configureAccountsDependencies();
   final logger = getIt<GPAppLogger>();
 
   final previousOnError = FlutterError.onError;

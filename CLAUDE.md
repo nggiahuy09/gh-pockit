@@ -87,7 +87,7 @@ Types in `core/` and shared widgets carry a `GP` prefix. Nothing else does.
 
 | Prefixed                                                                         | Not prefixed                                                                         |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| everything in `core/` — `GPClock`, `GPUuidGenerator`, `GPAppLogger`, `GPFailure` | domain entities and value objects — `Transaction`, `Account`, `Money`                |
+| everything in `core/` — `GPClock`, `GPUuidGenerator`, `GPAppLogger`, `GPFailure` | domain entities and value objects — `TransactionEntity`, `AccountEntity`, `Money`    |
 | shared widgets in `core/widgets/` — `GPButton`, `GPMoneyText`, `GPEmptyState`    | DTO / row / mapper — `TransactionDto`, `TransactionRow`, `TransactionMapper`         |
 | the root widget — `GPApp`                                                        | BLoC, page, use case, repository — `TransactionListBloc`, `CreateTransactionUseCase` |
 
@@ -96,6 +96,14 @@ Rules:
 - **Types only** (class, enum, mixin, typedef, extension). Top-level functions and constants keep plain names: `configureCoreDependencies()`, `redactSensitiveFields()`.
 - **File names never carry it.** `core/utils/clock.dart` holds `GPClock`. The path already says whose code it is; `gp_` on every file only makes imports longer.
 - **Test doubles of core types stay unprefixed** — `FakeClock`, `RecordingLogger`. They never leave `test/`, so they collide with nothing.
+- **An entity in `domain/entities/` carries an `Entity` suffix — on the class _and_ on the file.** `AccountEntity` in `account_entity.dart`, and its
+  test in `account_entity_test.dart`. This is the one place a suffix is mandatory rather than optional, because it is the one place the three-model
+  rule bites: `AccountEntity` / `AccountDto` / `AccountRow` are three names a reader tells apart in an import list, where a bare `Account` reads like
+  whichever of the three the surrounding file happens to be about. It is also why the file name carries it here and nowhere else — `account.dart`,
+  `account_dto.dart` and `accounts_table.dart` sitting in one editor's tab bar is exactly the confusion the suffix removes.
+- **The suffix stops at "is it an entity".** Not at the folder: an enum or value object living beside them takes no suffix — `AccountType` stays
+  `AccountType` in `account_type.dart`, because it is a type discriminator, not a thing with identity. Nor does anything in `domain/repositories/`
+  or `domain/usecases/`: `AccountRepository` and `CreateTransactionUseCase` already say what they are.
 
 Why only `core/`: those are the types shared by every feature, and the ones whose obvious names are already taken — `Clock` by `package:clock` (a transitive dep of `flutter_test`), `LogRecord` and `LogLevel` by `package:logging`. The prefix removes the `import as` gymnastics, and inside a `build()` it separates our widgets from Material's at a glance. Prefixing `GPTransaction` would add noise without adding information: the folder and the three-model suffix already say what it is.
 
@@ -111,7 +119,7 @@ lib/
 │   ├── auth/       # data/ domain/ presentation/
 │   ├── accounts/
 │   ├── transactions/
-│   │   ├── data/          # datasources/ dto/ mapper/ repositories/
+│   │   ├── data/          # tables/ daos/ datasources/ dto/ mapper/ repositories/
 │   │   ├── domain/        # entities/ repositories/ usecases/
 │   │   └── presentation/  # bloc/ pages/ widgets/
 │   ├── categories/ budgets/ analytics/ receipts/ recurring/ settings/
@@ -139,7 +147,8 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | Localization   | hand-written + `flutter_localizations`  | SDK (ADR-0004)              |
 | State          | `flutter_bloc`                          | 9.1.1                       |
 | DI             | `get_it`                                | 9.2.1                       |
-| Local DB       | `drift` + `drift_flutter`               | 2.34.x / 0.3.x              |
+| Local DB       | `drift` + `drift_flutter`               | 2.31.0 / 0.2.8 ⚠️           |
+| Codegen        | `build_runner` + `drift_dev`            | 2.15.1 / 2.31.0             |
 | HTTP           | `dio`                                   | 5.11.1                      |
 | Backend        | `supabase_flutter`                      | 2.17.2                      |
 | Immutable      | `freezed`, `json_serializable`          | — / 6.14.1                  |
@@ -156,9 +165,9 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 
 **Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
-**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and two rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12) and `very_good_analysis` (11.0.0 needs ≥3.10). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
+**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and three rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12), `very_good_analysis` (11.0.0 needs ≥3.10) and **Drift** (`drift` 2.33+ and `drift_flutter` 0.3+ both need ≥3.10, so 2.31.0 / 0.2.8 are the ceiling — W2 T2 found this; the earlier `2.34.x / 0.3.x` here simply does not resolve). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
 
-**Drift note:** do NOT add `sqlite3_flutter_libs` as older tutorials suggest — it is EOL in the current setup. Use the native `drift_flutter` setup. For encryption, use the SQLite3MultipleCiphers build hook if needed.
+**Drift note:** do NOT add `sqlite3_flutter_libs` **directly** as older tutorials suggest. `drift_flutter` already brings it in transitively, and on this SDK that is version `0.5.42`, not the `0.6.0+eol` release — the EOL one is what Dart ≥3.10 would pull. Adding it by hand is how a project ends up pinning the EOL line by accident. For encryption, use the SQLite3MultipleCiphers build hook if needed.
 
 **Before adding any new dependency**, you must be able to answer: (1) what problem does it solve, (2) what would it cost to do it ourselves, (3) is it still maintained, (4) does it affect native setup, (5) does it lock in the architecture. If you cannot answer, do not add it.
 
@@ -221,8 +230,11 @@ Sync engine tests must use a **fake clock** and a **fake remote**, never a real 
 ```bash
 # setup
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-dart run build_runner watch --delete-conflicting-outputs   # while developing
+# `--delete-conflicting-outputs` was REMOVED in build_runner 2.15 — passing it only prints a warning.
+# `dart format` must follow: the generator writes at 80 columns, the repo formats at 180, and
+# `dart format` has no exclude option, so the pre-commit hook fails on generated files otherwise.
+dart run build_runner build && fvm dart format .
+dart run build_runner watch                                # while developing
 
 # quality gate (the pre-commit hook runs the first two; see .githooks/pre-commit)
 fvm dart format --output=none --set-exit-if-changed .   # drop --output=none to rewrite files in place
@@ -265,6 +277,31 @@ flutter run --flavor dev --dart-define-from-file=env/dev.json
 - `dev` is staging, not a scratchpad: it must stay green, because a red `dev` means there is
   nothing to cut a test build from.
 
+### PR cadence — one PR per week, at the end of the week
+
+A work branch is pushed early and often, but its PR is opened **once the week's tasks are
+done**, not per task. `task/W2` collects T2…T6 plus the flex work and becomes a single PR into
+`dev` at the end of the week.
+
+The cost is real and worth stating: **CI does not run during the week.** `.github/workflows/ci.yml`
+triggers on PRs into `main`/`dev` and on pushes to them — a push to `task/W<n>` triggers nothing.
+So between Monday and the PR, the only gate is the local one:
+
+```bash
+fvm dart format --output=none --set-exit-if-changed .   # what .githooks/pre-commit runs
+fvm dart analyze --fatal-infos                          # likewise
+fvm flutter test                                        # the hook does NOT run this — run it yourself
+```
+
+Two consequences to keep in mind rather than rediscover:
+
+- The hook checks format and analyze only. **Tests are on you all week.** A branch that has not
+  had `fvm flutter test` run on it is not ready for Friday.
+- Anything that only breaks on a clean clone — a generated file that was never committed, a
+  missing asset, a dependency that resolves differently on Linux — stays invisible until the
+  PR. When a week touches codegen or dependencies, open the PR as a **draft** early instead of
+  waiting; a draft PR runs the same CI.
+
 ### Merge strategy
 
 - work branch → `dev`: **merge commit** (`--no-ff`). The per-task commits are the deliverable
@@ -280,7 +317,7 @@ flutter run --flavor dev --dart-define-from-file=env/dev.json
 - Commit: Conventional Commits (`feat(sync): add durable outbox`)
 - Every PR must have: **What / Why / Architecture impact / Screenshots / Testing / Risks**
 - CI gate: format → analyze → test → build. Runs on every PR into `main` / `dev` and on every
-  push to them (`.github/workflows/ci.yml`).
+  push to them (`.github/workflows/ci.yml`) — and **nowhere else**, see the PR cadence above.
 - Branch protection required on **both** `main` and `dev`: require a PR, require the
   `format → analyze → test` check, no force push, no deletion.
 
@@ -297,7 +334,7 @@ A feature is Done only when **all** of these hold:
 - [ ] Unit tests for the logic that matters
 - [ ] Migration written if the schema changed, plus a migration test
 - [ ] Zero analyzer warnings
-- [ ] Naming follows §3 — a new type in `core/` or `core/widgets/` is `GP`-prefixed
+- [ ] Naming follows §3 — a new type in `core/` or `core/widgets/` is `GP`-prefixed, a new entity in `domain/entities/` is `Entity`-suffixed in class and file
 - [ ] Docs/ADR updated
 
 ---
@@ -324,7 +361,7 @@ A feature is Done only when **all** of these hold:
 - **Ask before adding a new dependency** or changing the architecture.
 - When asked to implement a feature: read the matching section of `docs/blueprint.md` first, then write code.
 - Write code in this order: domain entity → repository interface → DAO/drift table → repository impl → use case → BLoC → UI. Never jump straight to the UI.
-- Name new types by §3 **before** writing them, not in a rename pass afterwards: anything landing in `core/` or `core/widgets/` gets `GP`; entities, DTOs, rows, mappers, BLoCs, pages and use cases do not. If a name would collide with a package or with Flutter (`Clock`, `LogRecord`, `Card`, `Route`), that is a signal it belongs in `core/` with the prefix — not a reason to invent a synonym.
+- Name new types by §3 **before** writing them, not in a rename pass afterwards: anything landing in `core/` or `core/widgets/` gets `GP`; entities, DTOs, rows, mappers, BLoCs, pages and use cases do not. An entity also takes an `Entity` suffix on both the class and the file (`AccountEntity` in `account_entity.dart`), and only an entity does. If a name would collide with a package or with Flutter (`Clock`, `LogRecord`, `Card`, `Route`), that is a signal it belongs in `core/` with the prefix — not a reason to invent a synonym.
 - Always include tests in the same PR. Never "tests later".
 - When touching the schema: call out the `schemaVersion` bump, the migration, and the fixture test. Never wipe the DB unilaterally.
 - When a trade-off is unclear: propose two options with their consequences, let the user choose, then write the ADR.
@@ -336,13 +373,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 0 — Foundation**                                                                    |
-| Week                 | W1 (T6 + all flex work done except `dev` branch protection, which is a GitHub-side setting) |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`      |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match         |
-| Drift schema version | —                                                                                           |
-| Backend              | not set up yet                                                                              |
-| Latest ADR           | 0005 — design tokens as `ThemeExtension`, Claude-derived palette, Inter bundled locally     |
-| Blocker              | —                                                                                           |
+| Field                | Value                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                                                     |
+| Week                 | **W2 done** — T2–T6 + cả 2 flex: Drift, `accounts`, migration v1→v2, DAO, locale persist, domain layer, mapper + repository |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                      |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                         |
+| Drift schema version | 2 — `settings` + `accounts`; v1 and v2 both dumped to `drift_schemas/`, migration tested                                    |
+| Backend              | not set up yet                                                                                                              |
+| Latest ADR           | 0006 — repositories return `GPResult<T>`, only bugs throw (W2 T5); 0001 Accepted at W2 T4                                   |
+| Blocker              | —                                                                                                                           |

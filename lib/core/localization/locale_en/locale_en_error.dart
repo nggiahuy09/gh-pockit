@@ -16,10 +16,16 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get authorization => 'You do not have permission to do that.';
 
   @override
-  String get validation => 'Please check the information you entered.';
+  String get validationAccountNameEmpty => "Account name can't be empty.";
+
+  @override
+  String get validationAccountNameTooLong => 'Account name is too long.';
 
   @override
   String get conflict => 'This item was changed on another device.';
+
+  @override
+  String get notFound => 'That item no longer exists.';
 
   @override
   String get database => 'Could not read local data.';
