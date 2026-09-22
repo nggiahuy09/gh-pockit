@@ -7,6 +7,10 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 /// assertion agree with the implementation by construction.
 ///
 /// [v7] and [v4] keep separate counters, so a test can tell an entity key apart from an idempotency key when the outbox lands in W7.
+///
+/// [v5] is the exception: it has to stay *deterministic*, because that is the property its callers rely on — the category seeder produces the same id for
+/// the same owner and key on every device. A counter here would let a test pass while the real generator's contract was broken, so this derives it from the name too,
+/// just visibly rather than by hashing.
 class FakeUuidGenerator extends GPUuidGenerator {
   FakeUuidGenerator({this.prefix = 'id'});
 
@@ -20,6 +24,9 @@ class FakeUuidGenerator extends GPUuidGenerator {
 
   @override
   String v4() => '$prefix-v4-${++_v4Count}';
+
+  @override
+  String v5(String name) => '$prefix-v5-$name';
 
   @override
   String v7() {
