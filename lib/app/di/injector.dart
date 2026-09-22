@@ -13,7 +13,9 @@ import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
+import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
+import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 
 /// The app-wide service locator.
 ///
@@ -84,10 +86,10 @@ void configureAccountsDependencies({GetIt? container}) {
     );
 }
 
-/// Registers the `categories` feature (W3 T5).
+/// Registers the `categories` feature (W3 T5–T6).
 ///
-/// Only the DAO and the seeder so far — the repository arrives at T6. Same rules as the accounts module: one DAO instance in the process, and the module is
-/// separate so a test can register it alone.
+/// Same rules as the accounts module: one DAO instance in the process, the repository registered against its interface, and the module separate so a test
+/// can register it alone. The seeder is the one addition accounts has no equivalent of — see `bootstrap()` for why it runs on every launch.
 void configureCategoriesDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
@@ -97,5 +99,14 @@ void configureCategoriesDependencies({GetIt? container}) {
     // generator. `ownerId` is the same W10 seam as the accounts repository — stated, not defaulted, so it is greppable when auth lands.
     ..registerLazySingleton<CategorySeeder>(
       () => CategorySeeder(dao: c<CategoryDao>(), clock: c<GPClock>(), uuidGenerator: c<GPUuidGenerator>(), ownerId: localOwnerId),
+    )
+    ..registerLazySingleton<CategoryRepository>(
+      () => CategoryRepositoryImpl(
+        dao: c<CategoryDao>(),
+        clock: c<GPClock>(),
+        uuidGenerator: c<GPUuidGenerator>(),
+        logger: c<GPAppLogger>(),
+        ownerId: localOwnerId,
+      ),
     );
 }

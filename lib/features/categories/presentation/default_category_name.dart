@@ -1,5 +1,6 @@
 import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/features/categories/data/seed/default_categories.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
 
 /// Turns a seeded category's key into text in the active language.
 ///
@@ -42,4 +43,13 @@ String categoryDisplayName({required String? name, required String? nameKey, req
   if (nameKey == null) return '';
 
   return DefaultCategory.fromNameKey(nameKey)?.nameIn(l10n) ?? nameKey;
+}
+
+/// What to show for a [CategoryEntity] — the same rule as [categoryDisplayName], reached from the type a screen actually holds.
+///
+/// An extension rather than a getter on the entity, because resolving a key needs the active locale and `domain/` may not see one (§3). It also keeps the
+/// entity's equality independent of the language: were the name a field, switching from English to Vietnamese would make every category compare unequal and
+/// rebuild the whole list.
+extension CategoryEntityName on CategoryEntity {
+  String displayNameIn(GPLocaleBase l10n) => categoryDisplayName(name: name, nameKey: nameKey, l10n: l10n);
 }

@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/localization/locale_vi/locale_vi.dart';
 import 'package:ghpockit/features/categories/data/seed/default_categories.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/presentation/default_category_name.dart';
 
 /// What makes storing `category.food` instead of "Ăn uống" actually work (W3 T5, ADR-0004).
@@ -60,6 +63,28 @@ void main() {
       // The table's CHECK accepts `name = ''` — it only asks that one of the two columns is non-null — so the display rule has to, rather than rendering a
       // blank line where a category should be.
       expect(categoryDisplayName(name: '', nameKey: 'category.food', l10n: const GPLocaleEn()), 'Food & drink');
+    });
+  });
+
+  group('displayNameIn', () {
+    CategoryEntity entity({String? nameKey, String? name}) =>
+        (CategoryEntity.create(
+                  id: 'c1',
+                  nameKey: nameKey,
+                  name: name,
+                  type: CategoryType.expense,
+                  createdAt: DateTime.utc(2026, 9, 22),
+                  updatedAt: DateTime.utc(2026, 9, 22),
+                )
+                as GPOk<CategoryEntity>)
+            .value;
+
+    test('reads an entity the same way the raw columns read', () {
+      // The extension a screen actually calls. It exists so the rule lives in one function — and it is an extension rather than a getter on the entity
+      // because resolving a key needs a locale, which `domain/` may not see.
+      expect(entity(nameKey: 'category.food').displayNameIn(const GPLocaleVi()), 'Ăn uống');
+      expect(entity(nameKey: 'category.food', name: 'Cà phê sáng').displayNameIn(const GPLocaleVi()), 'Cà phê sáng');
+      expect(entity(name: 'Cà phê').displayNameIn(const GPLocaleEn()), 'Cà phê');
     });
   });
 }
