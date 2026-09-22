@@ -5,6 +5,7 @@ part 'locale_base_home.dart';
 part 'locale_base_accounts.dart';
 part 'locale_base_transactions.dart';
 part 'locale_base_budgets.dart';
+part 'locale_base_categories.dart';
 part 'locale_base_settings.dart';
 part 'locale_base_error.dart';
 
@@ -29,6 +30,7 @@ abstract class GPLocaleBase {
   GPLocaleBaseAccounts get accounts;
   GPLocaleBaseTransactions get transactions;
   GPLocaleBaseBudgets get budgets;
+  GPLocaleBaseCategories get categories;
   GPLocaleBaseSettings get settings;
   GPLocaleBaseError get error;
 }

@@ -20,6 +20,15 @@ import 'package:uuid/uuid.dart';
 /// * [v4] for anything that must not carry a timestamp or an order —
 ///   idempotency keys above all. An idempotency key is only ever compared for
 ///   equality, and leaking creation time through it buys nothing.
+/// * [v5] for the rare row whose identity is **derived rather than minted** — today, the categories the app seeds (W3 T5). Two installs belonging to one
+///   user each run the seeder offline and independently; with a random id they would produce two "Food" categories that the first sync merges into a
+///   duplicate the user has to clean up. A v5 is a hash of a name inside a namespace, so both devices arrive at the same id and the pull reconciles them by
+///   primary key instead.
+///
+/// **On golden rule 4.** The rule says "UUID v4/v7", and [v5] is a third. What the rule is actually protecting — an id exists the moment the row does, and
+/// nothing waits for a server to hand one back — is untouched: a v5 is computed locally from values the client already has. It is listed as an exception
+/// here rather than a silent extension, and it is not for general use: an entity whose identity is derived is an entity two clients can collide on
+/// intentionally, which is right for a fixed catalogue and wrong for anything a user creates.
 ///
 /// Wrapped in an interface for the same reason as `GPClock`: a sync test that asserts "the same mutation retried twice keeps one idempotency key" is far
 /// easier to write against a generator whose output it controls.
@@ -31,6 +40,12 @@ abstract class GPUuidGenerator {
 
   /// Time-ordered UUID v7. Use for entity primary keys.
   String v7();
+
+  /// Deterministic UUID v5: the same [name] always produces the same id, and a different one never collides with it in practice.
+  ///
+  /// [name] must therefore carry everything that makes the row distinct — for a seeded category that is the owner and the translation key, so that two
+  /// users' "Food" categories are two different rows. Passing a bare key would give every account on earth the same id.
+  String v5(String name);
 }
 
 /// Production implementation, backed by `package:uuid`.
@@ -53,8 +68,17 @@ class GPUuidGeneratorImpl extends GPUuidGenerator {
   int _lastMillis = 0;
   int _counter = 0;
 
+  /// The namespace every [v5] in this app is computed inside.
+  ///
+  /// A fixed, arbitrary v4, generated once and then frozen: changing it changes every derived id, which after a release is a data migration rather than an
+  /// edit. It is written out as a literal, not generated at runtime, for exactly that reason.
+  static const String namespace = '6f3c1e6a-2f5f-4f4e-9f2a-0e2c9a8b7d41';
+
   @override
   String v4() => _uuid.v4();
+
+  @override
+  String v5(String name) => _uuid.v5(namespace, name);
 
   @override
   String v7() {

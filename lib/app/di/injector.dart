@@ -12,6 +12,8 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
+import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
 
 /// The app-wide service locator.
 ///
@@ -79,5 +81,21 @@ void configureAccountsDependencies({GetIt? container}) {
         // sentinel — see `core/database/owner_id.dart` for why it is not a nullable column.
         ownerId: localOwnerId,
       ),
+    );
+}
+
+/// Registers the `categories` feature (W3 T5).
+///
+/// Only the DAO and the seeder so far — the repository arrives at T6. Same rules as the accounts module: one DAO instance in the process, and the module is
+/// separate so a test can register it alone.
+void configureCategoriesDependencies({GetIt? container}) {
+  final c = container ?? getIt;
+
+  c
+    ..registerLazySingleton<CategoryDao>(() => CategoryDao(c<GPAppDatabase>()))
+    // Registered rather than constructed at the call site, because `bootstrap` should not be the place that knows a seeder needs a clock and a uuid
+    // generator. `ownerId` is the same W10 seam as the accounts repository — stated, not defaulted, so it is greppable when auth lands.
+    ..registerLazySingleton<CategorySeeder>(
+      () => CategorySeeder(dao: c<CategoryDao>(), clock: c<GPClock>(), uuidGenerator: c<GPUuidGenerator>(), ownerId: localOwnerId),
     );
 }

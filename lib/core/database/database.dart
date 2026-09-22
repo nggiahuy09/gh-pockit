@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:ghpockit/core/database/tables/settings_table.dart';
 import 'package:ghpockit/features/accounts/data/tables/accounts_table.dart';
+import 'package:ghpockit/features/categories/data/tables/categories_table.dart';
 
 part 'database.g.dart';
 
@@ -12,7 +13,7 @@ part 'database.g.dart';
 /// The exception is auth tokens, which belong in `flutter_secure_storage` because that is an OS-keystore concern rather than a data-modelling one.
 ///
 /// Auth tokens aside, nothing else may open its own store. A second persistent store is a second thing that can be inconsistent after a crash.
-@DriftDatabase(tables: [SettingsTable, AccountsTable])
+@DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable])
 class GPAppDatabase extends _$GPAppDatabase {
   GPAppDatabase() : super(_openConnection());
 
@@ -25,7 +26,7 @@ class GPAppDatabase extends _$GPAppDatabase {
   // and therefore never written out at a call site anyway.
   GPAppDatabase.forTesting(super.e);
 
-  /// v1 — `settings` only. v2 — adds `accounts` (W2 T3).
+  /// v1 — `settings` only. v2 — adds `accounts` (W2 T3). v3 — adds `categories` (W3 T5).
   ///
   /// Every bump costs a migration step below, a fixture test in `test/core/database/migration_test.dart`, and a fresh dump under `drift_schemas/` (§6,
   /// golden rule 7). v2 is the first time that bill is paid, and it was paid in full on purpose: golden rule 7 does allow wiping the database during
@@ -33,7 +34,7 @@ class GPAppDatabase extends _$GPAppDatabase {
   /// migrating from a real earlier schema — starting with no earlier schema to migrate from, and the first migration this app ever runs being written
   /// against a user's data instead of against a fixture. So v1 survives as something to upgrade rather than something to delete.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -49,6 +50,11 @@ class GPAppDatabase extends _$GPAppDatabase {
         // upgraded devices while existing on fresh installs — the schema drift that the v2 fixture test is there to catch.
         await m.createTable(accountsTable);
         await m.createIndex(accountsOwnerIdIsArchived);
+      }
+      if (from < 3) {
+        await m.createTable(categoriesTable);
+        await m.createIndex(categoriesOwnerIdType);
+        await m.createIndex(categoriesOwnerIdNameKey);
       }
     },
     beforeOpen: (details) async {

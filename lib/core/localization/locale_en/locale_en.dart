@@ -6,6 +6,7 @@ part 'locale_en_home.dart';
 part 'locale_en_accounts.dart';
 part 'locale_en_transactions.dart';
 part 'locale_en_budgets.dart';
+part 'locale_en_categories.dart';
 part 'locale_en_settings.dart';
 part 'locale_en_error.dart';
 
@@ -30,6 +31,9 @@ final class GPLocaleEn implements GPLocaleBase {
 
   @override
   GPLocaleBaseBudgets get budgets => const GPLocaleEnBudgets();
+
+  @override
+  GPLocaleBaseCategories get categories => const GPLocaleEnCategories();
 
   @override
   GPLocaleBaseSettings get settings => const GPLocaleEnSettings();
