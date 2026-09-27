@@ -115,9 +115,15 @@ every list query filters on exactly that. SQLite only picks a partial index when
 the query repeats its condition, so a forgotten filter becomes a silent full
 scan, and tombstones are rare in a personal ledger. Changing an index is a drop
 and a create, not a rebuild, so this waits for W8's numbers. The same test showed
-what the indexes cannot do: an account's history on **either** side of a
-transfer (`account_id = ? OR destination_account_id = ?`) is a multi-index OR
-followed by a sort of every row that matched — W4 T5's to solve.
+what the indexes cannot do: no index serves an account's history on **either**
+side of a transfer (`account_id = ? OR destination_account_id = ?`) in order.
+Measured without an owner condition, that is a multi-index OR followed by a sort
+of every row that matched. Re-measured at W4 T5 on the DAO's real query, which
+has one, SQLite walks the owner index and filters instead — no sort, but it reads
+as far back as it must to fill the window. The pick is a cost decision that can
+differ between SQLite versions, so `transaction_dao_test.dart` accepts both
+plans and forbids a scan; a `UNION ALL` of the two sides is the fix, measured at
+W8.
 
 **8. `receipt_id` is not in v4.** W9 T3 adds it with a real `ADD COLUMN` on a
 table that already holds data — the migration W9 is built around.
