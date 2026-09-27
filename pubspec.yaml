@@ -109,7 +109,8 @@ flutter:
   # Inter, bundled as static weights rather than fetched at runtime through
   # `google_fonts`. Pockit is offline-first (CLAUDE.md §1): a font downloaded on
   # first launch makes the first frame of a cold start depend on connectivity,
-  # which is the exact property this app exists not to have. ~272 KB, paid once.
+  # which is the exact property this app exists not to have. ~313 KB, paid once:
+  # a Latin + Vietnamese subset, not the whole family (ADR-0008).
   # SIL OFL 1.1 — see assets/fonts/README.md.
   fonts:
     - family: Inter

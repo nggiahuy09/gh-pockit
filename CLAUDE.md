@@ -381,5 +381,5 @@ A feature is Done only when **all** of these hold:
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                         |
 | Drift schema version | 3 — `settings` + `accounts` + `categories`; v1–v3 dumped to `drift_schemas/`, v1→v2, v2→v3 and v1→v3 all tested             |
 | Backend              | not set up yet                                                                                                              |
-| Latest ADR           | 0007 — store money as integer minor units (W3 flex); 0006 — repositories return `GPResult<T>` (W2 T5)                       |
+| Latest ADR           | 0008 — Inter as a Latin + Vietnamese subset (W3 font finding); 0007 — store money as integer minor units (W3 flex)          |
 | Blocker              | —                                                                                                                           |
