@@ -80,6 +80,13 @@ an unknown value on read instead, as `AccountType.fromStorage` does for
 no delete action to choose. What a foreign key cannot see — whose parent it is,
 and whether the parent is soft-deleted — is ADR-0010's.
 
+_Settled at W4 T3:_ they are checked immediately, not
+`DEFERRABLE INITIALLY DEFERRED`. Deferral would let one pull page apply children
+before parents, but not across pages, which still have to arrive parents first;
+and it moves the failure from the statement that caused it to the `COMMIT`, where
+nothing says which row it was. Deferral is part of the constraint, so this is the
+one foreign-key property that cannot change later without a rebuild.
+
 **5. `sync_status` is `TEXT NOT NULL`, no default, two values.** `pending`: a
 local write the server has not acknowledged. `synced`: the server has this
 version. Every local write — insert, update, soft delete — sets `pending`; only
@@ -102,6 +109,15 @@ local query that needs one, if one ever does. W7 T2 becomes an
 `EXPLAIN QUERY PLAN` audit of the new aggregates instead of a bulk add.
 `CLAUDE.md` §6 lists the same indexes and now says when each one lands; it also
 gained `destination_account_id`, which it lacked and the balance needs.
+
+_Settled at W4 T3:_ the four are not partial (`WHERE deleted_at IS NULL`), though
+every list query filters on exactly that. SQLite only picks a partial index when
+the query repeats its condition, so a forgotten filter becomes a silent full
+scan, and tombstones are rare in a personal ledger. Changing an index is a drop
+and a create, not a rebuild, so this waits for W8's numbers. The same test showed
+what the indexes cannot do: an account's history on **either** side of a
+transfer (`account_id = ? OR destination_account_id = ?`) is a multi-index OR
+followed by a sort of every row that matched — W4 T5's to solve.
 
 **8. `receipt_id` is not in v4.** W9 T3 adds it with a real `ADD COLUMN` on a
 table that already holds data — the migration W9 is built around.

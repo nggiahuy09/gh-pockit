@@ -1,10 +1,12 @@
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart' show SqliteException;
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
 
 import 'generated/schema.dart';
 
-/// Every migration this app runs: v1 → v2 (`accounts`, W2 T3) and v2 → v3 (`categories`, W3 T5).
+/// Every migration this app runs: v1 → v2 (`accounts`, W2 T3), v2 → v3 (`categories`, W3 T5) and v3 → v4 (`transactions`, W4 T3).
 ///
 /// Golden rule 7 lets Phase 0–1 wipe the database instead of migrating it, and `settings` held nothing but a language preference — so the cheap path was
 /// available and was refused. The reason is what this file is: W9 is an entire week of migration work, and a week of migration work needs an earlier schema
@@ -156,5 +158,112 @@ void main() {
     expect(await db.select(db.categoriesTable).get(), isEmpty);
 
     await db.close();
+  });
+
+  group('v3 → v4 (transactions, W4 T3)', () {
+    // The v3 rows every test below starts from, written as raw SQL against the raw handle for the reason the v1 case gives: at this point the database
+    // genuinely is a v3 database, and `GPAppDatabase` describes v4.
+    Future<GPAppDatabase> upgradedFromV3WithParents() async {
+      final schema = await verifier.schemaAt(3);
+      schema.rawDatabase
+        ..execute(
+          'INSERT INTO accounts (id, owner_id, name, type, currency_code, initial_balance, is_archived, created_at, updated_at, version) '
+          "VALUES ('a1', 'local', 'Ví tiền mặt', 'cash', 'VND', 1500000, 0, 1757800000000, 1757800000000, 1)",
+        )
+        ..execute(
+          'INSERT INTO categories (id, owner_id, name_key, type, is_system, created_at, updated_at, version) '
+          "VALUES ('c1', 'local', 'category.food', 'expense', 1, 1757800000000, 1757800000000, 1)",
+        );
+
+      final db = GPAppDatabase.forTesting(schema.newConnection());
+      await verifier.migrateAndValidate(db, 4);
+      return db;
+    }
+
+    TransactionsTableCompanion expense({required String id, required String accountId}) => TransactionsTableCompanion.insert(
+      id: id,
+      ownerId: 'local',
+      type: 'expense',
+      accountId: accountId,
+      categoryId: const Value('c1'),
+      amountMinor: 125000,
+      currencyCode: 'VND',
+      occurredAt: 1790573400000,
+      createdAt: 1790573400000,
+      updatedAt: 1790573400000,
+      version: 1,
+      syncStatus: 'pending',
+    );
+
+    test('migrates into the schema a fresh v4 install has', () async {
+      final connection = await verifier.startAt(3);
+      final db = GPAppDatabase.forTesting(connection);
+
+      // The foreign keys and the three cross-column CHECKs are part of the `CREATE TABLE`, so a `createTable` that dropped one would show here.
+      await verifier.migrateAndValidate(db, 4);
+
+      await db.close();
+    });
+
+    test('carries v3 accounts and categories across untouched, and adds an empty transactions table', () async {
+      final db = await upgradedFromV3WithParents();
+
+      expect((await db.select(db.accountsTable).getSingle()).initialBalance, 1500000);
+      expect((await db.select(db.categoriesTable).getSingle()).nameKey, 'category.food');
+      // Present and empty — not back-filled. A migration has no clock and no owner to write a transaction with, same as it has none to seed with.
+      expect(await db.select(db.transactionsTable).get(), isEmpty);
+
+      await db.close();
+    });
+
+    test('creates all four transactions indexes on the upgrade path', () async {
+      final connection = await verifier.startAt(3);
+      final db = GPAppDatabase.forTesting(connection);
+
+      await verifier.migrateAndValidate(db, 4);
+
+      final indexes = await db.customSelect("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'transactions'").get();
+
+      expect(
+        indexes.map((row) => row.read<String>('name')),
+        containsAll(<String>[
+          'transactions_owner_id_occurred_at_id',
+          'transactions_account_id_occurred_at_id',
+          'transactions_destination_account_id_occurred_at_id',
+          'transactions_category_id_occurred_at_id',
+        ]),
+      );
+
+      await db.close();
+    });
+
+    test('enforces the new foreign keys against rows that predate them', () async {
+      // The parents were written at v3, before any foreign key pointed at them. After the upgrade a transaction on the v3 account is accepted and one on an
+      // account that never existed is refused — so the constraint is live on the upgrade path, not just on a fresh install.
+      final db = await upgradedFromV3WithParents();
+
+      await db.into(db.transactionsTable).insert(expense(id: 't1', accountId: 'a1'));
+      await expectLater(
+        db.into(db.transactionsTable).insert(expense(id: 't2', accountId: 'a-ghost')),
+        throwsA(isA<SqliteException>().having((e) => e.message, 'message', contains('FOREIGN KEY constraint failed'))),
+      );
+
+      await db.close();
+    });
+
+    test('walks v2 → v4 and v1 → v4 for devices that skipped releases', () async {
+      // `transactions` references `accounts` and `categories`, so these are the paths where step order is load bearing: the v4 step has to find both
+      // tables already there. `if (from < N)` guarantees it; this proves it.
+      for (final from in [2, 1]) {
+        final connection = await verifier.startAt(from);
+        final db = GPAppDatabase.forTesting(connection);
+
+        await verifier.migrateAndValidate(db, 4);
+
+        expect(await db.select(db.transactionsTable).get(), isEmpty, reason: 'from v$from');
+
+        await db.close();
+      }
+    });
   });
 }
