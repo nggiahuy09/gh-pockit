@@ -322,9 +322,9 @@ void main() {
   group('a write the database refuses', () {
     /// Builds a repository whose DAO fails every write with [thrown].
     ///
-    /// **The one place this file uses a double**, and the reason is narrow: a real in-memory database does not fail on request, so the three `catch` sites
-    /// in the repository would otherwise be unreachable from a test. That is the honest cost of testing against real SQL, and a fake this small pays it
-    /// without turning the rest of the file into an assertion that the repository calls the methods it calls.
+    /// **One of the two places this file uses a double** — the read group below is the other — and the reason is narrow: a real in-memory database does
+    /// not fail on request, so the three `catch` sites in the repository would otherwise be unreachable from a test. That is the honest cost of testing
+    /// against real SQL, and a fake this small pays it without turning the rest of the file into an assertion that the repository calls the methods it calls.
     AccountRepositoryImpl repositoryFailingWith(Object thrown) => AccountRepositoryImpl(
       dao: ThrowingAccountDao(db, thrown),
       clock: clock,
@@ -386,6 +386,56 @@ void main() {
       expect(logger.records, isEmpty);
     });
   });
+
+  group('a read the database refuses', () {
+    /// Builds a repository whose DAO streams fail with [error] instead of emitting rows.
+    ///
+    /// Real SQL *can* fail a read — the first test below does it — but only wholesale, with no say over the exception, and never with an [Error], which is
+    /// the one case that must come out unconverted. The double covers both; the first test is what shows it models something real.
+    AccountRepositoryImpl repositoryReadingFrom(Object error) => AccountRepositoryImpl(
+      dao: FailingStreamAccountDao(db, error),
+      clock: clock,
+      uuidGenerator: uuid,
+      logger: logger,
+      ownerId: localOwnerId,
+    );
+
+    test('a query SQLite refuses reaches the caller as a GPDatabaseFailure, not as a raw SqliteException', () async {
+      // No double. A dropped table fails the real query the way a corrupt file or a failed migration would — the stand-in `drift_locale_store_test` uses —
+      // and Drift delivers that as an error event on this very stream, which is the shape `FailingStreamAccountDao` reproduces. Forwarded raw, it is what
+      // `AccountsPage` rethrows as a bug: a disk error crashing the tab instead of showing its error state.
+      await db.customStatement('DROP TABLE accounts');
+
+      await expectLater(repository.watchAccounts(), emitsError(const GPDatabaseFailure()));
+      // The user gets one sentence; the log keeps what SQLite actually said.
+      expect(logger.last.error, isA<SqliteException>());
+    });
+
+    test('watchAccounts reports an exception and logs an entity type, nothing else', () async {
+      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchAccounts(), emitsError(const GPDatabaseFailure()));
+
+      expect(logger.last.level, GPLogLevel.error);
+      // Golden rule 9, and a list has no id to add — so the entity type is the whole of it.
+      expect(logger.last.fields, {'entity': 'account'});
+    });
+
+    test('watchAccount reports it too, and logs the id', () async {
+      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchAccount('a1'), emitsError(const GPDatabaseFailure()));
+
+      expect(logger.last.fields, {'entity': 'account', 'id': 'a1'});
+    });
+
+    test('an Error is forwarded unchanged — it is a bug and must reach the crash reporter', () async {
+      // The read-side twin of the write test above. `AccountsPage` rethrows anything that is not a `GPFailure` into `FlutterError.onError`; converting a
+      // broken invariant would take it off that route and put "could not read local data" on the screen in its place.
+      final bug = StateError('broken invariant');
+      final failing = repositoryReadingFrom(bug);
+
+      await expectLater(failing.watchAccounts(), emitsError(same(bug)));
+      await expectLater(failing.watchAccount('a1'), emitsError(same(bug)));
+      expect(logger.records, isEmpty);
+    });
+  });
 }
 
 /// An [AccountDao] whose three write methods fail with a given object.
@@ -405,4 +455,20 @@ class ThrowingAccountDao extends AccountDao {
 
   @override
   Future<int> archive(String id, {required int now}) => Future<int>.error(thrown);
+}
+
+/// An [AccountDao] whose two watch streams fail with a given object instead of emitting rows — the read-side [ThrowingAccountDao].
+///
+/// `Stream.error` rather than a throw, because that is how the real failure arrives: Drift runs a watched query inside the stream and puts whatever it
+/// raised on the error channel, so a `SqliteException`, or a `DriftRemoteException` from the background isolate, reaches the repository as an error event.
+class FailingStreamAccountDao extends AccountDao {
+  FailingStreamAccountDao(super.attachedDatabase, this.error);
+
+  final Object error;
+
+  @override
+  Stream<List<AccountRow>> watchAccounts(String ownerId, {bool includeArchived = false}) => Stream<List<AccountRow>>.error(error);
+
+  @override
+  Stream<AccountRow?> watchAccount(String ownerId, String id) => Stream<AccountRow?>.error(error);
 }

@@ -74,6 +74,8 @@ class CategoryRepositoryImpl implements CategoryRepository {
 
               sink.add(entities);
             },
+            // What the query itself raised, as opposed to a row the mapper refused above — see `_reportQueryError`.
+            handleError: (error, stackTrace, sink) => _reportQueryError('category list read failed', error, stackTrace, sink),
           ),
         );
   }
@@ -98,6 +100,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
                   sink.addError(failure);
               }
             },
+            handleError: (error, stackTrace, sink) => _reportQueryError('category read failed', error, stackTrace, sink, id: id),
           ),
         );
   }
@@ -174,10 +177,30 @@ class CategoryRepositoryImpl implements CategoryRepository {
   void _logRejectedRow(String id, CategoryMapperReason reason) =>
       _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': id, 'reason': reason.name});
 
-  /// `on Exception`, never `on Object`: an `Error` is a bug in this code and must not be dressed up as "could not read local data" (ADR-0006).
+  /// `on Exception`, never `on Object`: an `Error` is a bug in this code and must not be dressed up as "could not read local data" (ADR-0006). The watch
+  /// streams draw the same line in [_reportQueryError].
   GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace) {
     _logger.error(message, fields: {'entity': 'category', 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
+  }
+
+  /// Puts what a watched query raised back on its stream — the read-side [_databaseFailure], for the reason `AccountRepositoryImpl._reportQueryError`
+  /// gives in full.
+  ///
+  /// Without it, [CategoryRepository]'s promise of a [GPFailure] on the error channel held for mapper rejections only: a `SqliteException` raised while
+  /// running the query — a `DriftRemoteException` wrapping one, in the app, where SQLite runs on a background isolate — went through raw. An [Exception] is
+  /// logged and replaced by [GPDatabaseFailure]; anything else is a bug and is forwarded untouched — stack trace included, and not logged, so the crash
+  /// reporter sees it once.
+  ///
+  /// An entity type in the fields, plus the id when there is one, and never a name (golden rule 9).
+  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
+    if (error is! Exception) {
+      sink.addError(error, stackTrace);
+      return;
+    }
+
+    _logger.error(message, fields: {'entity': 'category', 'id': ?id}, error: error, stackTrace: stackTrace);
+    sink.addError(const GPDatabaseFailure());
   }
 }

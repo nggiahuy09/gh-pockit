@@ -4,6 +4,7 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
+import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -219,4 +220,55 @@ void main() {
       DefaultCategory.values.where((c) => c.type == CategoryType.income).map((c) => c.nameKey).toSet(),
     );
   });
+
+  group('a read the database refuses', () {
+    /// Builds a repository whose DAO streams fail with [error] instead of emitting rows.
+    ///
+    /// The one double in this file, for the reason the accounts file's read group gives: real SQL fails a read only wholesale and never with an [Error].
+    /// That group also shows, against a real dropped table, that Drift delivers a failed query as an error event — a fact about Drift rather than about
+    /// this repository, so it is not proved twice.
+    CategoryRepositoryImpl repositoryReadingFrom(Object error) => CategoryRepositoryImpl(
+      dao: FailingStreamCategoryDao(db, error),
+      clock: clock,
+      uuidGenerator: uuid,
+      logger: logger,
+      ownerId: localOwnerId,
+    );
+
+    test('watchCategories reports an exception and logs an entity type, nothing else', () async {
+      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchCategories(), emitsError(const GPDatabaseFailure()));
+
+      expect(logger.last.level, GPLogLevel.error);
+      expect(logger.last.fields, {'entity': 'category'});
+    });
+
+    test('watchCategory reports it too, and logs the id', () async {
+      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchCategory('c1'), emitsError(const GPDatabaseFailure()));
+
+      expect(logger.last.fields, {'entity': 'category', 'id': 'c1'});
+    });
+
+    test('an Error is forwarded unchanged — it is a bug, not a sentence', () async {
+      final bug = StateError('broken invariant');
+      final failing = repositoryReadingFrom(bug);
+
+      await expectLater(failing.watchCategories(), emitsError(same(bug)));
+      await expectLater(failing.watchCategory('c1'), emitsError(same(bug)));
+      expect(logger.records, isEmpty);
+    });
+  });
+}
+
+/// A [CategoryDao] whose two watch streams fail with a given object instead of emitting rows — `FailingStreamAccountDao`'s counterpart, and a subclass
+/// of the real DAO for the same reason: everything it does not override still runs against the in-memory database.
+class FailingStreamCategoryDao extends CategoryDao {
+  FailingStreamCategoryDao(super.attachedDatabase, this.error);
+
+  final Object error;
+
+  @override
+  Stream<List<CategoryRow>> watchCategories(String ownerId, {String? type}) => Stream<List<CategoryRow>>.error(error);
+
+  @override
+  Stream<CategoryRow?> watchCategory(String ownerId, String id) => Stream<CategoryRow?>.error(error);
 }

@@ -86,6 +86,8 @@ class AccountRepositoryImpl implements AccountRepository {
 
               sink.add(entities);
             },
+            // What the query itself raised, as opposed to a row the mapper refused above — see `_reportQueryError`.
+            handleError: (error, stackTrace, sink) => _reportQueryError('account list read failed', error, stackTrace, sink),
           ),
         );
   }
@@ -111,6 +113,7 @@ class AccountRepositoryImpl implements AccountRepository {
                   sink.addError(failure);
               }
             },
+            handleError: (error, stackTrace, sink) => _reportQueryError('account read failed', error, stackTrace, sink, id: id),
           ),
         );
   }
@@ -220,7 +223,8 @@ class AccountRepositoryImpl implements AccountRepository {
   ///
   /// `on Exception`, never `on Object`: a sqlite error, a closed database and a disk that is full all arrive as exceptions, while an `Error` is a bug in
   /// this code — a null that should not be null, a broken invariant — and swallowing it into "could not read local data" would hide it behind a message the
-  /// user can do nothing about. Same line `GPDriftLocaleStore` draws, and the same one ADR-0006 draws for the domain.
+  /// user can do nothing about. Same line `GPDriftLocaleStore` draws, the same one ADR-0006 draws for the domain, and the one [_reportQueryError] draws for
+  /// the two watch streams.
   ///
   /// The fields carry an id and an entity type and nothing else (golden rule 9). The name of the account, its balance and its currency are all in scope at
   /// every call site and none of them is logged.
@@ -229,5 +233,33 @@ class AccountRepositoryImpl implements AccountRepository {
 
     // Not `const`: a type parameter cannot appear in a constant expression, so only the failure itself is canonicalised.
     return GPErr<T>(const GPDatabaseFailure());
+  }
+
+  /// Puts what a watched query raised back on its stream: a [GPDatabaseFailure] when it is the database refusing, the original object when it is a bug.
+  ///
+  /// **Why both watch streams need it.** `handleData` only ever sees rows, so on its own it converted exactly one kind of read failure — a row the mapper
+  /// refused. Anything Drift raised while *running* the query went through raw: a `SqliteException` from a corrupt file or a full disk — which in the app
+  /// arrives wrapped in a `DriftRemoteException`, because `driftDatabase` runs SQLite on a background isolate. That broke the one promise
+  /// [AccountRepository.watchAccounts] makes about its error channel, and `AccountsPage` rethrows whatever is not a [GPFailure] as a bug — so a disk error
+  /// crashed the Accounts tab instead of showing its error state.
+  ///
+  /// **The read-side [_databaseFailure], drawing the same line.** An [Exception] is the database refusing: it is logged, and replaced by the failure the
+  /// mapper path already emits, so every non-bug error on these streams is one type with one sentence. Anything else — an [Error] above all — is a bug and
+  /// is forwarded untouched, stack trace included, so it reaches the crash reporter just as a throw from a write does. It is not logged here either, as a
+  /// write does not log one: whoever receives the bug reports it, and one bug should be one report.
+  ///
+  /// The isolate blurs that line in one place, and identically for writes: a bug raised *on the database isolate* crosses back as a `DriftRemoteException`,
+  /// so it lands here as a logged failure with its remote cause attached rather than as a rethrown [Error]. The type is all this code can see.
+  ///
+  /// The fields carry an entity type, plus the id when the stream is about one account (golden rule 9). A failed query produced no row, so there is nothing
+  /// to leak; the list query has no id at all, which is why [id] is optional.
+  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
+    if (error is! Exception) {
+      sink.addError(error, stackTrace);
+      return;
+    }
+
+    _logger.error(message, fields: {'entity': 'account', 'id': ?id}, error: error, stackTrace: stackTrace);
+    sink.addError(const GPDatabaseFailure());
   }
 }
