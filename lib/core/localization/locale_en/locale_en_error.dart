@@ -22,6 +22,12 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationAccountNameTooLong => 'Account name is too long.';
 
   @override
+  String get validationCategoryNameEmpty => "Category name can't be empty.";
+
+  @override
+  String get validationCategoryNameTooLong => 'Category name is too long.';
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override

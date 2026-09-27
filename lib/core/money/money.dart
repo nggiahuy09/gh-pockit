@@ -15,6 +15,13 @@ import 'package:meta/meta.dart';
 /// [minorUnits] interpretable at all. It does not check *membership*: whether `XYZ` is a real ISO-4217 code, and what its exponent is, is the catalog's job
 /// at W3 T4. The split is the same one `accounts_table.dart` already makes between its `CHECK (length = 3)` and the business meaning layered on top.
 ///
+/// **The range is 64-bit, and it wraps.** [minorUnits] is a Dart `int`, so the ceiling is 9,223,372,036,854,775,807 — in VND, whose exponent is 0, that is
+/// 9.2 quintillion dong: not a balance, not a sum of balances, past the total quantity of dong in existence. Beyond it `+` wraps to a negative number
+/// silently, and `-(-9223372036854775808)` is itself. Both are recorded rather than guarded (W3 T3). A guard would put a branch on every addition to defend
+/// a bound no personal ledger reaches, and it would still not cover the path that can realistically overflow — the `SUM()` that W4's aggregates run inside
+/// SQLite, whose INTEGER is the same 64 bits and overflows on its own. Cheap safety there would read as safety everywhere. The bound is asserted in
+/// `money_test.dart` so it stays a decision rather than turning into a surprise.
+///
 /// **Unprefixed, in `core/`.** §3 puts `GP` on everything under `core/` — and names `Money` in the *unprefixed* column two cells later, because it is a
 /// domain value object. Both halves of that rule cannot apply at once and the second one wins: this is a value object every feature's `domain/` imports, so
 /// it cannot live under one feature, and calling it `GPMoney` would say it is infrastructure when it is the most domain-ish type in the app. The precedent
@@ -79,12 +86,14 @@ final class Money implements Comparable<Money> {
   ///
   /// There is no implicit conversion and there will not be one: a conversion needs a rate, a rate needs a date, and silently picking either would produce a
   /// number that looks right and is wrong. Multi-currency arithmetic is an explicit feature with an explicit rate, or it is absent.
+  ///
+  /// Does not check for overflow; see the range note on the class for why.
   Money operator +(Money other) => Money._(minorUnits + _sameCurrency(other), currencyCode);
 
   /// Difference. Same currency rule as [operator +].
   Money operator -(Money other) => Money._(minorUnits - _sameCurrency(other), currencyCode);
 
-  /// Sign flip, for rendering an expense as the negative of its stored magnitude.
+  /// Sign flip, for rendering an expense as the negative of its stored magnitude. The 64-bit floor is its own negation; see the range note on the class.
   Money operator -() => Money._(-minorUnits, currencyCode);
 
   /// Magnitude, currency kept.

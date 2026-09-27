@@ -23,6 +23,8 @@ extension GPFailureMessage on GPFailure {
     GPValidationFailure(:final code) => switch (code) {
       GPValidationCode.accountNameEmpty => l10n.error.validationAccountNameEmpty,
       GPValidationCode.accountNameTooLong => l10n.error.validationAccountNameTooLong,
+      GPValidationCode.categoryNameEmpty => l10n.error.validationCategoryNameEmpty,
+      GPValidationCode.categoryNameTooLong => l10n.error.validationCategoryNameTooLong,
     },
     GPConflictFailure() => l10n.error.conflict,
     GPNotFoundFailure() => l10n.error.notFound,

@@ -22,6 +22,12 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationAccountNameTooLong => 'Tên tài khoản quá dài.';
 
   @override
+  String get validationCategoryNameEmpty => 'Tên danh mục không được để trống.';
+
+  @override
+  String get validationCategoryNameTooLong => 'Tên danh mục quá dài.';
+
+  @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override

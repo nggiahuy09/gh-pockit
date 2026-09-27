@@ -101,4 +101,40 @@ void main() {
       expect(timestampOf(ids[4096]), clock.nowEpochMillis() + 1);
     });
   });
+
+  group('v5', () {
+    // Added at W3 T5 for the category seeder. Everything here is the *opposite* of what the v4 and v7 groups assert: the point of this one is that the
+    // output is boringly repeatable, because two devices have to arrive at the same id without talking to each other.
+    test('returns the same id for the same name, every time and on every instance', () {
+      final first = GPUuidGeneratorImpl(clock: FakeClock());
+      final second = GPUuidGeneratorImpl(clock: FakeClock(DateTime.utc(2030)));
+
+      expect(first.v5('local|category.food'), first.v5('local|category.food'));
+      // A different instance, a different clock, a different day: still the same id. This is the property the seeder's cross-device test relies on.
+      expect(second.v5('local|category.food'), first.v5('local|category.food'));
+    });
+
+    test('returns different ids for different names', () {
+      final generator = GPUuidGeneratorImpl(clock: FakeClock());
+
+      expect(generator.v5('local|category.food'), isNot(generator.v5('local|category.bills')));
+      // The owner half matters as much as the key half: without it every user on the server would share one set of category ids.
+      expect(generator.v5('local|category.food'), isNot(generator.v5('someone-else|category.food')));
+    });
+
+    test('is a well-formed v5 UUID', () {
+      // Version nibble 5 and an RFC 4122 variant. Nothing in the app parses a UUID, but a server column typed `uuid` at W10 will.
+      final id = GPUuidGeneratorImpl(clock: FakeClock()).v5('local|category.food');
+
+      expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
+    });
+
+    test('carries no timestamp, so it cannot be mistaken for a v7', () {
+      // A v7 leads with the clock; a v5 leads with a hash. Asserting they differ for the same instant guards against someone "unifying" the two.
+      final clock = FakeClock();
+      final generator = GPUuidGeneratorImpl(clock: clock);
+
+      expect(generator.v5('local|category.food'), isNot(generator.v7()));
+    });
+  });
 }

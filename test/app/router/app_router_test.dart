@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
+import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/localization/locale.dart';
+import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 
+import '../../helpers/fake_account_repository.dart';
 import '../../helpers/localization_harness.dart';
 
 /// Taps a bottom-navigation destination by its label.
@@ -22,6 +25,12 @@ Future<void> tapTab(WidgetTester tester, String label) async {
 }
 
 void main() {
+  // The Accounts route resolves its repository from the locator (see `createRouter`), so a test that opens that tab needs one registered. A fake rather than
+  // the real graph: these tests are about which page a path shows, and none of them reads an account. Reset after each test, because this is the global
+  // locator the router reads — the one place a test here cannot use a private `GetIt`.
+  setUp(() => getIt.registerSingleton<AccountRepository>(FakeAccountRepository()));
+  tearDown(getIt.reset);
+
   group('shell', () {
     testWidgets('starts on Home', (WidgetTester tester) async {
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));

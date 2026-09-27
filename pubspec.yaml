@@ -50,6 +50,17 @@ dependencies:
   # Navigation: the shell route and the five tabs (ADR-0003).
   go_router: 17.2.3
 
+  # Locale-aware number formatting and parsing, behind `GPMoneyFormatter` (W3 T4). Already in the tree as a transitive dependency of
+  # `flutter_localizations`; promoted to a direct one because we now import it, and a package you import belongs in your own pubspec.
+  #
+  # Writing it by hand was the alternative and it is not close: the separators alone are inverted between the two languages we ship (`1,234.56` vs
+  # `1.234,56`), symbol placement moves with the locale too, and a third language would mean researching all of it again rather than adding an enum case.
+  # No native setup, no architecture lock-in — the import lives in one file — and it is maintained by the Dart team.
+  #
+  # Pinned exactly, and it cannot be otherwise: `flutter_localizations` on Flutter 3.35.6 depends on `intl: 0.20.2` as an exact version, so any other value
+  # here fails to resolve. It moves when the SDK pin moves (§5).
+  intl: 0.20.2
+
   # `@immutable` and friends, used on `GPFailure` in `core/error/`.
   meta: 1.16.0
 
@@ -98,7 +109,8 @@ flutter:
   # Inter, bundled as static weights rather than fetched at runtime through
   # `google_fonts`. Pockit is offline-first (CLAUDE.md §1): a font downloaded on
   # first launch makes the first frame of a cold start depend on connectivity,
-  # which is the exact property this app exists not to have. ~272 KB, paid once.
+  # which is the exact property this app exists not to have. ~313 KB, paid once:
+  # a Latin + Vietnamese subset, not the whole family (ADR-0008).
   # SIL OFL 1.1 — see assets/fonts/README.md.
   fonts:
     - family: Inter

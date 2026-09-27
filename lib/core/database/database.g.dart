@@ -972,14 +972,751 @@ class AccountsTableCompanion extends UpdateCompanion<AccountRow> {
   }
 }
 
+class $CategoriesTableTable extends CategoriesTable with TableInfo<$CategoriesTableTable, CategoryRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CategoriesTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _ownerIdMeta = const VerificationMeta(
+    'ownerId',
+  );
+  @override
+  late final GeneratedColumn<String> ownerId = GeneratedColumn<String>(
+    'owner_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameKeyMeta = const VerificationMeta(
+    'nameKey',
+  );
+  @override
+  late final GeneratedColumn<String> nameKey = GeneratedColumn<String>(
+    'name_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
+  @override
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _iconKeyMeta = const VerificationMeta(
+    'iconKey',
+  );
+  @override
+  late final GeneratedColumn<String> iconKey = GeneratedColumn<String>(
+    'icon_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _colorKeyMeta = const VerificationMeta(
+    'colorKey',
+  );
+  @override
+  late final GeneratedColumn<String> colorKey = GeneratedColumn<String>(
+    'color_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isSystemMeta = const VerificationMeta(
+    'isSystem',
+  );
+  @override
+  late final GeneratedColumn<bool> isSystem = GeneratedColumn<bool>(
+    'is_system',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_system" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<int> updatedAt = GeneratedColumn<int>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _versionMeta = const VerificationMeta(
+    'version',
+  );
+  @override
+  late final GeneratedColumn<int> version = GeneratedColumn<int>(
+    'version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAt = GeneratedColumn<int>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ownerId,
+    nameKey,
+    name,
+    type,
+    iconKey,
+    colorKey,
+    isSystem,
+    createdAt,
+    updatedAt,
+    version,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'categories';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CategoryRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('owner_id')) {
+      context.handle(
+        _ownerIdMeta,
+        ownerId.isAcceptableOrUnknown(data['owner_id']!, _ownerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ownerIdMeta);
+    }
+    if (data.containsKey('name_key')) {
+      context.handle(
+        _nameKeyMeta,
+        nameKey.isAcceptableOrUnknown(data['name_key']!, _nameKeyMeta),
+      );
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    }
+    if (data.containsKey('type')) {
+      context.handle(
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_typeMeta);
+    }
+    if (data.containsKey('icon_key')) {
+      context.handle(
+        _iconKeyMeta,
+        iconKey.isAcceptableOrUnknown(data['icon_key']!, _iconKeyMeta),
+      );
+    }
+    if (data.containsKey('color_key')) {
+      context.handle(
+        _colorKeyMeta,
+        colorKey.isAcceptableOrUnknown(data['color_key']!, _colorKeyMeta),
+      );
+    }
+    if (data.containsKey('is_system')) {
+      context.handle(
+        _isSystemMeta,
+        isSystem.isAcceptableOrUnknown(data['is_system']!, _isSystemMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isSystemMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('version')) {
+      context.handle(
+        _versionMeta,
+        version.isAcceptableOrUnknown(data['version']!, _versionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_versionMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CategoryRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CategoryRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
+      )!,
+      nameKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name_key'],
+      ),
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      ),
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      iconKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}icon_key'],
+      ),
+      colorKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}color_key'],
+      ),
+      isSystem: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_system'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $CategoriesTableTable createAlias(String alias) {
+    return $CategoriesTableTable(attachedDatabase, alias);
+  }
+}
+
+class CategoryRow extends DataClass implements Insertable<CategoryRow> {
+  /// UUID. For a user-created category it is `GPUuidGenerator.v7`, as everywhere else; for a seeded one it is `v5` over `owner_id|name_key`, so that two
+  /// devices belonging to the same user mint the *same* id for "Food" and a pull reconciles them instead of showing the user two of everything. See
+  /// `category_seeder.dart`.
+  final String id;
+
+  /// `localOwnerId` until W10. Never null — see `core/database/owner_id.dart`.
+  final String ownerId;
+
+  /// Translation key for a seeded category (`category.food`), null for one the user created. Never translated text — see the class doc.
+  final String? nameKey;
+
+  /// The name the user typed, and the one that wins when both are present. Null on a seeded category nobody has renamed.
+  final String? name;
+
+  /// `CategoryType` — `expense` or `income` — stored as plain text and converted by the mapper at T6, not `textEnum<CategoryType>()`. Same reasoning as
+  /// `accounts.type`: `textEnum` persists the Dart constant's name, which turns a rename into a silent data migration.
+  final String type;
+
+  /// A key into the app's icon set, resolved in presentation — `icon_food`, not a code point. A stored code point is a number that means nothing after the
+  /// icon font changes, and Material's identifiers are not stable enough to put in a database.
+  final String? iconKey;
+
+  /// A key into the theme's palette, resolved in presentation. Never `#FF5722`: a stored hex is a colour that ignores dark mode and cannot be re-themed.
+  final String? colorKey;
+
+  /// True for the rows the seeder wrote. It is not a permission — the user may rename, recolour and soft-delete a system category — it is provenance, and
+  /// W6 uses it to offer "restore defaults" and to keep a fresh install's categories out of the "you created these" list.
+  final bool isSystem;
+
+  /// Epoch millis, UTC (§6). Written from `GPClock`, never `DateTime.now()`.
+  final int createdAt;
+
+  /// Epoch millis, UTC. Half the pull cursor at W12 T2.
+  final int updatedAt;
+
+  /// Optimistic-concurrency token (§7). Starts at 1, set from the server's response, never bumped hopefully on the client.
+  final int version;
+
+  /// Soft-delete tombstone (golden rule 5). Not indexed, same as `accounts`: a user has tens of categories, and an index nothing needs is one every write
+  /// maintains.
+  final int? deletedAt;
+  const CategoryRow({
+    required this.id,
+    required this.ownerId,
+    this.nameKey,
+    this.name,
+    required this.type,
+    this.iconKey,
+    this.colorKey,
+    required this.isSystem,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.version,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['owner_id'] = Variable<String>(ownerId);
+    if (!nullToAbsent || nameKey != null) {
+      map['name_key'] = Variable<String>(nameKey);
+    }
+    if (!nullToAbsent || name != null) {
+      map['name'] = Variable<String>(name);
+    }
+    map['type'] = Variable<String>(type);
+    if (!nullToAbsent || iconKey != null) {
+      map['icon_key'] = Variable<String>(iconKey);
+    }
+    if (!nullToAbsent || colorKey != null) {
+      map['color_key'] = Variable<String>(colorKey);
+    }
+    map['is_system'] = Variable<bool>(isSystem);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    map['version'] = Variable<int>(version);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<int>(deletedAt);
+    }
+    return map;
+  }
+
+  CategoriesTableCompanion toCompanion(bool nullToAbsent) {
+    return CategoriesTableCompanion(
+      id: Value(id),
+      ownerId: Value(ownerId),
+      nameKey: nameKey == null && nullToAbsent ? const Value.absent() : Value(nameKey),
+      name: name == null && nullToAbsent ? const Value.absent() : Value(name),
+      type: Value(type),
+      iconKey: iconKey == null && nullToAbsent ? const Value.absent() : Value(iconKey),
+      colorKey: colorKey == null && nullToAbsent ? const Value.absent() : Value(colorKey),
+      isSystem: Value(isSystem),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      version: Value(version),
+      deletedAt: deletedAt == null && nullToAbsent ? const Value.absent() : Value(deletedAt),
+    );
+  }
+
+  factory CategoryRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CategoryRow(
+      id: serializer.fromJson<String>(json['id']),
+      ownerId: serializer.fromJson<String>(json['ownerId']),
+      nameKey: serializer.fromJson<String?>(json['nameKey']),
+      name: serializer.fromJson<String?>(json['name']),
+      type: serializer.fromJson<String>(json['type']),
+      iconKey: serializer.fromJson<String?>(json['iconKey']),
+      colorKey: serializer.fromJson<String?>(json['colorKey']),
+      isSystem: serializer.fromJson<bool>(json['isSystem']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
+      deletedAt: serializer.fromJson<int?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ownerId': serializer.toJson<String>(ownerId),
+      'nameKey': serializer.toJson<String?>(nameKey),
+      'name': serializer.toJson<String?>(name),
+      'type': serializer.toJson<String>(type),
+      'iconKey': serializer.toJson<String?>(iconKey),
+      'colorKey': serializer.toJson<String?>(colorKey),
+      'isSystem': serializer.toJson<bool>(isSystem),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'version': serializer.toJson<int>(version),
+      'deletedAt': serializer.toJson<int?>(deletedAt),
+    };
+  }
+
+  CategoryRow copyWith({
+    String? id,
+    String? ownerId,
+    Value<String?> nameKey = const Value.absent(),
+    Value<String?> name = const Value.absent(),
+    String? type,
+    Value<String?> iconKey = const Value.absent(),
+    Value<String?> colorKey = const Value.absent(),
+    bool? isSystem,
+    int? createdAt,
+    int? updatedAt,
+    int? version,
+    Value<int?> deletedAt = const Value.absent(),
+  }) => CategoryRow(
+    id: id ?? this.id,
+    ownerId: ownerId ?? this.ownerId,
+    nameKey: nameKey.present ? nameKey.value : this.nameKey,
+    name: name.present ? name.value : this.name,
+    type: type ?? this.type,
+    iconKey: iconKey.present ? iconKey.value : this.iconKey,
+    colorKey: colorKey.present ? colorKey.value : this.colorKey,
+    isSystem: isSystem ?? this.isSystem,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  CategoryRow copyWithCompanion(CategoriesTableCompanion data) {
+    return CategoryRow(
+      id: data.id.present ? data.id.value : this.id,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
+      nameKey: data.nameKey.present ? data.nameKey.value : this.nameKey,
+      name: data.name.present ? data.name.value : this.name,
+      type: data.type.present ? data.type.value : this.type,
+      iconKey: data.iconKey.present ? data.iconKey.value : this.iconKey,
+      colorKey: data.colorKey.present ? data.colorKey.value : this.colorKey,
+      isSystem: data.isSystem.present ? data.isSystem.value : this.isSystem,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoryRow(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('nameKey: $nameKey, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('colorKey: $colorKey, ')
+          ..write('isSystem: $isSystem, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ownerId,
+    nameKey,
+    name,
+    type,
+    iconKey,
+    colorKey,
+    isSystem,
+    createdAt,
+    updatedAt,
+    version,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CategoryRow &&
+          other.id == this.id &&
+          other.ownerId == this.ownerId &&
+          other.nameKey == this.nameKey &&
+          other.name == this.name &&
+          other.type == this.type &&
+          other.iconKey == this.iconKey &&
+          other.colorKey == this.colorKey &&
+          other.isSystem == this.isSystem &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version &&
+          other.deletedAt == this.deletedAt);
+}
+
+class CategoriesTableCompanion extends UpdateCompanion<CategoryRow> {
+  final Value<String> id;
+  final Value<String> ownerId;
+  final Value<String?> nameKey;
+  final Value<String?> name;
+  final Value<String> type;
+  final Value<String?> iconKey;
+  final Value<String?> colorKey;
+  final Value<bool> isSystem;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> version;
+  final Value<int?> deletedAt;
+  final Value<int> rowid;
+  const CategoriesTableCompanion({
+    this.id = const Value.absent(),
+    this.ownerId = const Value.absent(),
+    this.nameKey = const Value.absent(),
+    this.name = const Value.absent(),
+    this.type = const Value.absent(),
+    this.iconKey = const Value.absent(),
+    this.colorKey = const Value.absent(),
+    this.isSystem = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CategoriesTableCompanion.insert({
+    required String id,
+    required String ownerId,
+    this.nameKey = const Value.absent(),
+    this.name = const Value.absent(),
+    required String type,
+    this.iconKey = const Value.absent(),
+    this.colorKey = const Value.absent(),
+    required bool isSystem,
+    required int createdAt,
+    required int updatedAt,
+    required int version,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ownerId = Value(ownerId),
+       type = Value(type),
+       isSystem = Value(isSystem),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       version = Value(version);
+  static Insertable<CategoryRow> custom({
+    Expression<String>? id,
+    Expression<String>? ownerId,
+    Expression<String>? nameKey,
+    Expression<String>? name,
+    Expression<String>? type,
+    Expression<String>? iconKey,
+    Expression<String>? colorKey,
+    Expression<bool>? isSystem,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? version,
+    Expression<int>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ownerId != null) 'owner_id': ownerId,
+      if (nameKey != null) 'name_key': nameKey,
+      if (name != null) 'name': name,
+      if (type != null) 'type': type,
+      if (iconKey != null) 'icon_key': iconKey,
+      if (colorKey != null) 'color_key': colorKey,
+      if (isSystem != null) 'is_system': isSystem,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CategoriesTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ownerId,
+    Value<String?>? nameKey,
+    Value<String?>? name,
+    Value<String>? type,
+    Value<String?>? iconKey,
+    Value<String?>? colorKey,
+    Value<bool>? isSystem,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? version,
+    Value<int?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return CategoriesTableCompanion(
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
+      nameKey: nameKey ?? this.nameKey,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      iconKey: iconKey ?? this.iconKey,
+      colorKey: colorKey ?? this.colorKey,
+      isSystem: isSystem ?? this.isSystem,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
+    if (nameKey.present) {
+      map['name_key'] = Variable<String>(nameKey.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (iconKey.present) {
+      map['icon_key'] = Variable<String>(iconKey.value);
+    }
+    if (colorKey.present) {
+      map['color_key'] = Variable<String>(colorKey.value);
+    }
+    if (isSystem.present) {
+      map['is_system'] = Variable<bool>(isSystem.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CategoriesTableCompanion(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('nameKey: $nameKey, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('iconKey: $iconKey, ')
+          ..write('colorKey: $colorKey, ')
+          ..write('isSystem: $isSystem, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$GPAppDatabase extends GeneratedDatabase {
   _$GPAppDatabase(QueryExecutor e) : super(e);
   $GPAppDatabaseManager get managers => $GPAppDatabaseManager(this);
   late final $SettingsTableTable settingsTable = $SettingsTableTable(this);
   late final $AccountsTableTable accountsTable = $AccountsTableTable(this);
+  late final $CategoriesTableTable categoriesTable = $CategoriesTableTable(
+    this,
+  );
   late final Index accountsOwnerIdIsArchived = Index(
     'accounts_owner_id_is_archived',
     'CREATE INDEX accounts_owner_id_is_archived ON accounts (owner_id, is_archived)',
+  );
+  late final Index categoriesOwnerIdType = Index(
+    'categories_owner_id_type',
+    'CREATE INDEX categories_owner_id_type ON categories (owner_id, type)',
+  );
+  late final Index categoriesOwnerIdNameKey = Index(
+    'categories_owner_id_name_key',
+    'CREATE UNIQUE INDEX categories_owner_id_name_key ON categories (owner_id, name_key)',
   );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -987,7 +1724,10 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     settingsTable,
     accountsTable,
+    categoriesTable,
     accountsOwnerIdIsArchived,
+    categoriesOwnerIdType,
+    categoriesOwnerIdNameKey,
   ];
 }
 
@@ -1438,10 +2178,320 @@ typedef $$AccountsTableTableProcessedTableManager =
       AccountRow,
       PrefetchHooks Function()
     >;
+typedef $$CategoriesTableTableCreateCompanionBuilder =
+    CategoriesTableCompanion Function({
+      required String id,
+      required String ownerId,
+      Value<String?> nameKey,
+      Value<String?> name,
+      required String type,
+      Value<String?> iconKey,
+      Value<String?> colorKey,
+      required bool isSystem,
+      required int createdAt,
+      required int updatedAt,
+      required int version,
+      Value<int?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$CategoriesTableTableUpdateCompanionBuilder =
+    CategoriesTableCompanion Function({
+      Value<String> id,
+      Value<String> ownerId,
+      Value<String?> nameKey,
+      Value<String?> name,
+      Value<String> type,
+      Value<String?> iconKey,
+      Value<String?> colorKey,
+      Value<bool> isSystem,
+      Value<int> createdAt,
+      Value<int> updatedAt,
+      Value<int> version,
+      Value<int?> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$CategoriesTableTableFilterComposer extends Composer<_$GPAppDatabase, $CategoriesTableTable> {
+  $$CategoriesTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nameKey => $composableBuilder(
+    column: $table.nameKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get colorKey => $composableBuilder(
+    column: $table.colorKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isSystem => $composableBuilder(
+    column: $table.isSystem,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CategoriesTableTableOrderingComposer extends Composer<_$GPAppDatabase, $CategoriesTableTable> {
+  $$CategoriesTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ownerId => $composableBuilder(
+    column: $table.ownerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nameKey => $composableBuilder(
+    column: $table.nameKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get iconKey => $composableBuilder(
+    column: $table.iconKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get colorKey => $composableBuilder(
+    column: $table.colorKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isSystem => $composableBuilder(
+    column: $table.isSystem,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get version => $composableBuilder(
+    column: $table.version,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CategoriesTableTableAnnotationComposer extends Composer<_$GPAppDatabase, $CategoriesTableTable> {
+  $$CategoriesTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get ownerId => $composableBuilder(column: $table.ownerId, builder: (column) => column);
+
+  GeneratedColumn<String> get nameKey => $composableBuilder(column: $table.nameKey, builder: (column) => column);
+
+  GeneratedColumn<String> get name => $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get type => $composableBuilder(column: $table.type, builder: (column) => column);
+
+  GeneratedColumn<String> get iconKey => $composableBuilder(column: $table.iconKey, builder: (column) => column);
+
+  GeneratedColumn<String> get colorKey => $composableBuilder(column: $table.colorKey, builder: (column) => column);
+
+  GeneratedColumn<bool> get isSystem => $composableBuilder(column: $table.isSystem, builder: (column) => column);
+
+  GeneratedColumn<int> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get updatedAt => $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get version => $composableBuilder(column: $table.version, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedAt => $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$CategoriesTableTableTableManager
+    extends
+        RootTableManager<
+          _$GPAppDatabase,
+          $CategoriesTableTable,
+          CategoryRow,
+          $$CategoriesTableTableFilterComposer,
+          $$CategoriesTableTableOrderingComposer,
+          $$CategoriesTableTableAnnotationComposer,
+          $$CategoriesTableTableCreateCompanionBuilder,
+          $$CategoriesTableTableUpdateCompanionBuilder,
+          (CategoryRow, BaseReferences<_$GPAppDatabase, $CategoriesTableTable, CategoryRow>),
+          CategoryRow,
+          PrefetchHooks Function()
+        > {
+  $$CategoriesTableTableTableManager(
+    _$GPAppDatabase db,
+    $CategoriesTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$CategoriesTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$CategoriesTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$CategoriesTableTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> ownerId = const Value.absent(),
+                Value<String?> nameKey = const Value.absent(),
+                Value<String?> name = const Value.absent(),
+                Value<String> type = const Value.absent(),
+                Value<String?> iconKey = const Value.absent(),
+                Value<String?> colorKey = const Value.absent(),
+                Value<bool> isSystem = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> updatedAt = const Value.absent(),
+                Value<int> version = const Value.absent(),
+                Value<int?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoriesTableCompanion(
+                id: id,
+                ownerId: ownerId,
+                nameKey: nameKey,
+                name: name,
+                type: type,
+                iconKey: iconKey,
+                colorKey: colorKey,
+                isSystem: isSystem,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                version: version,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String ownerId,
+                Value<String?> nameKey = const Value.absent(),
+                Value<String?> name = const Value.absent(),
+                required String type,
+                Value<String?> iconKey = const Value.absent(),
+                Value<String?> colorKey = const Value.absent(),
+                required bool isSystem,
+                required int createdAt,
+                required int updatedAt,
+                required int version,
+                Value<int?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CategoriesTableCompanion.insert(
+                id: id,
+                ownerId: ownerId,
+                nameKey: nameKey,
+                name: name,
+                type: type,
+                iconKey: iconKey,
+                colorKey: colorKey,
+                isSystem: isSystem,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                version: version,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CategoriesTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GPAppDatabase,
+      $CategoriesTableTable,
+      CategoryRow,
+      $$CategoriesTableTableFilterComposer,
+      $$CategoriesTableTableOrderingComposer,
+      $$CategoriesTableTableAnnotationComposer,
+      $$CategoriesTableTableCreateCompanionBuilder,
+      $$CategoriesTableTableUpdateCompanionBuilder,
+      (CategoryRow, BaseReferences<_$GPAppDatabase, $CategoriesTableTable, CategoryRow>),
+      CategoryRow,
+      PrefetchHooks Function()
+    >;
 
 class $GPAppDatabaseManager {
   final _$GPAppDatabase _db;
   $GPAppDatabaseManager(this._db);
   $$SettingsTableTableTableManager get settingsTable => $$SettingsTableTableTableManager(_db, _db.settingsTable);
   $$AccountsTableTableTableManager get accountsTable => $$AccountsTableTableTableManager(_db, _db.accountsTable);
+  $$CategoriesTableTableTableManager get categoriesTable => $$CategoriesTableTableTableManager(_db, _db.categoriesTable);
 }

@@ -115,6 +115,59 @@ void main() {
     });
   });
 
+  group('magnitude', () {
+    // W3 T3's "số lớn". The point of these is not that `int` can hold a big number — it is that the ceiling is a decision with a written reason, so the
+    // day a balance behaves strangely at 9.2 quintillion nobody re-derives it from scratch.
+    const ceiling = 9223372036854775807;
+    const floor = -9223372036854775808;
+
+    test('counts exactly at magnitudes where a double has stopped counting', () {
+      // 2^53 + 1 is the first integer a double cannot represent: it rounds down to 2^53. In VND, exponent 0, that is only ~9 quadrillion dong — far-fetched
+      // for a wallet, entirely reachable for a lifetime `SUM()`. This is golden rule 2 in one assertion.
+      // `avoid_js_rounded_ints` is exactly right and exactly beside the point here: this literal is unrepresentable in a double, which is the assertion.
+      // Android and iOS only (CLAUDE.md §1), so there is no JS target to round it.
+      // ignore: avoid_js_rounded_ints
+      const beyondDoublePrecision = 9007199254740993;
+
+      expect(beyondDoublePrecision.toDouble().toInt(), 9007199254740992, reason: 'a double loses this unit');
+      expect(Money(beyondDoublePrecision, 'VND').minorUnits, beyondDoublePrecision);
+      expect(Money(beyondDoublePrecision, 'VND') + Money(1, 'VND'), Money(9007199254740994, 'VND'));
+      expect(Money(beyondDoublePrecision, 'VND') - Money(1, 'VND'), Money(9007199254740992, 'VND'));
+    });
+
+    test('carries an amount at either end of the 64-bit range', () {
+      expect(Money(ceiling, 'VND').minorUnits, ceiling);
+      expect(Money(floor, 'VND').minorUnits, floor);
+      // Written out rather than `ceiling - 1`, so the expected value is not computed by the operation under test. Same JS caveat as above.
+      // ignore: avoid_js_rounded_ints
+      expect(Money(ceiling, 'VND') - Money(1, 'VND'), Money(9223372036854775806, 'VND'));
+      expect(Money(floor, 'VND') + Money(1, 'VND'), Money(-9223372036854775807, 'VND'));
+    });
+
+    test('fromStorage round-trips the whole range a SQLite INTEGER can hold', () {
+      // The storage column is the same 64 bits, so anything the DB can return must survive the read. A narrower guard here would reject rows the schema
+      // allows — the corrupt-row path is for a malformed *code*, never for a large amount.
+      expect(Money.fromStorage(ceiling, 'VND'), Money(ceiling, 'VND'));
+      expect(Money.fromStorage(floor, 'VND'), Money(floor, 'VND'));
+    });
+
+    test('addition past the ceiling wraps instead of throwing — the documented bound, not a bug', () {
+      // Accepted deliberately (W3 T3, option A): guarding every `+` buys nothing a personal ledger can reach, and would not cover the `SUM()` that W4's
+      // aggregates run inside SQLite anyway. Asserted so the behaviour is pinned: if a future change starts throwing here, that is a decision being
+      // reversed, and this test is where it has to be argued.
+      expect(Money(ceiling, 'VND') + Money(1, 'VND'), Money(floor, 'VND'));
+      expect(Money(floor, 'VND') - Money(1, 'VND'), Money(ceiling, 'VND'));
+    });
+
+    test('the floor is its own negation, so abs() of it stays negative', () {
+      // Two's complement has one more negative than positive, so `floor` has no positive twin to flip to. The only sharp edge in the range worth naming:
+      // `abs()` is documented as "magnitude", and at exactly this value it is not.
+      expect(-Money(floor, 'VND'), Money(floor, 'VND'));
+      expect(Money(floor, 'VND').abs().isNegative, isTrue);
+      expect(Money(ceiling, 'VND').abs(), Money(ceiling, 'VND'));
+    });
+  });
+
   group('comparison', () {
     test('orders by amount', () {
       expect(Money(1000, 'VND') < Money(2000, 'VND'), isTrue);

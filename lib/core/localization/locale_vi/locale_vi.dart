@@ -6,6 +6,7 @@ part 'locale_vi_home.dart';
 part 'locale_vi_accounts.dart';
 part 'locale_vi_transactions.dart';
 part 'locale_vi_budgets.dart';
+part 'locale_vi_categories.dart';
 part 'locale_vi_settings.dart';
 part 'locale_vi_error.dart';
 
@@ -30,6 +31,9 @@ final class GPLocaleVi implements GPLocaleBase {
 
   @override
   GPLocaleBaseBudgets get budgets => const GPLocaleViBudgets();
+
+  @override
+  GPLocaleBaseCategories get categories => const GPLocaleViCategories();
 
   @override
   GPLocaleBaseSettings get settings => const GPLocaleViSettings();

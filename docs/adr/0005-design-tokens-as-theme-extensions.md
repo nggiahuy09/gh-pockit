@@ -4,6 +4,8 @@
 
 Accepted — 2026-09-12 (W1, weekend flex)
 
+Amended — 2026-09-27 by ADR-0008: which characters the bundled Inter covers.
+
 ## Context
 
 `ROADMAP.md` W1 flex asks for "theme + design tokens". Until now `GPApp` passed
@@ -84,6 +86,12 @@ It is bundled as four static TTFs (~272 KB) rather than fetched by
 `google_fonts`, because a font downloaded on first launch makes the first frame
 of a cold start depend on connectivity — the exact property an offline-first
 app exists not to have.
+
+> **Amended by ADR-0008.** The four files first bundled here were a Latin-only
+> cut with no `ă đ ơ ư`, none of the toned vowels in U+1EA0–U+1EF9 and no `₫`.
+> They are now a Latin + Vietnamese subset of the same Inter 4.1, ~313 KB, and
+> `test/core/theme/font_coverage_test.dart` holds them to it. The typeface and
+> the decision to bundle it stand.
 
 ### From the kit: the architecture, not the values
 

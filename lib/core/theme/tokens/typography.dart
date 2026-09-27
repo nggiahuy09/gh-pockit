@@ -13,7 +13,8 @@ import 'dart:ui' show FontWeight;
 /// Inter rather than Anthropic's own Styrene / Tiempos, which are licensed and not distributable. Inter is the closest open grotesque: same
 /// neutral skeleton, same tall x-height, and it holds up at 12sp in a list — which matters more here than matching a display face exactly.
 abstract final class GPTypographyTokens {
-  /// The one family. Bundled locally under `assets/fonts/` — see the README there for why it is not `google_fonts`.
+  /// The one family. Bundled locally under `assets/fonts/` as a Latin + Vietnamese subset — see the README there for why it is not `google_fonts`, and
+  /// `font_coverage_test.dart` for the characters every weight must carry (ADR-0008).
   static const String fontFamily = 'Inter';
 
   /// 400 — body copy.

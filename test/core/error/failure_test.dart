@@ -19,6 +19,8 @@ const allFailures = <GPFailure>[
   // not quietly reuse an existing string.
   GPValidationFailure(GPValidationCode.accountNameEmpty),
   GPValidationFailure(GPValidationCode.accountNameTooLong),
+  GPValidationFailure(GPValidationCode.categoryNameEmpty),
+  GPValidationFailure(GPValidationCode.categoryNameTooLong),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),

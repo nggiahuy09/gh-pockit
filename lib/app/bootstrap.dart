@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
+import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
 
 /// Single startup path for every flavor and entry point.
 ///
@@ -17,6 +18,7 @@ Future<void> bootstrap(Widget Function() builder) async {
 
   configureCoreDependencies();
   configureAccountsDependencies();
+  configureCategoriesDependencies();
   final logger = getIt<GPAppLogger>();
 
   final previousOnError = FlutterError.onError;
@@ -38,6 +40,20 @@ Future<void> bootstrap(Widget Function() builder) async {
 
   // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
   await getIt<GPLocalization>().init(deviceLocale: PlatformDispatcher.instance.locale);
+
+  // Every launch, not just the first (W3 T5). The seeder is idempotent by construction — derived ids plus `INSERT OR IGNORE` — so the steady-state cost is
+  // one batch of eleven ignored inserts, and the benefit is that a category list can never be permanently empty because one install missed its one chance.
+  //
+  // Awaited, and therefore on the path to the first frame, for the same reason the locale is: a category picker that is empty for the first few hundred
+  // milliseconds is a picker the user can tap through. It is a single transaction on a table of eleven rows.
+  //
+  // Not in `onUpgrade`. Seeding needs an owner and a clock, neither of which a migration has, and a migration that wrote rows would also resurrect the
+  // categories a user deleted on the previous version.
+  final seeded = await getIt<CategorySeeder>().seedDefaults();
+  if (seeded > 0) {
+    // Count only — a category name is user data once the user renames one, and golden rule 9 keeps payloads out of logs.
+    logger.info('seeded default categories', fields: {'count': seeded});
+  }
 
   logger.info('app bootstrapped');
   runApp(builder());

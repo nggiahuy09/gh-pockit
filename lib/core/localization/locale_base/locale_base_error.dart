@@ -20,6 +20,8 @@ abstract class GPLocaleBaseError {
   /// shows the limit with a live counter instead, which tells the user *before* they hit it rather than after.
   String get validationAccountNameEmpty;
   String get validationAccountNameTooLong;
+  String get validationCategoryNameEmpty;
+  String get validationCategoryNameTooLong;
   String get conflict;
   String get notFound;
   String get database;

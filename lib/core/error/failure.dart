@@ -66,6 +66,13 @@ enum GPValidationCode {
 
   /// An account name past `AccountEntity.nameMaxLength`.
   accountNameTooLong,
+
+  /// A category with no name at all: no `name_key` and no typed name. For a user-created category that is a blank field; for a seeded one it would mean a
+  /// row that lost its key, which `CategoryEntity.update` makes unreachable by not accepting one.
+  categoryNameEmpty,
+
+  /// A category name past `CategoryEntity.nameMaxLength`.
+  categoryNameTooLong,
 }
 
 /// A domain rule said no. The write never reached persistence.
