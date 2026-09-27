@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
+import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
@@ -20,6 +22,10 @@ import 'package:go_router/go_router.dart';
 /// opening `/transactions/:id`, switching to Accounts and coming back returns to that detail page with its scroll position intact. A plain
 /// `ShellRoute` has one `Navigator` for all five tabs and resets the stack on every tab switch — which would have to be undone in W5–W6 as soon as
 /// the first child route exists.
+///
+/// **A route's builder is where its page's dependencies are resolved.** The page takes them through its constructor and never names `getIt`, so it can be
+/// pumped in a widget test with nothing configured; the builder is the widget-tree entry point `injector.dart` allows to touch the locator. Branches build
+/// lazily, so a tab nobody opened resolves nothing and subscribes to nothing.
 GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
   initialLocation: initialLocation,
   routes: <RouteBase>[
@@ -32,7 +38,11 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
         ),
         StatefulShellBranch(
           routes: <RouteBase>[
-            GoRoute(path: Routes.accounts, name: RouteNames.accounts, builder: (BuildContext context, GoRouterState state) => const AccountsPage()),
+            GoRoute(
+              path: Routes.accounts,
+              name: RouteNames.accounts,
+              builder: (BuildContext context, GoRouterState state) => AccountsPage(repository: getIt<AccountRepository>()),
+            ),
           ],
         ),
         StatefulShellBranch(
