@@ -200,6 +200,50 @@ draft PR sớm.
       v3→v4, v2→v4, v1→v4 và data cũ còn nguyên.
 - [x] Test bảng: mỗi CHECK từ chối đúng row sai của nó; FK từ chối `account_id` không tồn tại.
 
+### W4 T4 — spec `TransactionQuery` + `TransactionRepository` (ADR-0011)
+
+> Toàn bộ nằm ở `domain/`: không Drift, không Flutter. Value object đặt cạnh entity và không có hậu tố (CLAUDE.md §3). Mục ghi _(đề xuất)_ là chỗ chờ
+> chốt.
+
+**`TransactionQuery`** — `domain/entities/transaction_query.dart`
+
+- [ ] Bộ lọc, tất cả AND với nhau: `accountIds` (khớp **cả hai phía** transfer), `categoryIds`, `types`, `from` / `to` (instant, `[from, to)`). `null` là
+      không lọc. `types` là `Set<TransactionType>` chứ không phải một type _(đề xuất)_, để "ẩn transfer" diễn đạt được.
+- [ ] Set rỗng chuẩn hoá thành `null`, tức không lọc _(đề xuất)_ — "không chọn gì = tất cả", như mọi filter chip.
+- [ ] `limit` bắt buộc, không default _(đề xuất)_: page size là việc của W5. Không offset; "load more" là `withLimit(n)` trên cùng một query.
+- [ ] Order cố định, không phải tham số: `occurred_at DESC, id DESC`.
+- [ ] Không có owner, không có "kể cả đã xoá": repository scope owner, DAO lọc tombstone.
+- [ ] Người gọi dùng sai thì throw `ArgumentError` (ADR-0006: đó là bug): `limit <= 0`, `from > to`. `from == to` hợp lệ — khoảng rỗng. Mốc thời gian
+      chuẩn hoá về UTC.
+- [ ] Value equality — set so sánh không theo thứ tự, hash bằng `Object.hashAllUnordered`, không cần thêm `package:collection` — để W5 bỏ qua query trùng.
+- [ ] Không có bộ lọc "chưa phân loại": nó dính ADR-0010 (category đã xoá cũng đọc thành chưa phân loại) — để W26.
+
+**`TransactionListSnapshot`** _(tên đề xuất)_ — `domain/entities/transaction_list_snapshot.dart`
+
+- [ ] `transactions` (unmodifiable, đúng thứ tự query), `unreadableCount`, `hasMore` (= số row thô bằng `limit`; repository tính). `rowCount` suy ra từ
+      `transactions.length + unreadableCount`, không lưu riêng.
+- [ ] Value equality theo từng phần tử, để `flutter_bloc` bỏ qua lần emit trùng.
+
+**`TransactionRepository`** — `domain/repositories/transaction_repository.dart`
+
+- [ ] `watchTransactions(TransactionQuery)` → `Stream<TransactionListSnapshot>`. Row hỏng vào `unreadableCount`; query hỏng → `GPDatabaseFailure` trên
+      error channel. Error luôn là `GPFailure`, như `AccountRepository`.
+- [ ] `watchTransaction(id)` → `Stream<TransactionEntity?>`, null khi đã xoá (màn edit ở W6 T4). Row hỏng → error channel: một row thì không có
+      "một phần".
+- [ ] `createTransaction({type, accountId, destinationAccountId?, categoryId?, amount, occurredAt, note?})` → `GPResult<TransactionEntity>`. Nhận field chứ
+      không nhận entity: id và clock nằm sau interface, như `createAccount`.
+- [ ] `updateTransaction(TransactionEntity)` → `GPResult<TransactionEntity>`, guard `version`.
+- [ ] `deleteTransaction(id)` → `GPResult<void>`, soft delete, không guard version.
+- [ ] Doc ghi rõ failure của từng method: `GPValidationFailure` (rule của entity, và currency lệch account — ADR-0010), `GPNotFoundFailure` (account /
+      destination không còn), `GPConflictFailure` (chỉ update), `GPDatabaseFailure`.
+- [ ] `hasLiveTransactions(accountId)` cho `DeleteAccountUseCase` **không** thêm ở T4 _(đề xuất)_ — thêm cùng rule ở flex (§12.11).
+
+**Test + doc**
+
+- [ ] `transaction_query_test.dart`, `transaction_list_snapshot_test.dart`. Interface chưa có impl nên chưa có gì để test — T6 test qua impl thật trên
+      in-memory DB.
+- [ ] ADR-0011: ghi tên snapshot đã chốt.
+
 ## W5 · 05–11/10 🔴 BLoC + list UI
 
 | Ngày | Task                                                                                     |
