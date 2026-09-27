@@ -11,7 +11,7 @@ import 'package:drift/drift.dart';
 /// - `version` — the optimistic-concurrency token of §7. The client pushes it as `baseVersion`, the server runs `UPDATE ... WHERE version = ?`, and zero
 ///   affected rows means a conflict. A row whose `version` is wrong is a row that silently overwrites another device.
 /// - `deleted_at` — soft delete (golden rule 5). A hard `DELETE` here would be a row the server never learns is gone.
-/// - `created_at` / `updated_at` — epoch millis, UTC (§6). `updated_at` is half the pull cursor of W12 T2 (`updated_at, id`), which is why it is `NOT NULL`
+/// - `created_at` / `updated_at` — epoch millis, UTC (§6). `updated_at` is half the pull cursor of W14 T2 (`updated_at, id`), which is why it is `NOT NULL`
 ///   and why nothing may write it from `DateTime.now()` instead of `GPClock`.
 ///
 /// **No SQL defaults, deliberately.** Not on `version`, not on `is_archived`, not on the timestamps. A default is a value nobody wrote, and on a synced row
@@ -79,14 +79,14 @@ class AccountsTable extends Table {
   /// Epoch millis, UTC — never an ISO string (§6), never `DateTime.now()` (§8 wants a fake clock, `GPClock` provides one).
   IntColumn get createdAt => integer()();
 
-  /// Epoch millis, UTC. Half of the pull cursor at W12 T2, so it must move on every write the server should learn about.
+  /// Epoch millis, UTC. Half of the pull cursor at W14 T2, so it must move on every write the server should learn about.
   IntColumn get updatedAt => integer()();
 
   /// Optimistic-concurrency token (§7). Starts at 1 on create and is set from the server's response, never incremented hopefully on the client.
   IntColumn get version => integer()();
 
   /// Soft-delete tombstone (golden rule 5): epoch millis when deleted, null while alive. Every local query filters `deleted_at IS NULL` — audited across
-  /// all DAOs at W12 T3.
+  /// all DAOs at W15 T3.
   ///
   /// Not indexed. At transaction scale a partial index earns its keep; a user has a handful of accounts, and an index nothing needs is still an index every
   /// write maintains.

@@ -381,7 +381,7 @@ A feature is Done only when **all** of these hold:
 | Field                | Value                                                                                                                                                       |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Current phase        | **Phase 1 — Local-only vertical slice**                                                                                                                     |
-| Week                 | **W4 starting** — Q1–Q16 decided before the week (ROADMAP W4, ADR-0009–0011); T2 next                                                                       |
+| Week                 | **W4 in progress** — T2 done 27/09: `TransactionEntity` + `TransactionType`; Q1–Q16 decided before the week (ROADMAP W4, ADR-0009–0011)                     |
 | Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                                                      |
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                         |
 | Drift schema version | 3 — `settings` + `accounts` + `categories`; v1–v3 dumped to `drift_schemas/`, v1→v2, v2→v3 and v1→v3 all tested                                             |

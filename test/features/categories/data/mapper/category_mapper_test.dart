@@ -73,7 +73,7 @@ void main() {
     });
 
     test("maps a tombstoned row like any other, because filtering is the DAO's job", () {
-      // `CategoryEntity` has no `deletedAt`, and `findById` deliberately returns tombstones for W13's applier. A filter here would make the applier unable
+      // `CategoryEntity` has no `deletedAt`, and `findById` deliberately returns tombstones for W14's applier. A filter here would make the applier unable
       // to use the mapper at all.
       expect(mapper.toEntity(row()), isA<MappedCategory>());
     });

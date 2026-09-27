@@ -4,6 +4,9 @@ import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/localization/locale_vi/locale_vi.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 
 /// Every subtype of [GPFailure], listed by hand.
 ///
@@ -21,6 +24,10 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.accountNameTooLong),
   GPValidationFailure(GPValidationCode.categoryNameEmpty),
   GPValidationFailure(GPValidationCode.categoryNameTooLong),
+  GPValidationFailure(GPValidationCode.transactionAmountNotPositive),
+  GPValidationFailure(GPValidationCode.transactionDestinationMissing),
+  GPValidationFailure(GPValidationCode.transactionDestinationSameAsSource),
+  GPValidationFailure(GPValidationCode.transactionNoteTooLong),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),
@@ -150,8 +157,18 @@ void main() {
     test('a validation message carries no limit number', () {
       // `AccountEntity.nameMaxLength` lives in a feature's domain and presentation must not import it to build a sentence; a hard-coded 100 in two languages is
       // a number that goes stale silently. The form field shows the limit with a live counter instead.
+      //
+      // The limits are read from the entities rather than typed out here, so this keeps checking the right number when one of them moves.
+      final limits = {
+        GPValidationCode.accountNameTooLong: AccountEntity.nameMaxLength,
+        GPValidationCode.categoryNameTooLong: CategoryEntity.nameMaxLength,
+        GPValidationCode.transactionNoteTooLong: TransactionEntity.noteMaxLength,
+      };
+
       for (final locale in locales) {
-        expect(const GPValidationFailure(GPValidationCode.accountNameTooLong).message(locale), isNot(contains('100')));
+        for (final MapEntry(key: code, value: limit) in limits.entries) {
+          expect(GPValidationFailure(code).message(locale), isNot(contains('$limit')), reason: '${code.name} (${locale.locale.name})');
+        }
       }
     });
 

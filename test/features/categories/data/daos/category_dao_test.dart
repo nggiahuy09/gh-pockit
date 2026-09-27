@@ -107,7 +107,7 @@ void main() {
 
   group('findById', () {
     test('finds a tombstoned row, unlike every other read', () async {
-      // The W13 reconciliation read: the applier has to find a row it already deleted, or it re-inserts the server's copy as a duplicate.
+      // The W14 reconciliation read: the applier has to find a row it already deleted, or it re-inserts the server's copy as a duplicate.
       await dao.insertCategory(row());
       await dao.softDelete('c1', now: t1);
 
@@ -209,7 +209,7 @@ void main() {
 
   group('softDelete', () {
     test('stamps both deleted_at and updated_at', () async {
-      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W12's delta pull. Writing only the first produces a row
+      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W14's delta pull. Writing only the first produces a row
       // that is locally gone and permanently invisible to sync.
       await dao.insertCategory(row());
 

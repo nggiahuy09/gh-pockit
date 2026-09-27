@@ -8,7 +8,7 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 ///
 /// **Reads are streams, writes are futures, and that split is the architecture rather than a style choice.** Golden rule 1 makes the local DB the source of
 /// truth for the UI, so a screen never asks "what are the accounts now?" — it subscribes, and every write that lands anywhere (this device, a background
-/// sync, a pull from W12) arrives through the same subscription. A `Future<List<AccountEntity>>` read would be a snapshot that goes stale the moment a sync
+/// sync, a pull from W14) arrives through the same subscription. A `Future<List<AccountEntity>>` read would be a snapshot that goes stale the moment a sync
 /// applies, and the caller would have to know to re-fetch, which is the API-driven-UI anti-pattern (§12.1) wearing a repository's clothes.
 ///
 /// **No `ownerId` parameter anywhere.** `AccountDao` requires one on every query and it is right to; the repository is the layer that *knows* it — the

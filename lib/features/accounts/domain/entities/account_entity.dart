@@ -64,7 +64,7 @@ final class AccountEntity {
   /// UTC, always. [create] normalises, so no caller has to check `isUtc`.
   final DateTime createdAt;
 
-  /// UTC. Half the pull cursor at W12 T2, which is why it is stamped by the repository from `GPClock` rather than defaulted anywhere.
+  /// UTC. Half the pull cursor at W14 T2, which is why it is stamped by the repository from `GPClock` rather than defaulted anywhere.
   final DateTime updatedAt;
 
   /// Optimistic-concurrency token (§7). The server's number: the client sends it back as `baseVersion` and never increments it hopefully — a client-invented

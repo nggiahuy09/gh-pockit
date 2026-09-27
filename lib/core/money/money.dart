@@ -18,8 +18,8 @@ import 'package:meta/meta.dart';
 /// **The range is 64-bit, and it wraps.** [minorUnits] is a Dart `int`, so the ceiling is 9,223,372,036,854,775,807 — in VND, whose exponent is 0, that is
 /// 9.2 quintillion dong: not a balance, not a sum of balances, past the total quantity of dong in existence. Beyond it `+` wraps to a negative number
 /// silently, and `-(-9223372036854775808)` is itself. Both are recorded rather than guarded (W3 T3). A guard would put a branch on every addition to defend
-/// a bound no personal ledger reaches, and it would still not cover the path that can realistically overflow — the `SUM()` that W4's aggregates run inside
-/// SQLite, whose INTEGER is the same 64 bits and overflows on its own. Cheap safety there would read as safety everywhere. The bound is asserted in
+/// a bound no personal ledger reaches, and it would still not cover the path that can realistically overflow — the `SUM()` that W6's balances and W7's
+/// aggregates run inside SQLite, whose INTEGER is the same 64 bits and overflows on its own. Cheap safety there would read as safety everywhere. The bound is asserted in
 /// `money_test.dart` so it stays a decision rather than turning into a surprise.
 ///
 /// **Unprefixed, in `core/`.** §3 puts `GP` on everything under `core/` — and names `Money` in the *unprefixed* column two cells later, because it is a

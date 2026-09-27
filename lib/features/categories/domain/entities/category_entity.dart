@@ -67,7 +67,7 @@ final class CategoryEntity {
   /// UTC, always. [create] normalises.
   final DateTime createdAt;
 
-  /// UTC. Half the pull cursor at W12 T2, stamped by the repository from `GPClock`.
+  /// UTC. Half the pull cursor at W14 T2, stamped by the repository from `GPClock`.
   final DateTime updatedAt;
 
   /// Optimistic-concurrency token (§7). The server's number; the client sends it back as `baseVersion` and never increments it.

@@ -74,7 +74,7 @@ void main() {
   });
 
   test('refuses two rows claiming the same key for one owner', () async {
-    // What makes re-seeding safe even if a row arrives by some route other than the seeder — a pull at W13, or a future "restore defaults".
+    // What makes re-seeding safe even if a row arrives by some route other than the seeder — a pull at W14, or a future "restore defaults".
     await db.into(db.categoriesTable).insert(category(id: 'first'));
 
     await expectLater(

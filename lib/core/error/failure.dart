@@ -73,6 +73,19 @@ enum GPValidationCode {
 
   /// A category name past `CategoryEntity.nameMaxLength`.
   categoryNameTooLong,
+
+  /// An amount of zero or less. `amount_minor` is a magnitude and the transaction's type gives the direction (ADR-0009), so a negative expense is not a
+  /// smaller expense but a malformed one — and zero moves nothing.
+  transactionAmountNotPositive,
+
+  /// A transfer with no account to move the money into: the user has not picked one yet.
+  transactionDestinationMissing,
+
+  /// A transfer into the account it leaves. It would net to zero on the one account it touches, which is never what the user meant.
+  transactionDestinationSameAsSource,
+
+  /// A note past `TransactionEntity.noteMaxLength`.
+  transactionNoteTooLong,
 }
 
 /// A domain rule said no. The write never reached persistence.

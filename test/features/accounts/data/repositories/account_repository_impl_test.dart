@@ -207,7 +207,7 @@ void main() {
       final renamed = (await repository.updateAccount((created.update(name: 'Ví mới') as GPOk<AccountEntity>).value)) as GPOk<AccountEntity>;
 
       expect(renamed.value.name, 'Ví mới');
-      // `updated_at` moves because W12's delta pull reads it; `version` does not, because it is the server's (§7).
+      // `updated_at` moves because W14's delta pull reads it; `version` does not, because it is the server's (§7).
       expect(renamed.value.updatedAt, startedAt.add(const Duration(minutes: 5)));
       expect(renamed.value.version, 1);
       expect(renamed.value.createdAt, startedAt);
@@ -306,7 +306,7 @@ void main() {
       // Golden rule 5: a hard delete would be a deletion the server never learns about.
       expect(row, isNotNull);
       expect(row!.deletedAt, startedAt.add(const Duration(minutes: 1)).millisecondsSinceEpoch);
-      // `updated_at` moves too, or the deletion never reaches W12's delta pull.
+      // `updated_at` moves too, or the deletion never reaches W14's delta pull.
       expect(row.updatedAt, row.deletedAt);
       expect(await repository.watchAccounts(includeArchived: true).first, isEmpty);
     });

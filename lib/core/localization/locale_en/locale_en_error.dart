@@ -28,6 +28,18 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationCategoryNameTooLong => 'Category name is too long.';
 
   @override
+  String get validationTransactionAmountNotPositive => 'Amount must be greater than zero.';
+
+  @override
+  String get validationTransactionDestinationMissing => 'Choose an account to transfer to.';
+
+  @override
+  String get validationTransactionDestinationSameAsSource => "Can't transfer to the same account.";
+
+  @override
+  String get validationTransactionNoteTooLong => 'Note is too long.';
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override

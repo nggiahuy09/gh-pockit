@@ -22,6 +22,10 @@ abstract class GPLocaleBaseError {
   String get validationAccountNameTooLong;
   String get validationCategoryNameEmpty;
   String get validationCategoryNameTooLong;
+  String get validationTransactionAmountNotPositive;
+  String get validationTransactionDestinationMissing;
+  String get validationTransactionDestinationSameAsSource;
+  String get validationTransactionNoteTooLong;
   String get conflict;
   String get notFound;
   String get database;

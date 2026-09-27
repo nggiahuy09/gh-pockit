@@ -28,6 +28,18 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationCategoryNameTooLong => 'Tên danh mục quá dài.';
 
   @override
+  String get validationTransactionAmountNotPositive => 'Số tiền phải lớn hơn 0.';
+
+  @override
+  String get validationTransactionDestinationMissing => 'Hãy chọn tài khoản nhận tiền.';
+
+  @override
+  String get validationTransactionDestinationSameAsSource => 'Không thể chuyển tiền vào chính tài khoản này.';
+
+  @override
+  String get validationTransactionNoteTooLong => 'Ghi chú quá dài.';
+
+  @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override

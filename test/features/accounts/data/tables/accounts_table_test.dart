@@ -134,7 +134,7 @@ void main() {
     expect(all, hasLength(1));
     expect(all.single.deletedAt, 1757900000000);
 
-    // And invisible to the filter every DAO applies — audited across the codebase at W12 T3.
+    // And invisible to the filter every DAO applies — audited across the codebase at W15 T3.
     final live = await (db.select(db.accountsTable)..where((t) => t.deletedAt.isNull())).get();
     expect(live, isEmpty);
   });
