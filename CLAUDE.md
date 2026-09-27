@@ -32,7 +32,7 @@ So whenever there is a choice between:
 1. **The local DB is the source of truth for the UI.** The UI reads Drift streams and never reads a network response directly.
 2. **Money is `int` minor units.** No `double`, no `num`, no exceptions. Use the `Money(minorUnits, currencyCode)` value object.
 3. **The entity write and the outbox mutation must commit in the SAME DB transaction.** Split them and a crash in between means data that never syncs.
-4. **IDs are generated client-side (UUID v4/v7).** Never wait for the server to hand back an ID.
+4. **IDs are generated client-side (UUID v4/v7).** Never wait for the server to hand back an ID. One exception: a row every device _seeds_ (the default categories) takes a deterministic v5 of its owner + key, so two devices mint the same id offline (ADR-0002 amendment). Anything a user creates stays v7.
 5. **Delete = soft delete** (`deleted_at`) for every synced entity. Hard delete is only for internal tables such as `sync_mutations`.
 6. **Never delete a mutation before a successful response arrives.** Deleting early loses data on timeout.
 7. **Never wipe the database on a schema change.** Write a real migration plus a migration test. (Only exception: Phase 0–1, before there is real seed data.)
@@ -76,6 +76,8 @@ flowchart TD
 | `domain`       | Entity, Value Object, Repository _interface_, UseCase, Failure                                                                                               | Any Flutter import (ideally), DTO, Drift |
 | `data`         | Repository impl, DAO, DTO, Mapper, RemoteDataSource                                                                                                          | Widget, BuildContext                     |
 | `core`         | Database, network client, sync coordinator, logger, secure storage, `GPClock`, `GPUuidGenerator`, connectivity — every type here is `GP`-prefixed, see below | Business rules of any specific feature   |
+
+**A use case exists only when it owns a rule** (ADR-0010). An operation with nothing to add beyond the repository call — deleting a transaction — goes from the BLoC straight to the repository; a use case that forwards one call is the pass-through of §12.2, one layer up.
 
 ### The three-model rule
 
@@ -177,11 +179,12 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 
 - Store timestamps as `INTEGER` (epoch millis, UTC). Never store ISO strings.
 - Every synced entity must have: `id`, `owner_id`, `created_at`, `updated_at`, `version`, `deleted_at`.
-- Required indexes:
+- Required indexes — each one is created **in the change that adds the first query reading it**, never ahead of it (ADR-0009):
   - `transactions(owner_id, occurred_at DESC)`
   - `transactions(account_id, occurred_at DESC)`
+  - `transactions(destination_account_id, occurred_at DESC)` — the transfer-in side of every balance
   - `transactions(category_id, occurred_at DESC)`
-  - `transactions(sync_status)`, `transactions(updated_at)`
+  - `transactions(sync_status)`, `transactions(updated_at)` — P4, with the queries that filter on them
   - `sync_mutations(status, next_attempt_at)`
 - Balances are **never stored as a derived column** unless there is an explicit recompute strategy plus tests. Default: compute with an indexed aggregate query.
 - Heavy queries run on a **background isolate** (Drift `driftDatabase(..., isolate)`).
@@ -254,7 +257,9 @@ dart run drift_dev schema generate drift_schemas/ test/core/database/generated/
 # benchmark
 flutter test test/benchmark --dart-define=DATASET=50k
 
-# run
+# run — until the dev/prod flavors land at W10, with the Supabase env (there is no `env/` yet)
+fvm flutter run
+# from W10
 flutter run --flavor dev --dart-define-from-file=env/dev.json
 ```
 
@@ -316,7 +321,7 @@ Two consequences to keep in mind rather than rediscover:
 
 - Commit: Conventional Commits (`feat(sync): add durable outbox`)
 - Every PR must have: **What / Why / Architecture impact / Screenshots / Testing / Risks**
-- CI gate: format → analyze → test → build. Runs on every PR into `main` / `dev` and on every
+- CI gate: format → analyze → test → build (a debug APK, flavor-less until W10). Runs on every PR into `main` / `dev` and on every
   push to them (`.github/workflows/ci.yml`) — and **nowhere else**, see the PR cadence above.
 - Branch protection required on **both** `main` and `dev`: require a PR, require the
   `format → analyze → test` check, no force push, no deletion.
@@ -373,13 +378,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                                                       |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 1 — Local-only vertical slice**                                                                                     |
-| Week                 | **W3 done** — T2–T6 + flex: `Money` + `GPMoneyFormatter` + `CurrencyCode`, `categories` + seed, ADR-0007, raw accounts list |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                      |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                         |
-| Drift schema version | 3 — `settings` + `accounts` + `categories`; v1–v3 dumped to `drift_schemas/`, v1→v2, v2→v3 and v1→v3 all tested             |
-| Backend              | not set up yet                                                                                                              |
-| Latest ADR           | 0008 — Inter as a Latin + Vietnamese subset (W3 font finding); 0007 — store money as integer minor units (W3 flex)          |
-| Blocker              | —                                                                                                                           |
+| Field                | Value                                                                                                                                                       |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                                                                                     |
+| Week                 | **W4 starting** — Q1–Q16 decided before the week (ROADMAP W4, ADR-0009–0011); T2 next                                                                       |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                                                      |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                         |
+| Drift schema version | 3 — `settings` + `accounts` + `categories`; v1–v3 dumped to `drift_schemas/`, v1→v2, v2→v3 and v1→v3 all tested                                             |
+| Backend              | not set up yet                                                                                                                                              |
+| Latest ADR           | 0011 — transaction list: partial results + growing limit; 0010 — rules across entities, deleting a parent; 0009 — transactions table (all 27/09, before W4) |
+| Blocker              | —                                                                                                                                                           |

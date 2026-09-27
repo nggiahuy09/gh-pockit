@@ -43,8 +43,10 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
   ///
   /// Ordered by creation, not by name. SQLite's default `BINARY` collation sorts by UTF-8 code point, so "Ăn uống" lands after "Ví", and `NOCASE` only
   /// folds ASCII — locale-aware collation needs ICU, which this app does not ship. A list that claims to be alphabetical and is not is worse than one that
-  /// is honestly chronological; sorting for display is W4's problem, in Dart, where the locale is known. `id` breaks ties rather than leaving the order to
-  /// SQLite, and it agrees with `created_at` for free because v7 ids are themselves time-ordered (ADR-0002).
+  /// is honestly chronological. **And chronological is also the display order** (decided 2026-09-27, ROADMAP W4 Q14): neither Dart nor `intl` ships a
+  /// Vietnamese collation, so sorting by name in Dart would mean writing one, for a list of a handful of rows the user created in an order that already
+  /// means something to them. A user-chosen order is a feature — a `sort_order` column and a migration — not a sort. `id` breaks ties rather than leaving
+  /// the order to SQLite, and it agrees with `created_at` for free because v7 ids are themselves time-ordered (ADR-0002).
   ///
   /// No `.distinct()`. Drift invalidates a stream query per table, so this re-runs on any write to `accounts` even when no visible row moved — measured and
   /// written down in `database_test.dart`. At a handful of accounts that is not worth a filter; `watchTransactions` at W8 is where it starts to be.

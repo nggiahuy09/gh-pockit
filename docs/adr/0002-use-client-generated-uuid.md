@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-09 (W1 T5)
+Accepted — 2026-09-09 (W1 T5). Amended 2026-09-27 (before W4), to record the
+`v5` exception W3 T5 introduced without an ADR — see the closing section.
 
 > Numbered 0002 to match the slot Appendix E of `docs/blueprint.md` reserves for
 > this decision. ADR 0001 (_Use Drift as local source of truth_) was drafted in
@@ -102,3 +103,50 @@ Negative:
 - A v7 key exposes roughly when a row was created to anyone who can read the
   key. Acceptable for a per-user finance app; it is why idempotency keys, which
   travel to the server, are v4.
+
+## Amended 2026-09-27 — a derived v5 for rows every device seeds
+
+W3 T5 added a third variant, and the decision lived only in the dartdoc of
+`GPUuidGenerator.v5` and in the ROADMAP. By golden rule 10 that is a decision
+that did not exist yet; this section is where it should have been written.
+
+**The decision.** A row the app _seeds_ — today, the default categories — takes
+`v5(namespace, '<owner_id>|<name_key>')` instead of a v7
+(`CategorySeeder._idFor`). Two installs belonging to one user run the seeder
+offline and independently. Minted ids would give them two "Food" categories, and
+by the first sync each copy may already carry transactions, so no automatic
+merge is safe. A derived id makes both devices write the same primary key, and
+the pull at W14 reconciles by key instead of duplicating.
+
+**An exception to golden rule 4, not a breach of it.** The rule protects "an id
+exists the moment the row does, and nothing waits for a server to hand one
+back". A v5 is computed locally from values the client already holds, so that
+still holds. What changes is uniqueness: two clients produce the same id _on
+purpose_. That is right for a fixed catalogue and wrong for anything a user
+creates, so the exception has three edges:
+
+- **Only when every device already holds the row's whole identity** — the owner
+  plus a constant of ours (`name_key`). A category the user creates takes a v7:
+  two categories with the same typed name are two rows, and a derived id would
+  collide them.
+- **The name carries the owner.** A bare key would give every user on earth the
+  same "Food".
+- **The namespace is frozen** (`GPUuidGeneratorImpl.namespace`). Changing it
+  changes every derived id, which after a release is a data migration, not an
+  edit.
+
+Positive:
+
+- Seeding is idempotent by construction: `insertOrIgnore` on the same key, so it
+  can run on every launch.
+- A category the user deleted is not resurrected by the next seed — its
+  tombstone keeps the id. With a v7 it would come back.
+
+Negative:
+
+- A derived id is predictable from its inputs. Harmless behind the RLS policy of
+  W10, but a v5 id must never be treated as unguessable.
+- v5 ids carry no time, so seeded rows do not get v7's append-only index
+  inserts. Eleven rows per owner; it does not register.
+
+`CLAUDE.md` golden rule 4 now names the exception.

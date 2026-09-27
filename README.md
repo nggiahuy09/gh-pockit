@@ -46,14 +46,16 @@ overrides and the reasoning behind each one live in
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the same gate on every
 push and pull request against `main` and `dev`, in the same fail-fast order:
-**format → analyze → test**. The Flutter version is read from `.fvmrc` with `jq`,
-so CI and every machine always use the one pinned SDK — CI never hardcodes the
-version a second time.
+**format → analyze → test → build**. The Flutter version is read from `.fvmrc`
+with `jq`, so CI and every machine always use the one pinned SDK — CI never
+hardcodes the version a second time.
 
-`build` is deliberately not in the gate yet: there is no app beyond the
-`flutter create` output and no Android flavors, so a build job would cost ~5
-minutes per run and assert nothing. It joins the gate when the dev/prod flavors
-land.
+`build` is a debug APK with no flavor. It joined the gate before the dev/prod
+flavors did, because the reason for waiting stopped holding at W2: the app now
+bundles a native SQLite, a subset font and icon assets, which are what break on
+a clean machine. The flavors land at W10 with the Supabase env. The job keeps
+the name `format → analyze → test`, since that is the status check the rulesets
+below require.
 
 ### Branch protection for `main` and `dev` (manual, once)
 

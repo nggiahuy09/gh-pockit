@@ -39,7 +39,8 @@ abstract class AccountRepository {
   /// would leave the feature doing nothing. The opt-in branch is for the screen that un-archives.
   ///
   /// Ordered by creation, not alphabetically: SQLite's `BINARY` collation sorts by code point, so "Ăn uống" would land after "Ví", and locale-aware
-  /// collation needs ICU this app does not ship. Sorting for display happens in Dart, where the locale is known.
+  /// collation needs ICU this app does not ship. Screens show this order as it comes — a name sort would need a Vietnamese collation neither Dart nor
+  /// `intl` provides (see `AccountDao.watchAccounts`).
   ///
   /// Errors arrive on the stream's error channel rather than wrapped in a `GPResult` per emission. Unwrapping in every widget would make the common path —
   /// there are accounts, render them — pay for the rare one, and `BLoC` already routes `onError` into a state; that is where the error UI (§11) is built.
@@ -80,6 +81,11 @@ abstract class AccountRepository {
   /// Soft-deletes: stamps `deleted_at` (golden rule 5). The row stays so the server can learn it is gone; a hard delete would be a deletion no other device
   /// ever hears about.
   ///
-  /// Deleting an account with transactions is a decision W4 has to make — cascade, block, or orphan — and this method does not pretend to have made it.
+  /// **An account that still has live transactions must not be deleted** (ADR-0010) — the answer is to archive it. Cascading would soft-delete its
+  /// transfers too and rewrite the balance of the account at the other end of each one.
+  ///
+  /// **This method does not check, and callers go through `DeleteAccountUseCase` (W4 flex).** Nothing in storage breaks when an account with
+  /// transactions is deleted — readers already tolerate a deleted parent, because sync can produce one anyway — so the rule is about what deleting means,
+  /// and ADR-0010 puts rules of that kind in the domain. Called directly, this deletes whatever it is given.
   Future<GPResult<void>> deleteAccount(String id);
 }
