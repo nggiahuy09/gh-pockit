@@ -36,8 +36,9 @@ read.** `watchTransactions` emits a snapshot — the transactions it mapped, how
 many rows the query returned, and how many of those the mapper refused — rather
 than a bare `List`. The UI shows what it has and, when the refused count is not
 zero, a notice that does not block it. Each refused row is logged with its id
-and the mapper's reason and nothing else (golden rule 9). The snapshot's name is
-settled at W4 T4 with the interface.
+and the mapper's reason and nothing else (golden rule 9). The type is
+`TransactionListSnapshot` (settled at W4 T4): the mapped rows, `unreadableCount`
+and `hasMore`, with `rowCount` derived from the first two rather than stored.
 
 A query that fails — the database refusing, not a row — still puts
 `GPDatabaseFailure` on the error channel, exactly as `accounts` does.
@@ -61,7 +62,16 @@ rows jump. `id` is a v7, so ties fall back to creation order (ADR-0002).
   is missing every transfer into it;
 - a date range is two instants, half-open `[from, to)`, computed by presentation
   from local dates (ADR-0009), so consecutive months never share a row;
-- category ids and a type narrow further.
+- category ids and a set of types narrow further — a set, so "everything but
+  transfers" can be said.
+
+_Settled at W4 T4,_ in `TransactionQuery`: an empty set means no filter, the
+same as `null` — "nothing selected" in a filter bar means everything, and a set
+that matched no row would be the filter bug nobody reports, because the list is
+merely empty. `limit` has no default: how many rows a screen shows is the
+screen's decision (W5). There is no "uncategorised only" filter yet: a
+transaction under a deleted category reads as uncategorised too (ADR-0010), so
+that filter needs a join, and it is W26's.
 
 ## Alternatives
 

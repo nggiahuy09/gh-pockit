@@ -378,13 +378,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase        | **Phase 1 — Local-only vertical slice**                                                                                                                          |
-| Week                 | **W4 in progress** — T2–T3 done 27/09: `TransactionEntity` + `TransactionType`, `transactions` table (schema v4); Q1–Q16 decided before the week (ADR-0009–0011) |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                                                           |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                              |
-| Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                |
-| Backend              | not set up yet                                                                                                                                                   |
-| Latest ADR           | 0011 — transaction list: partial results + growing limit; 0010 — rules across entities, deleting a parent; 0009 — transactions table (all 27/09, before W4)      |
-| Blocker              | —                                                                                                                                                                |
+| Field                | Value                                                                                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Current phase        | **Phase 1 — Local-only vertical slice**                                                                                                                                                                                                    |
+| Week                 | **W4 in progress** — T2–T4 done 27/09: `TransactionEntity` + `TransactionType`, `transactions` table (schema v4), `TransactionQuery` + `TransactionListSnapshot` + `TransactionRepository`; Q1–Q16 decided before the week (ADR-0009–0011) |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                                                                                                                                     |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                        |
+| Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                                                                                          |
+| Backend              | not set up yet                                                                                                                                                                                                                             |
+| Latest ADR           | 0011 — transaction list: partial results + growing limit; 0010 — rules across entities, deleting a parent; 0009 — transactions table (all 27/09, before W4)                                                                                |
+| Blocker              | —                                                                                                                                                                                                                                          |
