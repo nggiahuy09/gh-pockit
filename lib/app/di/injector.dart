@@ -16,6 +16,9 @@ import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
+import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
+import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
+import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 /// The app-wide service locator.
 ///
@@ -106,6 +109,28 @@ void configureCategoriesDependencies({GetIt? container}) {
         clock: c<GPClock>(),
         uuidGenerator: c<GPUuidGenerator>(),
         logger: c<GPAppLogger>(),
+        ownerId: localOwnerId,
+      ),
+    );
+}
+
+/// Registers the `transactions` feature (W4 T6).
+///
+/// Same rules as the accounts module: one DAO instance in the process, the repository registered against its interface, the module separate so a test can
+/// register it alone. Registered although nothing on screen reads it before W5 — as `CategoryRepository` was at W3 T6 — so the first BLoC finds the graph
+/// already wired rather than being the change that grows it.
+void configureTransactionsDependencies({GetIt? container}) {
+  final c = container ?? getIt;
+
+  c
+    ..registerLazySingleton<TransactionDao>(() => TransactionDao(c<GPAppDatabase>()))
+    ..registerLazySingleton<TransactionRepository>(
+      () => TransactionRepositoryImpl(
+        dao: c<TransactionDao>(),
+        clock: c<GPClock>(),
+        uuidGenerator: c<GPUuidGenerator>(),
+        logger: c<GPAppLogger>(),
+        // The same W10 seam as the other two repositories — stated, not defaulted, so it is greppable when auth lands.
         ownerId: localOwnerId,
       ),
     );
