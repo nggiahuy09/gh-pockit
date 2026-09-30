@@ -40,13 +40,20 @@ have to hold at the moment of the write, not at the moment of a check.
 
 - A missing or soft-deleted account is `GPNotFoundFailure`, which is what "no
   live row with that id" means everywhere else.
-- A currency mismatch is a `GPValidationFailure` with its own code, added at
-  W4 T6 together with the rule. A correct user can reach it — another device can
-  edit the account (see _Still open_) — so it is a result, not a throw
-  (ADR-0006).
+- A currency mismatch is a `GPValidationFailure`, and it is two codes rather
+  than one (settled at W4 T6). `transactionCurrencyMismatch` is an amount not in
+  its account's currency: a correct user can reach it — another device can edit
+  the account (see _Still open_) — so it is a result, not a throw (ADR-0006).
+  `transactionTransferCurrenciesDiffer` is a transfer between accounts of two
+  currencies, which a user picks directly. Two sentences, because there are two
+  different things to fix.
 - An archived account passes. An old transaction on an archived account must
   stay editable; keeping archived accounts out of the picker is presentation's
   job.
+
+On an update, both rules run **before** the version guard (settled at W4 T6):
+nothing is written that should not be, and when the accounts are fine a
+conflict is still reported as one.
 
 **Rule 3 runs in `CreateTransactionUseCase` and `UpdateTransactionUseCase`**
 (W4 flex), which read the category through `CategoryRepository`. It is a rule

@@ -36,7 +36,9 @@ read.** `watchTransactions` emits a snapshot — the transactions it mapped, how
 many rows the query returned, and how many of those the mapper refused — rather
 than a bare `List`. The UI shows what it has and, when the refused count is not
 zero, a notice that does not block it. Each refused row is logged with its id
-and the mapper's reason and nothing else (golden rule 9). The type is
+and the mapper's reason and nothing else (golden rule 9) — once per stream, not
+once per emission (settled at W4 T6): the list re-runs after every write, and one
+bad row would otherwise repeat the same line for every edit the user makes. The type is
 `TransactionListSnapshot` (settled at W4 T4): the mapped rows, `unreadableCount`
 and `hasMore`, with `rowCount` derived from the first two rather than stored.
 
