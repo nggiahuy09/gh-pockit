@@ -86,6 +86,14 @@ enum GPValidationCode {
 
   /// A note past `TransactionEntity.noteMaxLength`.
   transactionNoteTooLong,
+
+  /// An amount in another currency than its account's (ADR-0010). A balance is a SQL `SUM` that never goes through `Money`, so storing it would add dollars
+  /// to a dong balance without a word. A correct user can reach it: another device can change the account after the form opened.
+  transactionCurrencyMismatch,
+
+  /// A transfer between two accounts that keep different currencies. One row carries one amount in one currency, and moving it into an account that counts
+  /// in another would need an exchange rate this app does not model (multi-currency is W37+). Unlike the mismatch above, a user picks this directly.
+  transactionTransferCurrenciesDiffer,
 }
 
 /// A domain rule said no. The write never reached persistence.

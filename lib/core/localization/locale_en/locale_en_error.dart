@@ -40,6 +40,12 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationTransactionNoteTooLong => 'Note is too long.';
 
   @override
+  String get validationTransactionCurrencyMismatch => "The amount's currency doesn't match the account.";
+
+  @override
+  String get validationTransactionTransferCurrenciesDiffer => 'Both accounts in a transfer must use the same currency.';
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override

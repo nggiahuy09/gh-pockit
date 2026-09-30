@@ -40,6 +40,12 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationTransactionNoteTooLong => 'Ghi chú quá dài.';
 
   @override
+  String get validationTransactionCurrencyMismatch => 'Loại tiền của số tiền không khớp với tài khoản.';
+
+  @override
+  String get validationTransactionTransferCurrenciesDiffer => 'Hai tài khoản trong một lần chuyển phải dùng cùng loại tiền.';
+
+  @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override

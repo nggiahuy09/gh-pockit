@@ -26,6 +26,8 @@ abstract class GPLocaleBaseError {
   String get validationTransactionDestinationMissing;
   String get validationTransactionDestinationSameAsSource;
   String get validationTransactionNoteTooLong;
+  String get validationTransactionCurrencyMismatch;
+  String get validationTransactionTransferCurrenciesDiffer;
   String get conflict;
   String get notFound;
   String get database;

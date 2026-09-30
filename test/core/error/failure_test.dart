@@ -28,6 +28,8 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.transactionDestinationMissing),
   GPValidationFailure(GPValidationCode.transactionDestinationSameAsSource),
   GPValidationFailure(GPValidationCode.transactionNoteTooLong),
+  GPValidationFailure(GPValidationCode.transactionCurrencyMismatch),
+  GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),

@@ -29,6 +29,8 @@ extension GPFailureMessage on GPFailure {
       GPValidationCode.transactionDestinationMissing => l10n.error.validationTransactionDestinationMissing,
       GPValidationCode.transactionDestinationSameAsSource => l10n.error.validationTransactionDestinationSameAsSource,
       GPValidationCode.transactionNoteTooLong => l10n.error.validationTransactionNoteTooLong,
+      GPValidationCode.transactionCurrencyMismatch => l10n.error.validationTransactionCurrencyMismatch,
+      GPValidationCode.transactionTransferCurrenciesDiffer => l10n.error.validationTransactionTransferCurrenciesDiffer,
     },
     GPConflictFailure() => l10n.error.conflict,
     GPNotFoundFailure() => l10n.error.notFound,
