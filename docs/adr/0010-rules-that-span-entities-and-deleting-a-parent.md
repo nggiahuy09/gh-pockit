@@ -63,6 +63,23 @@ and it is what gives those two use cases a reason to exist. A soft-deleted
 category is refused there too, as `GPNotFoundFailure`; the mismatch code arrives
 with the rule.
 
+_Settled at W4 flex:_ the mismatch is
+`GPValidationCode.transactionCategoryTypeMismatch`, and the category is read
+with `watchCategory(id).first` rather than through a one-shot method
+`CategoryRepository` would have to grow. A transfer's category is not judged:
+the entity drops it. **An update judges only a filing the edit makes** — a new
+category, or a new type with the category kept. A transaction already under a
+category deleted since stays editable: deleting such a category is allowed
+(below), so that state is ordinary rather than a race, and refusing every later
+save would leave those transactions read-only behind a "no longer exists" about
+a field that reads "Uncategorised". A category whose type was flipped since is
+left alone for the same reason (see _Still open_). Knowing what the edit changed
+costs one read of the stored row, by id; an edit whose version is no longer the
+stored one skips the rule and meets the version guard, so it is reported as the
+conflict it is. Accounts get no such tolerance, deliberately: an account with
+transactions cannot be deleted, so a transaction on a deleted one only ever
+comes from a race.
+
 **Deleting an account that has live transactions is refused.**
 `DeleteAccountUseCase` (W4 flex) asks `TransactionRepository` whether any live
 transaction touches the account, on either side of a transfer, and if one does
@@ -72,9 +89,20 @@ the domain for the same reason as rule 3: nothing in storage breaks when an
 account with transactions is deleted — readers tolerate a deleted parent, below
 — so the rule is about what deleting means, not about keeping rows
 interpretable. `AccountRepository.deleteAccount` stays unguarded, and callers go
-through the use case. Cascade is rejected outright: soft-deleting a transfer A→B together
-with A changes B's balance and B's history, on an account the user never
-touched.
+through the use case. Cascade is rejected outright: soft-deleting a transfer A→B
+together with A changes B's balance and B's history, on an account the user
+never touched.
+
+_Settled at W4 flex:_ the question is
+`TransactionRepository.hasLiveTransactions(accountId)`, a future of
+`GPResult<bool>`, and the refusal is `GPValidationCode.accountHasTransactions`.
+Its SQL is the one raw statement in `TransactionDao`, for a measured reason:
+with the owner as an ordinary equality, SQLite — which has no statistics to go
+on — picks the owner index and walks every row the owner has, end to end for an
+account with no transactions, which is exactly the account the check lets the
+user delete. A unary `+` on `owner_id` keeps that term out of index selection,
+so the plan is one seek into each account index (`MULTI-INDEX OR`), and the
+owner is still checked on the row found. The DAO test pins the plan.
 
 **Deleting a category that has transactions is allowed, and nothing else is
 written.** The transactions keep their `category_id`, and every reader resolves a
@@ -137,6 +165,8 @@ Negative:
 - The use-case checks run outside the write transaction, so sync can still slip
   a transaction under an account or a category between check and write — one
   more reason readers tolerate orphans.
+- `UpdateTransactionUseCase` reads the stored row before it writes, whenever
+  the edit carries a category — one lookup by id, also outside the write.
 - "Uncategorised" needs a string in both languages when W5 or W6 first renders
   one.
 
@@ -148,3 +178,8 @@ Negative:
   strands every transaction already under the row — rule 2 or rule 3 broken
   after the fact, with no write left to refuse. Decide before W6 exposes either
   edit: freeze them once the row has transactions, or freeze them outright.
+  Since W4 flex a flipped category no longer blocks editing the transactions
+  under it — `UpdateTransactionUseCase` judges only what an edit changes — so
+  for rule 3 what is left is the reports: W7's breakdown would count those
+  transactions under the wrong kind. A changed account currency still refuses
+  every later edit of its transactions, in the repository.

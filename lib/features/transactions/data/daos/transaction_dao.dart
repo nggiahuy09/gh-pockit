@@ -20,6 +20,7 @@ part 'transaction_dao.g.dart';
 ///
 /// [liveAccountCurrency] is the one read that leaves this table, and it is here on purpose: ADR-0010 has the repository check the account inside the write's
 /// own transaction, and a lookup through this DAO joins that transaction the way `AccountDao` would, without a second feature's DAO in the repository.
+/// [hasLiveTransactions] is the one statement written as raw SQL, and its doc says which character made that necessary.
 @DriftAccessor(tables: [TransactionsTable, AccountsTable])
 class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionDaoMixin {
   // `super.attachedDatabase`, not `super.db`: `matching_super_parameters` wants the name drift generated.
@@ -122,6 +123,28 @@ class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionD
     final row = await query.getSingleOrNull();
     return row?.read(accountsTable.currencyCode);
   }
+
+  /// Whether any live transaction of [ownerId] touches [accountId], **on either side of a transfer** — the question `DeleteAccountUseCase` asks before it
+  /// lets an account go (ADR-0010). A tombstone does not count; a transaction on an archived account does, because archiving keeps the history.
+  ///
+  /// **Raw SQL, for one character: the `+` in `+owner_id`.** Built with the query builder, the owner term is an equality on the leading column of the owner
+  /// index, and SQLite — with no statistics, it guesses that any equality narrows to a handful of rows — prefers that index to the two account ones. The
+  /// plan then walks every transaction the owner has, filtering for the account. `EXISTS` stops at the first match, so an account that has transactions
+  /// answers quickly either way; the walk only reaches the end for an account with **none** — exactly the account this question lets the user delete. A
+  /// unary `+` is SQLite's documented way to keep a term out of index selection: the plan becomes one seek into each account index (`MULTI-INDEX OR`),
+  /// and the owner is still checked on whatever row is found. `transaction_dao_test.dart` pins that plan on [hasLiveTransactionsSql].
+  Future<bool> hasLiveTransactions(String ownerId, String accountId) async {
+    final row = await customSelect(hasLiveTransactionsSql, variables: [Variable.withString(ownerId), Variable.withString(accountId)]).getSingle();
+
+    return row.read<bool>('has_live');
+  }
+
+  /// The statement [hasLiveTransactions] runs, exposed for the reason [selectTransactions] is: the plan test explains this string, not a copy of it.
+  ///
+  /// `?1` is the owner and `?2` the account, which is named twice — once per side of a transfer.
+  @visibleForTesting
+  static const String hasLiveTransactionsSql =
+      'SELECT EXISTS (SELECT 1 FROM transactions WHERE +owner_id = ?1 AND deleted_at IS NULL AND (account_id = ?2 OR destination_account_id = ?2)) AS has_live';
 
   /// Inserts a row the mapper built, with `sync_status` stamped to [pendingSyncStatus] whatever the companion said.
   ///

@@ -22,6 +22,9 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationAccountNameTooLong => 'Account name is too long.';
 
   @override
+  String get validationAccountHasTransactions => "This account has transactions, so it can't be deleted. Archive it instead to hide it and keep its history.";
+
+  @override
   String get validationCategoryNameEmpty => "Category name can't be empty.";
 
   @override
@@ -44,6 +47,9 @@ final class GPLocaleEnError implements GPLocaleBaseError {
 
   @override
   String get validationTransactionTransferCurrenciesDiffer => 'Both accounts in a transfer must use the same currency.';
+
+  @override
+  String get validationTransactionCategoryTypeMismatch => 'Pick an expense category for an expense, and an income category for income.';
 
   @override
   String get conflict => 'This item was changed on another device.';

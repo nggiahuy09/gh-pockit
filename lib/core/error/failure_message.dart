@@ -23,6 +23,7 @@ extension GPFailureMessage on GPFailure {
     GPValidationFailure(:final code) => switch (code) {
       GPValidationCode.accountNameEmpty => l10n.error.validationAccountNameEmpty,
       GPValidationCode.accountNameTooLong => l10n.error.validationAccountNameTooLong,
+      GPValidationCode.accountHasTransactions => l10n.error.validationAccountHasTransactions,
       GPValidationCode.categoryNameEmpty => l10n.error.validationCategoryNameEmpty,
       GPValidationCode.categoryNameTooLong => l10n.error.validationCategoryNameTooLong,
       GPValidationCode.transactionAmountNotPositive => l10n.error.validationTransactionAmountNotPositive,
@@ -31,6 +32,7 @@ extension GPFailureMessage on GPFailure {
       GPValidationCode.transactionNoteTooLong => l10n.error.validationTransactionNoteTooLong,
       GPValidationCode.transactionCurrencyMismatch => l10n.error.validationTransactionCurrencyMismatch,
       GPValidationCode.transactionTransferCurrenciesDiffer => l10n.error.validationTransactionTransferCurrenciesDiffer,
+      GPValidationCode.transactionCategoryTypeMismatch => l10n.error.validationTransactionCategoryTypeMismatch,
     },
     GPConflictFailure() => l10n.error.conflict,
     GPNotFoundFailure() => l10n.error.notFound,

@@ -135,9 +135,11 @@ test would unwrap on the path that always succeeds, and `BLoC`'s existing
 
 **What is still open.**
 
-- Use cases (W4 flex) return `GPResult` unchanged; whether they ever _translate_
-  a failure is undecided and will be decided when the first one needs to. Which
-  use cases exist at all is ADR-0010's: only those that own a rule.
+- Use cases return `GPResult` unchanged; whether they ever _translate_ a
+  failure is undecided and will be decided when the first one needs to. Which
+  use cases exist at all is ADR-0010's: only those that own a rule. The three
+  written at W4 flex add failures of their own and pass every other one through
+  as it came.
 - No app-wide policy says _where_ a failure is logged. W2 T6 set a shape rather
   than a rule: `AccountRepositoryImpl` logs at `error` with `{entity, id}` and,
   for a row it could not parse, an `AccountMapperReason` code. That is what

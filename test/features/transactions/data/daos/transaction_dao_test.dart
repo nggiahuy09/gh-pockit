@@ -308,6 +308,46 @@ void main() {
     });
   });
 
+  group('hasLiveTransactions', () {
+    test('is false for an account no transaction touches', () async {
+      await dao.insertTransaction(row(accountId: 'acc-bank'));
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-cash'), isFalse);
+    });
+
+    test('is true for the account a transaction is on', () async {
+      await dao.insertTransaction(row());
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-cash'), isTrue);
+    });
+
+    test("is true for a transfer's destination — the side a delete would silently strand", () async {
+      await dao.insertTransaction(transfer(id: 'tx-1', from: 'acc-cash', to: 'acc-bank'));
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-bank'), isTrue);
+    });
+
+    test('is true for an archived account — archiving keeps the history', () async {
+      await dao.insertTransaction(row(accountId: 'acc-archived'));
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-archived'), isTrue);
+    });
+
+    test('does not count a tombstone', () async {
+      await dao.insertTransaction(row());
+      await tombstone('tx-1');
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-cash'), isFalse);
+    });
+
+    test("does not count another owner's transaction — the `+` keeps the owner out of the index choice, not out of the WHERE", () async {
+      await dao.insertTransaction(row(ownerId: otherOwner, accountId: 'acc-theirs', categoryId: null));
+
+      expect(await dao.hasLiveTransactions(localOwnerId, 'acc-theirs'), isFalse);
+      expect(await dao.hasLiveTransactions(otherOwner, 'acc-theirs'), isTrue);
+    });
+  });
+
   group('insertTransaction', () {
     test("stamps sync_status 'pending', whatever the companion carried", () async {
       await dao.insertTransaction(row());
@@ -433,6 +473,25 @@ void main() {
 
       expect(plan, isNot(contains('SCAN transactions')));
       expect(plan, anyOf(contains('USING INDEX transactions_owner_id_occurred_at_id'), contains('MULTI-INDEX OR')));
+    });
+
+    test('the delete check seeks both account indexes and never walks the owner one', () async {
+      // Written with the query builder, this plan was the owner index plus a filter — every row the owner has, read end to end for an account with no
+      // transactions, which is the account the check lets the user delete. `+owner_id` takes the owner term out of the index choice, and this pins that
+      // the planner then has nothing left to pick but the two account indexes. Unlike the list above, there is one plan and no ordering to pay for.
+      final rows = await db
+          .customSelect(
+            'EXPLAIN QUERY PLAN ${TransactionDao.hasLiveTransactionsSql}',
+            variables: [Variable.withString(localOwnerId), Variable.withString('acc-cash')],
+          )
+          .get();
+      final plan = rows.map((r) => r.read<String>('detail')).join('\n');
+
+      expect(plan, contains('MULTI-INDEX OR'));
+      expect(plan, contains('transactions_account_id_occurred_at_id (account_id=?)'));
+      expect(plan, contains('transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
+      expect(plan, isNot(contains('transactions_owner_id_occurred_at_id')));
+      expect(plan, isNot(contains('SCAN transactions')));
     });
   });
 }

@@ -27,8 +27,8 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 /// - [GPDatabaseFailure] — the local database refused, from every method. Includes a `category_id` that names no row at all, which the foreign key refuses;
 ///   whether a category that does exist is live and of the right kind is the use cases' rule, not this interface's (ADR-0010).
 ///
-/// Not here: a network failure, for the reason `AccountRepository` gives. Not here either: "does this account have transactions?" —
-/// `DeleteAccountUseCase` needs it, and it arrives with that rule at W4 flex rather than ahead of it (§12.11).
+/// Not here: a network failure, for the reason `AccountRepository` gives. [hasLiveTransactions] is the one method no screen calls — `DeleteAccountUseCase`
+/// asks it, and it arrived with that rule at W4 flex rather than ahead of it (§12.11).
 abstract class TransactionRepository {
   const TransactionRepository();
 
@@ -75,4 +75,11 @@ abstract class TransactionRepository {
   /// landed a moment earlier would only make the user press delete twice. Deleting a transaction has no rule beyond this, which is why no use case wraps
   /// it (ADR-0010).
   Future<GPResult<void>> deleteTransaction(String id);
+
+  /// Whether any live transaction touches the account [accountId], **on either side of a transfer** — what `DeleteAccountUseCase` asks before an account
+  /// may be deleted (ADR-0010). A deleted transaction does not count; one on an archived account does, because archiving keeps the history.
+  ///
+  /// A future, not a stream: it is a check a use case makes once, at the moment of the delete, and no screen renders it. The only failure is
+  /// [GPDatabaseFailure].
+  Future<GPResult<bool>> hasLiveTransactions(String accountId);
 }

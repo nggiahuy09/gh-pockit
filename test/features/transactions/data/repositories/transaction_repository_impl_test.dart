@@ -312,6 +312,24 @@ void main() {
     });
   });
 
+  group('hasLiveTransactions', () {
+    test('answers yes for either side of a transfer, and no for an account nothing touches', () async {
+      ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
+
+      expect(await repository.hasLiveTransactions('acc-cash'), const GPOk<bool>(true));
+      // The destination is the side a delete would strand without a word: its balance moves, and nothing lists the account it came from.
+      expect(await repository.hasLiveTransactions('acc-bank'), const GPOk<bool>(true));
+      expect(await repository.hasLiveTransactions('acc-usd'), const GPOk<bool>(false));
+    });
+
+    test('stops counting a transaction once it is deleted', () async {
+      final created = ok(await create());
+      await repository.deleteTransaction(created.id);
+
+      expect(await repository.hasLiveTransactions('acc-cash'), const GPOk<bool>(false));
+    });
+  });
+
   group('watchTransactions', () {
     test('emits a snapshot of the window, newest first, and re-emits when a transaction is created', () async {
       final emissions = <TransactionListSnapshot>[];
@@ -476,6 +494,15 @@ void main() {
     });
   });
 
+  group('the delete check the database refuses', () {
+    test('comes back as a GPDatabaseFailure, logged against the account it was asked about', () async {
+      final failing = TransactionRepositoryImpl(dao: ThrowingTransactionDao(db, Exception('disk I/O')), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
+
+      expect(await failing.hasLiveTransactions('acc-cash'), const GPErr<bool>(GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'account', 'id': 'acc-cash'});
+    });
+  });
+
   group('a read the database refuses', () {
     TransactionRepositoryImpl repositoryReadingFrom(Object error) =>
         TransactionRepositoryImpl(dao: FailingStreamTransactionDao(db, error), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
@@ -511,8 +538,9 @@ void main() {
   });
 }
 
-/// A [TransactionDao] whose three writes fail with a given object — `ThrowingAccountDao`'s twin. Subclassed rather than faked through an interface, so it
-/// stays attached to the same database: `transaction()` and every read still behave, and only the write under test misbehaves.
+/// A [TransactionDao] whose three writes — and [hasLiveTransactions], the one read that answers with a future — fail with a given object:
+/// `ThrowingAccountDao`'s twin. Subclassed rather than faked through an interface, so it stays attached to the same database: `transaction()` and every
+/// other read still behave, and only the call under test misbehaves.
 class ThrowingTransactionDao extends TransactionDao {
   ThrowingTransactionDao(super.attachedDatabase, this.thrown);
 
@@ -526,6 +554,9 @@ class ThrowingTransactionDao extends TransactionDao {
 
   @override
   Future<int> softDelete(String id, {required int now}) => Future<int>.error(thrown);
+
+  @override
+  Future<bool> hasLiveTransactions(String ownerId, String accountId) => Future<bool>.error(thrown);
 }
 
 /// A [TransactionDao] whose watch streams fail with a given object — `FailingStreamAccountDao`'s twin, and `Stream.error` for the same reason: that is how

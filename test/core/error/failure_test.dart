@@ -22,6 +22,7 @@ const allFailures = <GPFailure>[
   // not quietly reuse an existing string.
   GPValidationFailure(GPValidationCode.accountNameEmpty),
   GPValidationFailure(GPValidationCode.accountNameTooLong),
+  GPValidationFailure(GPValidationCode.accountHasTransactions),
   GPValidationFailure(GPValidationCode.categoryNameEmpty),
   GPValidationFailure(GPValidationCode.categoryNameTooLong),
   GPValidationFailure(GPValidationCode.transactionAmountNotPositive),
@@ -30,6 +31,7 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.transactionNoteTooLong),
   GPValidationFailure(GPValidationCode.transactionCurrencyMismatch),
   GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer),
+  GPValidationFailure(GPValidationCode.transactionCategoryTypeMismatch),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),

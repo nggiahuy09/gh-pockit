@@ -12,6 +12,7 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/accounts/domain/usecases/delete_account_use_case.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -19,6 +20,8 @@ import 'package:ghpockit/features/categories/domain/repositories/category_reposi
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
 
 /// The app-wide service locator.
 ///
@@ -66,6 +69,11 @@ void configureCoreDependencies({GetIt? container}) {
 ///
 /// Depends on [configureCoreDependencies] having run first: it resolves `GPAppDatabase`, `GPClock`, `GPUuidGenerator` and `GPAppLogger` out of the same
 /// container. Separate function rather than more lines in the core one, so a widget test for one feature can register that feature and nothing else.
+///
+/// **One registration reaches across modules:** `DeleteAccountUseCase` (W4 flex) resolves `TransactionRepository`, because its rule is about the account's
+/// transactions (ADR-0010). Every registration is lazy, so the order `bootstrap()` calls the modules in does not matter — but resolving that use case needs
+/// [configureTransactionsDependencies] to have run as well. It is registered here rather than there because it is this feature's operation; the edge it
+/// adds is the one ADR-0010 names, accounts' domain reading transactions'.
 void configureAccountsDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
@@ -86,6 +94,11 @@ void configureAccountsDependencies({GetIt? container}) {
         // sentinel — see `core/database/owner_id.dart` for why it is not a nullable column.
         ownerId: localOwnerId,
       ),
+    )
+    // The only way an account should be deleted: `AccountRepository.deleteAccount` does not check for transactions, and this does. Stateless, so one
+    // instance serves every screen, like the repositories it holds.
+    ..registerLazySingleton<DeleteAccountUseCase>(
+      () => DeleteAccountUseCase(accountRepository: c<AccountRepository>(), transactionRepository: c<TransactionRepository>()),
     );
 }
 
@@ -119,6 +132,10 @@ void configureCategoriesDependencies({GetIt? container}) {
 /// Same rules as the accounts module: one DAO instance in the process, the repository registered against its interface, the module separate so a test can
 /// register it alone. Registered although nothing on screen reads it before W5 — as `CategoryRepository` was at W3 T6 — so the first BLoC finds the graph
 /// already wired rather than being the change that grows it.
+///
+/// The two use cases (W4 flex) resolve `CategoryRepository` as well — their rule reads the category (ADR-0010) — so resolving either needs
+/// [configureCategoriesDependencies] too; the repository alone does not. There is no `DeleteTransactionUseCase` to register: deleting a transaction owns
+/// no rule, and a BLoC calls the repository for it.
 void configureTransactionsDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
@@ -133,5 +150,11 @@ void configureTransactionsDependencies({GetIt? container}) {
         // The same W10 seam as the other two repositories — stated, not defaulted, so it is greppable when auth lands.
         ownerId: localOwnerId,
       ),
+    )
+    ..registerLazySingleton<CreateTransactionUseCase>(
+      () => CreateTransactionUseCase(transactionRepository: c<TransactionRepository>(), categoryRepository: c<CategoryRepository>()),
+    )
+    ..registerLazySingleton<UpdateTransactionUseCase>(
+      () => UpdateTransactionUseCase(transactionRepository: c<TransactionRepository>(), categoryRepository: c<CategoryRepository>()),
     );
 }

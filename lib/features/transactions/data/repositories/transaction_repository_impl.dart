@@ -220,6 +220,16 @@ class TransactionRepositoryImpl implements TransactionRepository {
     }
   }
 
+  @override
+  Future<GPResult<bool>> hasLiveTransactions(String accountId) async {
+    try {
+      return GPOk<bool>(await _dao.hasLiveTransactions(_ownerId, accountId));
+    } on Exception catch (error, stackTrace) {
+      // The id in scope is the account's — the one the delete was asked about — so the log names that entity, not a transaction.
+      return _databaseFailure<bool>('transaction lookup by account failed', accountId, error, stackTrace, entity: 'account');
+    }
+  }
+
   /// The two rules of ADR-0010 that need another row, or null when the write may go ahead. Called only inside the write's own transaction.
   ///
   /// The account must be live and the owner's — archived counts, deleted does not — or the answer is [GPNotFoundFailure]. The amount must be in its
@@ -247,8 +257,8 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   /// Logs a local-storage failure and reports it as one. `on Exception` at every call site, never `on Object`, for the line `AccountRepositoryImpl` draws:
   /// an `Error` is a bug, and it must reach the crash reporter rather than a sentence the user can do nothing with.
-  GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace) {
-    _logger.error(message, fields: {'entity': 'transaction', 'id': id}, error: error, stackTrace: stackTrace);
+  GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace, {String entity = 'transaction'}) {
+    _logger.error(message, fields: {'entity': entity, 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
   }

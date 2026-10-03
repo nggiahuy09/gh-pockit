@@ -67,6 +67,11 @@ enum GPValidationCode {
   /// An account name past `AccountEntity.nameMaxLength`.
   accountNameTooLong,
 
+  /// An account asked to be deleted while a live transaction still touches it, on either side of a transfer (ADR-0010). Deleted, it would leave a balance
+  /// nobody can see that still moves the accounts at the other end of its transfers — so the answer is archiving, and the message says so. Checked by
+  /// `DeleteAccountUseCase`, not by the entity: it needs the transactions' rows.
+  accountHasTransactions,
+
   /// A category with no name at all: no `name_key` and no typed name. For a user-created category that is a blank field; for a seeded one it would mean a
   /// row that lost its key, which `CategoryEntity.update` makes unreachable by not accepting one.
   categoryNameEmpty,
@@ -94,6 +99,10 @@ enum GPValidationCode {
   /// A transfer between two accounts that keep different currencies. One row carries one amount in one currency, and moving it into an account that counts
   /// in another would need an exchange rate this app does not model (multi-currency is W37+). Unlike the mismatch above, a user picks this directly.
   transactionTransferCurrenciesDiffer,
+
+  /// An expense filed under an income category, or an income under an expense one (ADR-0010) — W7's breakdown would count the one as the other. Checked by
+  /// `CreateTransactionUseCase` and `UpdateTransactionUseCase`, not by the entity, because it needs the category's row.
+  transactionCategoryTypeMismatch,
 }
 
 /// A domain rule said no. The write never reached persistence.
