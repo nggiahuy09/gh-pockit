@@ -79,7 +79,7 @@ class AccountMapper {
   /// Parses a row into a [MappedAccount], or an [UnmappableAccountRow] naming the check that refused it.
   ///
   /// Tombstones are **not** filtered here. [AccountEntity] has no `deletedAt`, so a soft-deleted row maps to an entity that looks alive; every read path in
-  /// `AccountDao` already filters `deleted_at IS NULL`, and the one that does not — `findById` — exists for W13's applier, which wants the tombstone. Putting
+  /// `AccountDao` already filters `deleted_at IS NULL`, and the one that does not — `findById` — exists for W14's applier, which wants the tombstone. Putting
   /// the filter here as well would make the applier unable to use the mapper at all.
   AccountMapping toEntity(AccountRow row) {
     final type = AccountType.fromStorage(row.type);

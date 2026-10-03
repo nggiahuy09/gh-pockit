@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-18 (W2 T5)
+Accepted — 2026-09-18 (W2 T5). One open item — the corrupt-row policy for
+transactions — settled 2026-09-27 by ADR-0011; see _What is still open_.
 
 > Numbered sequentially, not from Appendix E of `docs/blueprint.md`. That list
 > reserved 0006 for version-based conflict detection; the repo diverged at 0003
@@ -134,8 +135,11 @@ test would unwrap on the path that always succeeds, and `BLoC`'s existing
 
 **What is still open.**
 
-- Use cases (W4 flex) return `GPResult` unchanged; whether they ever _translate_
-  a failure is undecided and will be decided when the first one needs to.
+- Use cases return `GPResult` unchanged; whether they ever _translate_ a
+  failure is undecided and will be decided when the first one needs to. Which
+  use cases exist at all is ADR-0010's: only those that own a rule. The three
+  written at W4 flex add failures of their own and pass every other one through
+  as it came.
 - No app-wide policy says _where_ a failure is logged. W2 T6 set a shape rather
   than a rule: `AccountRepositoryImpl` logs at `error` with `{entity, id}` and,
   for a row it could not parse, an `AccountMapperReason` code. That is what
@@ -153,11 +157,16 @@ test would unwrap on the path that always succeeds, and `BLoC`'s existing
   a developer holding logcat to act on it. A quarantine or diagnostics path
   belongs with P4's sync engine or P7's crash reporting, and until one exists
   this policy is a bet that local rows do not corrupt.
-- **That policy must be decided again at W4 T6, from scratch.** With five
+- ~~**That policy must be decided again at W4 T6, from scratch.** With five
   accounts, one bad row taking down the list is proportionate. With 50k
   transactions it hides a year of history, and the middle ground — emit the good
   rows plus a non-blocking warning — needs a stream shape this interface does not
-  have. Inheriting the `accounts` answer by copy-paste is the failure mode.
+  have. Inheriting the `accounts` answer by copy-paste is the failure mode.~~
+  **Decided 2026-09-27 — ADR-0011.** The transaction list takes the middle
+  ground: it emits the rows it could read plus a count of the rows it could not,
+  in a snapshot type of its own. `accounts` and `categories` keep failing the
+  whole list — the answer is scale-dependent, which is why it was re-decided
+  rather than copied.
 - **Conflict resolution needs no extra read, and W20 should not add one.**
   `GPConflictFailure` carries two version numbers and not the remote entity,
   which looks like it forces the caller to re-read. It does not: a detail screen

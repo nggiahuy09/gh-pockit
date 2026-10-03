@@ -57,6 +57,8 @@ abstract class CategoryRepository {
   /// **A system category may be deleted**, because `is_system` is provenance and not a lock — a user who never spends on education should be able to make
   /// that row go away. The seeder will not bring it back: its derived id still belongs to the tombstoned row, so the next `INSERT OR IGNORE` is ignored.
   ///
-  /// What happens to transactions already filed under it is W4's decision — cascade, block, or orphan — and this method does not pretend to have made it.
+  /// **Transactions already filed under it are left alone** (ADR-0010): they keep their `category_id`, and every reader shows a soft-deleted category as
+  /// "Uncategorised". So a delete is one row and one mutation, however many transactions it had — setting their `category_id` to null would rewrite every
+  /// one of them and push a mutation each, to say the same thing.
   Future<GPResult<void>> deleteCategory(String id);
 }

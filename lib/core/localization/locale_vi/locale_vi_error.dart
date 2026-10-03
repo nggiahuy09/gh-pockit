@@ -22,10 +22,34 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationAccountNameTooLong => 'Tên tài khoản quá dài.';
 
   @override
+  String get validationAccountHasTransactions => 'Tài khoản đã có giao dịch nên không thể xóa. Hãy lưu trữ để ẩn tài khoản mà vẫn giữ lịch sử.';
+
+  @override
   String get validationCategoryNameEmpty => 'Tên danh mục không được để trống.';
 
   @override
   String get validationCategoryNameTooLong => 'Tên danh mục quá dài.';
+
+  @override
+  String get validationTransactionAmountNotPositive => 'Số tiền phải lớn hơn 0.';
+
+  @override
+  String get validationTransactionDestinationMissing => 'Hãy chọn tài khoản nhận tiền.';
+
+  @override
+  String get validationTransactionDestinationSameAsSource => 'Không thể chuyển tiền vào chính tài khoản này.';
+
+  @override
+  String get validationTransactionNoteTooLong => 'Ghi chú quá dài.';
+
+  @override
+  String get validationTransactionCurrencyMismatch => 'Loại tiền của số tiền không khớp với tài khoản.';
+
+  @override
+  String get validationTransactionTransferCurrenciesDiffer => 'Hai tài khoản trong một lần chuyển phải dùng cùng loại tiền.';
+
+  @override
+  String get validationTransactionCategoryTypeMismatch => 'Khoản chi cần danh mục chi, khoản thu cần danh mục thu.';
 
   @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';

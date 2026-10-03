@@ -89,7 +89,7 @@ void main() {
     });
 
     test('maps a tombstone rather than refusing it', () {
-      // Deliberate: `AccountDao.findById` is the one read that sees tombstones, and W13's applier needs to map one in order to reconcile it. Every read a
+      // Deliberate: `AccountDao.findById` is the one read that sees tombstones, and W14's applier needs to map one in order to reconcile it. Every read a
       // user reaches already filters `deleted_at IS NULL` in SQL, so filtering here too would only break the applier.
       expect(mapper.toEntity(row(deletedAt: t1)), isA<MappedAccount>());
     });

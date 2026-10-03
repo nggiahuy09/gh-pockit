@@ -67,12 +67,42 @@ enum GPValidationCode {
   /// An account name past `AccountEntity.nameMaxLength`.
   accountNameTooLong,
 
+  /// An account asked to be deleted while a live transaction still touches it, on either side of a transfer (ADR-0010). Deleted, it would leave a balance
+  /// nobody can see that still moves the accounts at the other end of its transfers — so the answer is archiving, and the message says so. Checked by
+  /// `DeleteAccountUseCase`, not by the entity: it needs the transactions' rows.
+  accountHasTransactions,
+
   /// A category with no name at all: no `name_key` and no typed name. For a user-created category that is a blank field; for a seeded one it would mean a
   /// row that lost its key, which `CategoryEntity.update` makes unreachable by not accepting one.
   categoryNameEmpty,
 
   /// A category name past `CategoryEntity.nameMaxLength`.
   categoryNameTooLong,
+
+  /// An amount of zero or less. `amount_minor` is a magnitude and the transaction's type gives the direction (ADR-0009), so a negative expense is not a
+  /// smaller expense but a malformed one — and zero moves nothing.
+  transactionAmountNotPositive,
+
+  /// A transfer with no account to move the money into: the user has not picked one yet.
+  transactionDestinationMissing,
+
+  /// A transfer into the account it leaves. It would net to zero on the one account it touches, which is never what the user meant.
+  transactionDestinationSameAsSource,
+
+  /// A note past `TransactionEntity.noteMaxLength`.
+  transactionNoteTooLong,
+
+  /// An amount in another currency than its account's (ADR-0010). A balance is a SQL `SUM` that never goes through `Money`, so storing it would add dollars
+  /// to a dong balance without a word. A correct user can reach it: another device can change the account after the form opened.
+  transactionCurrencyMismatch,
+
+  /// A transfer between two accounts that keep different currencies. One row carries one amount in one currency, and moving it into an account that counts
+  /// in another would need an exchange rate this app does not model (multi-currency is W37+). Unlike the mismatch above, a user picks this directly.
+  transactionTransferCurrenciesDiffer,
+
+  /// An expense filed under an income category, or an income under an expense one (ADR-0010) — W7's breakdown would count the one as the other. Checked by
+  /// `CreateTransactionUseCase` and `UpdateTransactionUseCase`, not by the entity, because it needs the category's row.
+  transactionCategoryTypeMismatch,
 }
 
 /// A domain rule said no. The write never reached persistence.

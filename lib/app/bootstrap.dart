@@ -19,6 +19,7 @@ Future<void> bootstrap(Widget Function() builder) async {
   configureCoreDependencies();
   configureAccountsDependencies();
   configureCategoriesDependencies();
+  configureTransactionsDependencies();
   final logger = getIt<GPAppLogger>();
 
   final previousOnError = FlutterError.onError;

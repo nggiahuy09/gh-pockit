@@ -41,7 +41,7 @@ class CategoryDao extends DatabaseAccessor<GPAppDatabase> with _$CategoryDaoMixi
     return (select(categoriesTable)..where((t) => t.id.equals(id) & t.ownerId.equals(ownerId) & t.deletedAt.isNull())).watchSingleOrNull();
   }
 
-  /// One row by id, tombstone included — the reconciliation read `RemoteChangeApplier` needs at W13. Same exception as `AccountDao.findById`.
+  /// One row by id, tombstone included — the reconciliation read `RemoteChangeApplier` needs at W14. Same exception as `AccountDao.findById`.
   Future<CategoryRow?> findById(String id) => (select(categoriesTable)..where((t) => t.id.equals(id))).getSingleOrNull();
 
   Future<void> insertCategory(CategoriesTableCompanion row) => into(categoriesTable).insert(row);

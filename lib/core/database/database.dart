@@ -3,6 +3,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:ghpockit/core/database/tables/settings_table.dart';
 import 'package:ghpockit/features/accounts/data/tables/accounts_table.dart';
 import 'package:ghpockit/features/categories/data/tables/categories_table.dart';
+import 'package:ghpockit/features/transactions/data/tables/transactions_table.dart';
 
 part 'database.g.dart';
 
@@ -13,7 +14,7 @@ part 'database.g.dart';
 /// The exception is auth tokens, which belong in `flutter_secure_storage` because that is an OS-keystore concern rather than a data-modelling one.
 ///
 /// Auth tokens aside, nothing else may open its own store. A second persistent store is a second thing that can be inconsistent after a crash.
-@DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable])
+@DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable])
 class GPAppDatabase extends _$GPAppDatabase {
   GPAppDatabase() : super(_openConnection());
 
@@ -26,7 +27,8 @@ class GPAppDatabase extends _$GPAppDatabase {
   // and therefore never written out at a call site anyway.
   GPAppDatabase.forTesting(super.e);
 
-  /// v1 — `settings` only. v2 — adds `accounts` (W2 T3). v3 — adds `categories` (W3 T5).
+  /// v1 — `settings` only. v2 — adds `accounts` (W2 T3). v3 — adds `categories` (W3 T5). v4 — adds `transactions` (W4 T3, ADR-0009), the first table
+  /// with foreign keys, which is why v4 has to be created after v2 and v3 on every path.
   ///
   /// Every bump costs a migration step below, a fixture test in `test/core/database/migration_test.dart`, and a fresh dump under `drift_schemas/` (§6,
   /// golden rule 7). v2 is the first time that bill is paid, and it was paid in full on purpose: golden rule 7 does allow wiping the database during
@@ -34,7 +36,7 @@ class GPAppDatabase extends _$GPAppDatabase {
   /// migrating from a real earlier schema — starting with no earlier schema to migrate from, and the first migration this app ever runs being written
   /// against a user's data instead of against a fixture. So v1 survives as something to upgrade rather than something to delete.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -55,6 +57,15 @@ class GPAppDatabase extends _$GPAppDatabase {
         await m.createTable(categoriesTable);
         await m.createIndex(categoriesOwnerIdType);
         await m.createIndex(categoriesOwnerIdNameKey);
+      }
+      if (from < 4) {
+        // Last, and it has to be: `transactions` references `accounts` and `categories`, so on a device coming from v1 both steps above must already
+        // have run. The `if (from < N)` chain guarantees the order; a `switch` would not.
+        await m.createTable(transactionsTable);
+        await m.createIndex(transactionsOwnerIdOccurredAtId);
+        await m.createIndex(transactionsAccountIdOccurredAtId);
+        await m.createIndex(transactionsDestinationAccountIdOccurredAtId);
+        await m.createIndex(transactionsCategoryIdOccurredAtId);
       }
     },
     beforeOpen: (details) async {

@@ -152,8 +152,8 @@ void main() {
     });
 
     test('addition past the ceiling wraps instead of throwing — the documented bound, not a bug', () {
-      // Accepted deliberately (W3 T3, option A): guarding every `+` buys nothing a personal ledger can reach, and would not cover the `SUM()` that W4's
-      // aggregates run inside SQLite anyway. Asserted so the behaviour is pinned: if a future change starts throwing here, that is a decision being
+      // Accepted deliberately (W3 T3, option A): guarding every `+` buys nothing a personal ledger can reach, and would not cover the `SUM()` that W6's
+      // balances and W7's aggregates run inside SQLite anyway. Asserted so the behaviour is pinned: if a future change starts throwing here, that is a decision being
       // reversed, and this test is where it has to be argued.
       expect(Money(ceiling, 'VND') + Money(1, 'VND'), Money(floor, 'VND'));
       expect(Money(floor, 'VND') - Money(1, 'VND'), Money(ceiling, 'VND'));

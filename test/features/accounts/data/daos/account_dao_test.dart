@@ -135,7 +135,7 @@ void main() {
       await dao.insertAccount(row());
       await softDelete('a1');
 
-      // The one deliberate exception to the `deleted_at IS NULL` filter. `RemoteChangeApplier` at W13 has to find a row it already soft-deleted in order
+      // The one deliberate exception to the `deleted_at IS NULL` filter. `RemoteChangeApplier` at W14 has to find a row it already soft-deleted in order
       // to reconcile it against the server's tombstone; a lookup that hid it would make the applier insert a duplicate.
       final found = await dao.findById('a1');
 
@@ -290,7 +290,7 @@ void main() {
       // Golden rule 5: the row survives, because the server has to be told it is gone.
       expect(deleted, isNotNull);
       expect(deleted!.deletedAt, t1);
-      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W12's delta pull. Writing only one of them loses the
+      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W14's delta pull. Writing only one of them loses the
       // deletion on one side or the other.
       expect(deleted.updatedAt, t1);
       expect(deleted.version, 1);
@@ -303,7 +303,7 @@ void main() {
       expect(await dao.watchAccounts(localOwnerId).first, isEmpty);
       expect(await dao.watchAccounts(localOwnerId, includeArchived: true).first, isEmpty);
       expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
-      // The one read that still sees it, and the reason it exists: W13's applier has to find the row it already deleted.
+      // The one read that still sees it, and the reason it exists: W14's applier has to find the row it already deleted.
       expect(await dao.findById('a1'), isNotNull);
     });
 

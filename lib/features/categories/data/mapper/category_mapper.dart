@@ -57,7 +57,7 @@ class CategoryMapper {
 
   /// Parses a row into a [MappedCategory], or an [UnmappableCategoryRow] naming the check that refused it.
   ///
-  /// Tombstones are not filtered here, same as `AccountMapper.toEntity`: the DAO's reads already do it, and `findById` deliberately does not because W13's
+  /// Tombstones are not filtered here, same as `AccountMapper.toEntity`: the DAO's reads already do it, and `findById` deliberately does not because W14's
   /// applier needs the tombstone.
   CategoryMapping toEntity(CategoryRow row) {
     final type = CategoryType.fromStorage(row.type);

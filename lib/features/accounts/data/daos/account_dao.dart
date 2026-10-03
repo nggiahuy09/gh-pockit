@@ -5,7 +5,7 @@ import 'package:ghpockit/features/accounts/data/tables/accounts_table.dart';
 part 'account_dao.g.dart';
 
 /// Row-level access to `accounts` (W2 T4) — the first DAO in the app, written to the shape `docs/patterns/local-storage-with-drift.md` §6.2 already
-/// prescribes, so `CategoryDao` (W3 T5) and `TransactionDao` (W5 T4) copy one design rather than three.
+/// prescribes, so `CategoryDao` (W3 T5) and `TransactionDao` (W4 T5) copy one design rather than three.
 ///
 /// **It speaks SQL and rows, and holds no policy**: no clock, no UUIDs, no outbox, no opinion about whether something should sync. Those live one layer up,
 /// in the repository at T6 (§12.2). Two consequences that look like awkwardness and are not:
@@ -14,7 +14,7 @@ part 'account_dao.g.dart';
 ///   the `sync_mutations` row it writes in the same transaction (golden rule 3) — so the entity and the mutation describe the same moment. A DAO that read
 ///   its own clock would produce two instants inside one transaction and no way to reconcile them. Making it required is also what stops `updated_at` from
 ///   being forgotten: forget it and the code does not compile, rather than writing a row that is locally correct and permanently invisible to the pull
-///   cursor of W12 T2.
+///   cursor of W14 T2.
 /// - **Writes take a companion the mapper built**, not a list of fields. `AccountMapper` at T6 is the one place that knows how an `Account` becomes a row,
 ///   and duplicating that knowledge in a parameter list here is the three-model rule (§3) leaking.
 ///
@@ -43,8 +43,10 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
   ///
   /// Ordered by creation, not by name. SQLite's default `BINARY` collation sorts by UTF-8 code point, so "Ăn uống" lands after "Ví", and `NOCASE` only
   /// folds ASCII — locale-aware collation needs ICU, which this app does not ship. A list that claims to be alphabetical and is not is worse than one that
-  /// is honestly chronological; sorting for display is W4's problem, in Dart, where the locale is known. `id` breaks ties rather than leaving the order to
-  /// SQLite, and it agrees with `created_at` for free because v7 ids are themselves time-ordered (ADR-0002).
+  /// is honestly chronological. **And chronological is also the display order** (decided 2026-09-27, ROADMAP W4 Q14): neither Dart nor `intl` ships a
+  /// Vietnamese collation, so sorting by name in Dart would mean writing one, for a list of a handful of rows the user created in an order that already
+  /// means something to them. A user-chosen order is a feature — a `sort_order` column and a migration — not a sort. `id` breaks ties rather than leaving
+  /// the order to SQLite, and it agrees with `created_at` for free because v7 ids are themselves time-ordered (ADR-0002).
   ///
   /// No `.distinct()`. Drift invalidates a stream query per table, so this re-runs on any write to `accounts` even when no visible row moved — measured and
   /// written down in `database_test.dart`. At a handful of accounts that is not worth a filter; `watchTransactions` at W8 is where it starts to be.
@@ -77,7 +79,7 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
 
   /// One row by id, tombstone included.
   ///
-  /// The one read that does **not** filter `deleted_at IS NULL`, and the exception is load bearing: `RemoteChangeApplier` at W13 has to find a row it
+  /// The one read that does **not** filter `deleted_at IS NULL`, and the exception is load bearing: `RemoteChangeApplier` at W14 has to find a row it
   /// already soft-deleted in order to reconcile it against the server's tombstone. A lookup that hid it would make the applier insert a duplicate.
   Future<AccountRow?> findById(String id) => (select(accountsTable)..where((t) => t.id.equals(id))).getSingleOrNull();
 
@@ -120,7 +122,7 @@ class AccountDao extends DatabaseAccessor<GPAppDatabase> with _$AccountDaoMixin 
   /// against a local decision rather than re-inserting it. `sync_mutations` is the only table in this app a hard delete is legal on.
   ///
   /// [now] lands on `deleted_at` **and** on `updated_at`, and both matter for different reasons: `deleted_at` is what every read filters on, `updated_at` is
-  /// what makes the deletion visible to W12's delta pull. Writing only the first would produce a row that is locally gone and permanently invisible to sync.
+  /// what makes the deletion visible to W14's delta pull. Writing only the first would produce a row that is locally gone and permanently invisible to sync.
   ///
   /// `version` does not move, same as [updateAccount] and [_setArchived] — it is the server's number.
   ///

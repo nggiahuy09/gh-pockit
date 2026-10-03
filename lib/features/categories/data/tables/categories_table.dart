@@ -24,7 +24,7 @@ import 'package:drift/drift.dart';
 // same leftmost-prefix reason `accounts` gives for not adding a second index on `(owner_id)` alone.
 @TableIndex(name: 'categories_owner_id_type', columns: {#ownerId, #type})
 // **Unique, and the uniqueness is the seeding contract.** A seeded row's id is derived from `(owner_id, name_key)`, so re-running the seeder writes the same
-// primary key and is ignored; this index is the second lock on the same door, for the case where a row reaches the table some other way — a pull at W13, or
+// primary key and is ignored; this index is the second lock on the same door, for the case where a row reaches the table some other way — a pull at W14, or
 // a future "restore default categories".
 //
 // It reads as a *partial* unique index without being one: SQLite treats NULLs as distinct in a unique index, so any number of user-created rows (`name_key
@@ -63,7 +63,7 @@ class CategoriesTable extends Table {
   /// Epoch millis, UTC (§6). Written from `GPClock`, never `DateTime.now()`.
   IntColumn get createdAt => integer()();
 
-  /// Epoch millis, UTC. Half the pull cursor at W12 T2.
+  /// Epoch millis, UTC. Half the pull cursor at W14 T2.
   IntColumn get updatedAt => integer()();
 
   /// Optimistic-concurrency token (§7). Starts at 1, set from the server's response, never bumped hopefully on the client.
