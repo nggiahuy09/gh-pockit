@@ -52,6 +52,16 @@ insert anywhere simply appears in the next emission. "There is more" is
 `rowCount == limit` — rows, not mapped transactions, or a single refused row
 makes the list believe it has reached the end.
 
+_Settled at W5 T2,_ in `TransactionListBloc`: a page is 50 rows — judgement
+until W8 times the list's first frame. "Load more" asks for the rows on screen
+plus a page, counted in rows like `hasMore`, rather than for the current limit
+plus a page. Asked twice for the same snapshot, that is the same window twice, so
+the second ask is dropped: a scroll listener firing every frame costs one query,
+the window never shrinks, and a larger window whose watch failed is not grown
+past. Rows stay on screen while the larger window loads, being its prefix. A new
+filter starts again at one page with nothing on screen; re-sending the filter
+already in force changes nothing.
+
 **The order is total: `occurred_at DESC, id DESC`.** Many rows share an
 `occurred_at` — anything entered with a date and no time — and without the
 tie-breaker SQLite may return them in a different order on each emission, so
