@@ -378,16 +378,79 @@ draft PR sớm.
 
 ## W5 · 05–11/10 🔴 BLoC + list UI
 
-| Ngày | Task                                                                                     |
-| ---- | ---------------------------------------------------------------------------------------- |
-| T2   | `TransactionBloc`: events `Started / FilterChanged / LoadMoreRequested`, immutable state |
-| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     |
-| T4   | Transaction list UI: group theo ngày, hiển thị `Money` đã format                         |
-| T5   | Loading / empty / error state cho list                                                   |
-| T6   | `bloc_test` cho `TransactionBloc`                                                        |
-| Flex | Widget test list, polish nhẹ                                                             |
+| Ngày | Task                                                                                     | Trạng thái                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | `TransactionBloc`: events `Started / FilterChanged / LoadMoreRequested`, immutable state | ✅ Done (04/10, sớm một ngày) — `features/transactions/presentation/bloc/`: `TransactionListBloc`, event và state là `part` của cùng library. Mới là **phần tính query**, chưa subscribe gì: handler đồng bộ, đọc state, tính `TransactionQuery` kế tiếp, emit — T3 nối `query` vào `watchTransactions`. Đặt tên lệch ROADMAP: **`TransactionListBloc`**, vì form của W6 là BLoC khác (§12.4). `flutter_bloc` 9.1.1 vào pubspec; **`bloc_test` không cài được** trên Dart 3.9.2 (`test` cần `analyzer <8`, `build_runner` 2.15.1 cần `≥8` — CLAUDE.md §5) nên test đọc `bloc.stream` bằng `flutter_test`, T6 cũng vậy. 23 test mới (suite: 641). Spec và bốn chỗ chốt trong lúc làm ở _W5 T2_ dưới (ADR-0011) |
+| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| T4   | Transaction list UI: group theo ngày, hiển thị `Money` đã format                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| T5   | Loading / empty / error state cho list                                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| T6   | Test BLoC cho `TransactionListBloc` — bằng `flutter_test`, không có `bloc_test` (W5 T2)  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Flex | Widget test list, polish nhẹ                                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 **Done khi:** thêm 1 row vào DB bằng tay → UI tự update, không gọi refresh.
+
+### W5 T2 — spec `TransactionListBloc` (ADR-0011)
+
+> Phần tính toán, chưa có plumbing: mỗi handler đồng bộ, đọc state, tính `TransactionQuery` kế tiếp rồi emit; event không đổi query thì bị bỏ, không
+> emit gì. T3 nối `state.query` vào `watchTransactions`. Bốn chỗ ROADMAP chưa nói, chốt trong lúc làm theo đề xuất và ghi vào ADR-0011 (04/10).
+
+**Dependency**
+
+- [x] `flutter_bloc` 9.1.1 (kéo `bloc` 9.2.1, `provider`, `nested`); comment pubspec trả lời 5 câu của §5. Không `bloc_concurrency` — transformer tự
+      viết, ở T3 cùng subscription.
+- [x] `bloc_test` **không** thêm được: nó cần `package:test`, mọi `test` chấp nhận `test_api 0.7.6` (do `flutter_test` pin) đều cần `analyzer <8`, còn
+      `build_runner` 2.15.1 cần `≥8`. Test đọc `bloc.stream` bằng `flutter_test`; seed state bằng subclass khai báo trong file test gọi `emit` — đúng
+      việc `seed` của `bloc_test` làm. Ghi ở pubspec, CLAUDE.md §5 và §8.
+
+**Cấu trúc**
+
+- [x] `presentation/bloc/transaction_list_bloc.dart` + `part` `transaction_list_event.dart`, `transaction_list_state.dart` — layout `flutter_bloc`
+      hướng dẫn. Cùng library nên event vẫn `sealed` mà T3 vẫn thêm được event private nếu cần.
+- [x] Event: `TransactionListStarted` / `TransactionListFilterChanged` / `TransactionListLoadMoreRequested`. Không có refresh (list là query sống), không
+      có create / edit / delete (form của W6, đi qua DB như mọi write khác).
+- [x] Chưa nhận repository, chưa bind DI: T3 thêm repository cùng subscription; T4 tạo BLoC trong route builder, như `AccountsPage` nhận repository
+      qua constructor.
+
+**State** — một class immutable, không phải family `Initial / Loading / Ready / Failure`: row còn trên màn hình trong lúc load more, và lỗi có thể đến
+khi đã có row, nên các trạng thái chồng lên nhau
+
+- [x] Ba field: `query` (cửa sổ đang hoặc sắp watch), `snapshot` (row trên màn hình — của `query`, hoặc của cửa sổ nhỏ hơn trong lúc load more), `failure`
+      (lỗi trên error channel, giữ **cạnh** snapshot chứ không thay; hiện thế nào là việc của T5).
+- [x] Cờ đều suy ra, không lưu: `isLoading` = chưa có snapshot và không có lỗi; `hasMore` = snapshot đầy; `isLoadingMore` = snapshot đầy nhưng ít row hơn
+      `query.limit`, và không có lỗi.
+- [x] Value equality, vì `Bloc.emit` bỏ state bằng state đang có. `toString` chỉ có id, instant, số đếm (golden rule 9).
+
+**Event**
+
+- [x] `Started`: cửa sổ đầu là không lọc, một trang. `Started` lần hai bị bỏ — không reset list user đã cuộn.
+- [x] `FilterChanged` mang **cả bộ lọc**, không phải phần thay đổi: field null là bỏ lọc đó. Lọc khác → về một trang, bỏ snapshot và failure — không row
+      nào của filter cũ được hiện dưới filter mới. Lọc y hệt → bỏ qua, giữ cửa sổ và row; so ở limit hiện tại, nên set khác thứ tự hay set rỗng (= null)
+      đều là y hệt nhờ equality của `TransactionQuery`. Trước `Started` → bỏ. `from` sau `to` → `ArgumentError` từ `TransactionQuery`, không bị nuốt
+      (ADR-0006). Chưa màn nào gửi event này trước thanh lọc của W26 T4.
+- [x] `LoadMoreRequested`: chỉ khi snapshot đầy; giữ snapshot (nó là prefix của cửa sổ mới), bỏ failure.
+
+**Chốt trong lúc làm** (ADR-0011)
+
+- [x] `pageSize = 50`: khoảng bốn màn hình trước lần load more đầu, map 50 entity mỗi emission không đáng kể. Là ước lượng; W8 T3 đo first frame.
+- [x] Load more hỏi `snapshot.rowCount + pageSize` — đếm row thô, kể cả row hỏng — chứ không `query.limit + pageSize`. Gửi nhiều lần cho cùng một snapshot
+      là hỏi cùng một cửa sổ, nên scroll listener bắn mỗi frame chỉ tốn một query; cửa sổ không bao giờ co. Không cần cờ "đang load more" riêng.
+- [x] Failure thuộc về watch đã báo nó: đổi query nào cũng xoá. Cửa sổ lớn bị lỗi thì không nới thêm — watch vẫn sống và tự hồi (T3), như list accounts;
+      không có retry bằng cuộn.
+- [x] `FilterChanged` trước `Started` bị bỏ chứ không thành filter ban đầu. Khi W26 cần mở list với filter sẵn thì thêm filter vào `Started`.
+
+**Để lại cho T3**
+
+- [ ] Nhận `TransactionRepository`, subscribe theo `state.query`; mỗi lần query đổi, watch cũ phải bị huỷ **trước khi** kịp giao thêm row — sau
+      `FilterChanged`, một emission trễ của filter cũ là row sai trên màn hình.
+- [ ] `onData` → snapshot mới, xoá failure; `onError` → giữ snapshot, đặt failure; lỗi không phải `GPFailure` là bug, ném lại (ADR-0006).
+- [ ] `close()` huỷ watch đang chạy.
+
+**Test** — `test/features/transactions/presentation/bloc/transaction_list_bloc_test.dart`, 23 test
+
+- [x] State: cờ suy ra ở từng ca — trước `Started`, lỗi khi chưa có row, cửa sổ đầy / ngắn, load more đang chờ và kết thúc bằng emission đầy, ngắn hoặc
+      lỗi; equality; `toString`.
+- [x] `Started` hai lần. `FilterChanged`: trước `Started`, lọc mới, thay cả bộ, lọc y hệt, khoảng ngược → lỗi không bị nuốt. `LoadMoreRequested`: nới và
+      giữ row, gửi năm lần hỏi một lần, đếm row hỏng, cửa sổ ngắn, chưa có row, bỏ failure, không nới qua cửa sổ đã lỗi.
 
 ## W6 · 12–18/10 🔴 CRUD UI + balances
 

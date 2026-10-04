@@ -163,11 +163,11 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | Charts         | `fl_chart`                              | 1.2.0                       |
 | OCR            | `google_mlkit_text_recognition`         | 0.17.1                      |
 | Crash          | `sentry_flutter`                        | 9.29.0                      |
-| Test           | `mocktail` 1.0.5, `bloc_test`, `patrol` | —                           |
+| Test           | `mocktail` 1.0.5, `bloc_test`, `patrol` | — / `bloc_test` ⚠️          |
 
 **Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
-**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and three rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12), `very_good_analysis` (11.0.0 needs ≥3.10) and **Drift** (`drift` 2.33+ and `drift_flutter` 0.3+ both need ≥3.10, so 2.31.0 / 0.2.8 are the ceiling — W2 T2 found this; the earlier `2.34.x / 0.3.x` here simply does not resolve). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
+**Version pins vs the SDK pin:** `.fvmrc` pins Flutter 3.35.6 / Dart 3.9.2, and three rows above are held back by it — `go_router` (17.3+ needs Dart ≥3.10, 18.x needs ≥3.12), `very_good_analysis` (11.0.0 needs ≥3.10) and **Drift** (`drift` 2.33+ and `drift_flutter` 0.3+ both need ≥3.10, so 2.31.0 / 0.2.8 are the ceiling — W2 T2 found this; the earlier `2.34.x / 0.3.x` here simply does not resolve). One dev dependency is not held back but **absent**: `bloc_test` depends on `package:test`, every `test` that accepts the `test_api 0.7.6` `flutter_test` pins needs `analyzer <8`, and `build_runner` 2.15.1 needs `analyzer >=8` — so BLoC tests read `bloc.stream` with `flutter_test` (W5 T2 found this). The SDK pin wins; revisit both when the SDK moves. Do not "fix" them by bumping to the number on pub.dev's front page — `pub get` will fail. See ADR-0003.
 
 **Drift note:** do NOT add `sqlite3_flutter_libs` **directly** as older tutorials suggest. `drift_flutter` already brings it in transitively, and on this SDK that is version `0.5.42`, not the `0.6.0+eol` release — the EOL one is what Dart ≥3.10 would pull. Adding it by hand is how a project ends up pinning the EOL line by accident. For encryption, use the SQLite3MultipleCiphers build hook if needed.
 
@@ -220,7 +220,7 @@ acquire lock → push pending mutations → pull delta (cursor) → apply inside
 | DB          | Aggregate queries, index behaviour                                 |
 | Migration   | **Every** schema version bump, with a fixture of the old DB        |
 | Sync engine | offline→online, app kill mid-sync, duplicate push, conflict, retry |
-| BLoC        | `bloc_test` for non-trivial state machines                         |
+| BLoC        | Non-trivial state machines, via `bloc.stream` (no `bloc_test`, §5) |
 | Widget      | Loading/error/empty states                                         |
 | Integration | Golden path offline→sync→multi-device                              |
 
