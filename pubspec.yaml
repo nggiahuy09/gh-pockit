@@ -40,6 +40,14 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # State management for presentation (blueprint §16): one BLoC per screen-sized concern, the first being `TransactionListBloc` (W5 T2). Brings `bloc`
+  # (events in, states out, handlers that can be cancelled) and `provider` (how a subtree finds its BLoC).
+  #
+  # Doing it ourselves means `ValueNotifier` plus hand-managed subscriptions, and what that leaves to get right is exactly what the transaction list needs:
+  # one live query, swapped and never doubled whenever the filter or the window changes, and the order of states testable without a widget. No native
+  # setup; maintained by Very Good Ventures. The lock-in stops at `presentation/` — domain and data never import it (§3).
+  flutter_bloc: 9.1.1
+
   # Material's own localized widgets — date picker month names, the Cut/Copy/Paste menu, `MaterialLocalizations` in general (ADR-0004).
   flutter_localizations:
     sdk: flutter
@@ -68,6 +76,10 @@ dependencies:
   uuid: 4.6.0
 
 dev_dependencies:
+  # No `bloc_test` (blueprint §44.6), and it cannot be added on this SDK: it depends on `package:test`, every `test` that accepts the `test_api 0.7.6`
+  # `flutter_test` pins needs `analyzer <8`, and `build_runner` 2.15.1 needs `analyzer >=8`. BLoC tests assert on `bloc.stream` with `flutter_test`
+  # instead (W5 T2). Revisit with the other SDK-held pins (CLAUDE.md §5).
+
   # Runs the code generators.
   build_runner: 2.15.1
 
