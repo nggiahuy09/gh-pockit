@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/core/error/failure.dart';
@@ -14,7 +15,6 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_list_
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/watch_transactions_use_case.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
 
 import '../../../../helpers/fake_clock.dart';
@@ -27,7 +27,8 @@ void main() {
 
   late FakeTransactionRepository repository;
 
-  setUp(() => repository = FakeTransactionRepository());
+  setUp(() => getIt.registerSingleton<TransactionRepository>(repository = FakeTransactionRepository()));
+  tearDown(getIt.reset);
 
   TransactionEntity transaction(int n) {
     final created = TransactionEntity.create(
@@ -51,16 +52,14 @@ void main() {
     return TransactionListSnapshot(transactions: [for (var i = 0; i < rows; i++) transaction(i)], unreadableCount: unreadable, hasMore: rows + unreadable == limit);
   }
 
-  TransactionListBloc listOver(TransactionRepository transactions) => TransactionListBloc(watchTransactions: WatchTransactionsUseCase(transactionRepository: transactions));
-
   TransactionListBloc fresh() {
-    final bloc = listOver(repository);
+    final bloc = TransactionListBloc();
     addTearDown(bloc.close);
     return bloc;
   }
 
   TransactionListBloc seeded(TransactionListState seed) {
-    final bloc = _SeededTransactionListBloc(seed, WatchTransactionsUseCase(transactionRepository: repository));
+    final bloc = _SeededTransactionListBloc(seed);
     addTearDown(bloc.close);
     return bloc;
   }
@@ -71,7 +70,6 @@ void main() {
     final subscription = bloc.stream.listen(states.add);
 
     act();
-    // Events and fake emissions are delivered asynchronously.
     await pumpEventQueue();
 
     await subscription.cancel();
@@ -285,7 +283,7 @@ void main() {
     test('a range that ends before it starts is a bug, and it is not swallowed', () async {
       final errors = <Object>[];
       // A handler's error is rethrown into the zone the bloc was created in.
-      final bloc = runZonedGuarded(() => listOver(repository), (Object error, StackTrace _) => errors.add(error))!;
+      final bloc = runZonedGuarded(TransactionListBloc.new, (Object error, StackTrace _) => errors.add(error))!;
       addTearDown(bloc.close);
 
       final states = await statesAfter(bloc, [
@@ -493,7 +491,7 @@ void main() {
 
     test('an error that is not a GPFailure is a bug, and it is not swallowed', () async {
       final errors = <Object>[];
-      final bloc = runZonedGuarded(() => listOver(repository), (Object error, StackTrace _) => errors.add(error))!;
+      final bloc = runZonedGuarded(TransactionListBloc.new, (Object error, StackTrace _) => errors.add(error))!;
       addTearDown(bloc.close);
       await statesAfter(bloc, [const TransactionListStarted()]);
 
@@ -504,7 +502,7 @@ void main() {
     });
 
     test('close cancels the running watch', () async {
-      final bloc = listOver(repository);
+      final bloc = TransactionListBloc();
       await statesAfter(bloc, [const TransactionListStarted()]);
 
       await bloc.close();
@@ -542,7 +540,10 @@ void main() {
             ),
           );
 
-      final bloc = listOver(transactions)..add(const TransactionListStarted());
+      await getIt.unregister<TransactionRepository>();
+      getIt.registerSingleton<TransactionRepository>(transactions);
+
+      final bloc = TransactionListBloc()..add(const TransactionListStarted());
       addTearDown(bloc.close);
       await expectLater(bloc.stream, emitsThrough(predicate<TransactionListState>((state) => state.snapshot?.transactions.isEmpty ?? false)));
 
@@ -562,7 +563,7 @@ void main() {
 
 /// `bloc_test`'s `seed`: starts from a state without driving a watch to it. `emit` is protected, so only a subclass may call it.
 class _SeededTransactionListBloc extends TransactionListBloc {
-  _SeededTransactionListBloc(TransactionListState seed, WatchTransactionsUseCase watchTransactions) : super(watchTransactions: watchTransactions) {
+  _SeededTransactionListBloc(TransactionListState seed) {
     emit(seed);
   }
 }

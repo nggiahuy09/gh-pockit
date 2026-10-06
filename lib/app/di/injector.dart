@@ -12,7 +12,6 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/accounts/domain/usecases/delete_account_use_case.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -20,11 +19,8 @@ import 'package:ghpockit/features/categories/domain/repositories/category_reposi
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/watch_transactions_use_case.dart';
 
-/// Only `bootstrap()`, the `configure*Dependencies()` functions and widget-tree entry points may touch it; the rest take constructor arguments.
+/// Use cases are never registered here: BLoCs build them from repositories resolved through this (ADR-0013).
 final GetIt getIt = GetIt.instance;
 
 /// [container] lets a test register into a fresh `GetIt()` instead of the global one. Every other module resolves from this one.
@@ -45,7 +41,6 @@ void configureCoreDependencies({GetIt? container}) {
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
 }
 
-/// Resolving `DeleteAccountUseCase` also needs [configureTransactionsDependencies] (ADR-0010). Registration is lazy, so module call order is free.
 void configureAccountsDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
@@ -60,9 +55,6 @@ void configureAccountsDependencies({GetIt? container}) {
         // The sentinel owner until auth (W10). Passed, never defaulted, so every site is greppable.
         ownerId: localOwnerId,
       ),
-    )
-    ..registerLazySingleton<DeleteAccountUseCase>(
-      () => DeleteAccountUseCase(accountRepository: c<AccountRepository>(), transactionRepository: c<TransactionRepository>()),
     );
 }
 
@@ -85,7 +77,6 @@ void configureCategoriesDependencies({GetIt? container}) {
     );
 }
 
-/// Resolving either use case also needs [configureCategoriesDependencies] (ADR-0010). No `DeleteTransactionUseCase` on purpose: deleting owns no rule.
 void configureTransactionsDependencies({GetIt? container}) {
   final c = container ?? getIt;
 
@@ -99,12 +90,5 @@ void configureTransactionsDependencies({GetIt? container}) {
         logger: c<GPAppLogger>(),
         ownerId: localOwnerId,
       ),
-    )
-    ..registerLazySingleton<CreateTransactionUseCase>(
-      () => CreateTransactionUseCase(transactionRepository: c<TransactionRepository>(), categoryRepository: c<CategoryRepository>()),
-    )
-    ..registerLazySingleton<UpdateTransactionUseCase>(
-      () => UpdateTransactionUseCase(transactionRepository: c<TransactionRepository>(), categoryRepository: c<CategoryRepository>()),
-    )
-    ..registerLazySingleton<WatchTransactionsUseCase>(() => WatchTransactionsUseCase(transactionRepository: c<TransactionRepository>()));
+    );
 }

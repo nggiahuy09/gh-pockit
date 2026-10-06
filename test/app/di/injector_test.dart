@@ -12,13 +12,13 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/accounts/domain/usecases/delete_account_use_case.dart';
+import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
+import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
+import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
+import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/watch_transactions_use_case.dart';
 
 void main() {
   group('configureCoreDependencies', () {
@@ -115,6 +115,31 @@ void main() {
     });
   });
 
+  group('configureCategoriesDependencies', () {
+    late GetIt container;
+
+    setUp(() async {
+      container = GetIt.asNewInstance();
+      configureCoreDependencies(container: container);
+      await container.unregister<GPAppDatabase>();
+      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
+      configureCategoriesDependencies(container: container);
+    });
+
+    tearDown(() => container.reset());
+
+    test('registers the repository against its interface, not the impl', () {
+      expect(container<CategoryRepository>(), isA<CategoryRepositoryImpl>());
+      expect(container.isRegistered<CategoryRepositoryImpl>(), isFalse);
+    });
+
+    test('hands out one CategoryDao, bound to the database the core module registered, and the seeder', () {
+      expect(container<CategoryDao>(), same(container<CategoryDao>()));
+      expect(container<CategoryDao>().attachedDatabase, same(container<GPAppDatabase>()));
+      expect(container<CategorySeeder>(), isA<CategorySeeder>());
+    });
+  });
+
   group('configureTransactionsDependencies', () {
     late GetIt container;
 
@@ -136,45 +161,6 @@ void main() {
     test('hands out one TransactionDao, bound to the database the core module registered', () {
       expect(container<TransactionDao>(), same(container<TransactionDao>()));
       expect(container<TransactionDao>().attachedDatabase, same(container<GPAppDatabase>()));
-    });
-  });
-
-  group('the use cases, which reach across modules', () {
-    late GetIt container;
-
-    setUp(() async {
-      container = GetIt.asNewInstance();
-      configureCoreDependencies(container: container);
-      await container.unregister<GPAppDatabase>();
-      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
-    });
-
-    tearDown(() => container.reset());
-
-    test("each is registered by its own feature's module", () {
-      // `DeleteAccountUseCase` reads transactions but is an accounts operation (ADR-0010).
-      configureAccountsDependencies(container: container);
-
-      expect(container.isRegistered<DeleteAccountUseCase>(), isTrue);
-      expect(container.isRegistered<CreateTransactionUseCase>(), isFalse);
-
-      configureTransactionsDependencies(container: container);
-
-      expect(container.isRegistered<CreateTransactionUseCase>(), isTrue);
-      expect(container.isRegistered<UpdateTransactionUseCase>(), isTrue);
-      expect(container.isRegistered<WatchTransactionsUseCase>(), isTrue);
-    });
-
-    test('each resolves once every module it reads is configured — in any order, since every registration is lazy', () {
-      // The reverse of the order `bootstrap()` uses, on purpose.
-      configureTransactionsDependencies(container: container);
-      configureCategoriesDependencies(container: container);
-      configureAccountsDependencies(container: container);
-
-      expect(container<DeleteAccountUseCase>(), same(container<DeleteAccountUseCase>()));
-      expect(container<CreateTransactionUseCase>(), isA<CreateTransactionUseCase>());
-      expect(container<UpdateTransactionUseCase>(), isA<UpdateTransactionUseCase>());
-      expect(container<WatchTransactionsUseCase>(), isA<WatchTransactionsUseCase>());
     });
   });
 }
