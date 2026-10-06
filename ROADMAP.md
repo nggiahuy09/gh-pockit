@@ -780,7 +780,7 @@ Cuối mỗi tháng, tự trả lời (viết ra, không nghĩ trong đầu):
 W1  [x]   W8  [ ]   W15 [ ]   W22 [ ]
 W2  [x]   W9  [ ]   W16 [ ]   W23 [ ]
 W3  [x]   W10 [ ]   W17 [ ]   W24 [ ]
-W4  [ ]   W11 [ ]   W18 [ ]   W25 [ ]
+W4  [x]   W11 [ ]   W18 [ ]   W25 [ ]
 W5  [ ]   W12 [ ]   W19 [ ]   W26 [ ]
 W6  [ ]   W13 [ ]   W20 [ ]   W27 [ ]
 W7  [ ]   W14 [ ]   W21 [ ]   W28 [ ]
