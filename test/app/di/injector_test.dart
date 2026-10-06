@@ -24,8 +24,7 @@ void main() {
     late GetIt container;
 
     setUp(() {
-      // A private container, never `GetIt.instance`: a test that registered
-      // into the global locator would leak into whichever test ran next.
+      // A private container, never `GetIt.instance`: registrations in the global locator would leak into the next test.
       container = GetIt.asNewInstance();
       configureCoreDependencies(container: container);
     });
@@ -45,9 +44,6 @@ void main() {
     });
 
     test('registers against the interface, not the implementation', () {
-      // The point of the whole exercise: app code depends on `GPClock`, so a
-      // test can swap in a fake. If these were registered as `GPSystemClock`,
-      // callers would have to name the concrete type to resolve them.
       expect(container.isRegistered<GPClock>(), isTrue);
       expect(container.isRegistered<GPSystemClock>(), isFalse);
       expect(container.isRegistered<GPUuidGenerator>(), isTrue);
@@ -55,36 +51,24 @@ void main() {
     });
 
     test('wires the logger to the registered GPClock', () {
-      // Resolving the logger is what triggers its factory, which resolves
-      // `GPClock` from the same container — the one dependency edge in the core
-      // graph today. If it were wired to `DateTime.now()` instead, nothing
-      // here would fail, which is exactly why the edge is asserted.
+      // Resolving the logger runs its factory, which resolves `GPClock` from this same container.
       container<GPAppLogger>().info('probe');
 
       expect(container<GPClock>(), isA<GPSystemClock>());
     });
 
     test('binds the locale store to Drift, not to the in-memory one', () async {
-      // The W1 debt ADR-0004 left open: with `GPInMemoryLocaleStore` bound, a chosen language did not survive a restart. Asserted on the container rather
-      // than trusted to the one-line swap, because nothing else in the app would fail if that line were reverted — the symptom is a setting quietly
-      // forgetting itself between launches, which no other test would notice.
-      //
-      // The database is swapped for an in-memory one first: the production registration reaches `path_provider` for a file path, and a plain unit test has
-      // no platform side to answer it. Swapping it is possible at all because every registration here is lazy — the store resolves the database when it is
-      // first asked for rather than when it is registered, which is the same property that keeps sqlite setup off the path to the first frame.
+      // In-memory database first: the production one asks `path_provider` for a path, which a unit test cannot answer. Lazy registration allows the swap.
       await container.unregister<GPAppDatabase>();
       container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
 
       expect(container<GPLocaleStore>(), isA<GPDriftLocaleStore>());
-      // Against the interface, like every other registration here, so a test can still substitute the in-memory store.
       expect(container.isRegistered<GPLocaleStore>(), isTrue);
       expect(container.isRegistered<GPDriftLocaleStore>(), isFalse);
     });
 
     test('a reset container can be configured again', () async {
-      // Guards the bootstrap-twice case (hot restart, an integration test that
-      // reboots the app): get_it throws on a duplicate registration, so the
-      // reset has to be enough to start over.
+      // get_it throws on a duplicate registration, so a reboot (hot restart, an integration test) relies on the reset alone.
       await container.reset();
 
       expect(() => configureCoreDependencies(container: container), returnsNormally);
@@ -107,8 +91,6 @@ void main() {
     setUp(() async {
       container = GetIt.asNewInstance();
       configureCoreDependencies(container: container);
-      // Swapped before anything resolves it, for the reason the locale-store test above gives: the production registration reaches `path_provider`, which
-      // a plain unit test has no platform side to answer. Every registration being lazy is what makes the swap possible after the fact.
       await container.unregister<GPAppDatabase>();
       container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
       configureAccountsDependencies(container: container);
@@ -117,16 +99,12 @@ void main() {
     tearDown(() => container.reset());
 
     test('registers the repository against its interface, not the impl', () {
-      // Presentation depends on `AccountRepository`; if the impl were the registered type, every BLoC would have to name a class that imports drift.
       expect(container<AccountRepository>(), isA<AccountRepositoryImpl>());
       expect(container.isRegistered<AccountRepository>(), isTrue);
       expect(container.isRegistered<AccountRepositoryImpl>(), isFalse);
     });
 
     test('hands out one AccountDao, shared with the repository', () {
-      // The reason the DAO is deliberately absent from `@DriftDatabase(daos: ...)`: a second instance would give the app two ways to reach one DAO, and
-      // drift resolves a transaction by comparing `attachedDatabase`. One instance is what keeps W7's "entity write and outbox insert in one transaction"
-      // enforceable at all.
       expect(container<AccountDao>(), same(container<AccountDao>()));
       expect(container<AccountRepository>(), same(container<AccountRepository>()));
     });
@@ -142,7 +120,6 @@ void main() {
     setUp(() async {
       container = GetIt.asNewInstance();
       configureCoreDependencies(container: container);
-      // Same swap as the accounts group, for the same reason: the production database reaches `path_provider`.
       await container.unregister<GPAppDatabase>();
       container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
       configureTransactionsDependencies(container: container);
@@ -156,8 +133,6 @@ void main() {
     });
 
     test('hands out one TransactionDao, bound to the database the core module registered', () {
-      // One instance, for the transaction reason the accounts group gives — and here it matters sooner: the repository checks the account and writes the
-      // transaction inside one `transaction {}` (ADR-0010), which only holds if both go through the same database.
       expect(container<TransactionDao>(), same(container<TransactionDao>()));
       expect(container<TransactionDao>().attachedDatabase, same(container<GPAppDatabase>()));
     });
@@ -176,7 +151,7 @@ void main() {
     tearDown(() => container.reset());
 
     test("each is registered by its own feature's module", () {
-      // `DeleteAccountUseCase` is the accounts feature's operation although its rule reads transactions (ADR-0010), so it lives with accounts.
+      // `DeleteAccountUseCase` reads transactions but is an accounts operation (ADR-0010).
       configureAccountsDependencies(container: container);
 
       expect(container.isRegistered<DeleteAccountUseCase>(), isTrue);
@@ -189,7 +164,7 @@ void main() {
     });
 
     test('each resolves once every module it reads is configured — in any order, since every registration is lazy', () {
-      // The reverse of the order `bootstrap()` uses, on purpose: nothing resolves until asked, so registration order carries no meaning.
+      // The reverse of the order `bootstrap()` uses, on purpose.
       configureTransactionsDependencies(container: container);
       configureCategoriesDependencies(container: container);
       configureAccountsDependencies(container: container);

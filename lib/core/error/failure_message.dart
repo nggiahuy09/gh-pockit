@@ -1,25 +1,14 @@
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 
-/// Turns a failure type into a sentence in the active language.
-///
-/// The other half of ADR-0004: `GPFailure` carries a type, and this is the single place that decides what the user reads for it.
-///
-/// Kept in its own file rather than inside `failure.dart` so the failure types stay importable with no localization dependency at all — `domain/`
-/// returns a `GPFailure` and must never see a `GPLocaleBase`. An extension rather than a method on `GPFailure` for the same reason: the mapping is
-/// presentation's job, so it does not belong on the type it maps.
-///
-/// The `switch` is exhaustive over a sealed type with no `default` branch, which is the entire value of this file. Adding a subtype to
-/// [GPFailure] without deciding what the user reads for it does not compile. Scattering `if (failure is GPNetworkFailure)` across pages would give
-/// the same behaviour today and none of that guarantee tomorrow.
+/// Kept out of `failure.dart` so `domain/` never sees localization (ADR-0004). No wildcard in either switch: a new failure or validation code must not
+/// compile without a message.
 extension GPFailureMessage on GPFailure {
   String message(GPLocaleBase l10n) => switch (this) {
     GPNetworkFailure() => l10n.error.network,
     GPTimeoutFailure() => l10n.error.timeout,
     GPAuthenticationFailure() => l10n.error.authentication,
     GPAuthorizationFailure() => l10n.error.authorization,
-    // The one failure whose message is not a function of the type alone: the *code* picks the sentence, so a user reads which rule they broke instead of
-    // "check your input". Nested switch over a non-sealed enum, so adding a code without a message is still a compile error.
     GPValidationFailure(:final code) => switch (code) {
       GPValidationCode.accountNameEmpty => l10n.error.validationAccountNameEmpty,
       GPValidationCode.accountNameTooLong => l10n.error.validationAccountNameTooLong,

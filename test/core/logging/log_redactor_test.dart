@@ -29,8 +29,6 @@ void main() {
       });
 
       expect(result.values, everyElement(redactedPlaceholder));
-      // The keys survive: "the failed mutation had an amount" is useful, the
-      // amount is not.
       expect(result.keys, containsAll(<String>['amountMinor', 'balance', 'note', 'email', 'accessToken']));
     });
 

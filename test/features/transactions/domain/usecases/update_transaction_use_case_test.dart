@@ -20,11 +20,7 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
 
-/// `UpdateTransactionUseCase` (W4 flex), over the real repositories on an in-memory database, for the reasons `create_transaction_use_case_test.dart`
-/// gives.
-///
-/// The point of this file is the rule's one difference from creating: **only a filing the edit makes is judged.** A transaction that already sits under
-/// a category deleted since — an ordinary state, because ADR-0010 lets such a category go — must stay editable.
+/// Real repositories on in-memory SQL: the rule turns on what the stored row and a real `watchCategory` answer.
 void main() {
   late GPAppDatabase db;
   late TransactionRepositoryImpl transactions;
@@ -88,7 +84,7 @@ void main() {
 
   T ok<T>(GPResult<T> result) => (result as GPOk<T>).value;
 
-  /// An expense under `cat-food`, created through the repository — not through a use case — so the setup cannot fail on the rule under test.
+  /// Through the repository, not a use case, so the setup cannot fail on the rule under test.
   Future<TransactionEntity> filedUnderFood() async => ok(
     await transactions.createTransaction(
       type: TransactionType.expense,
@@ -128,7 +124,7 @@ void main() {
     });
 
     test('judges a type change against the category it keeps', () async {
-      // Switching expense → income keeps the category (only a transfer drops it), so the old expense category is being re-filed under an income.
+      // Expense → income keeps the category (only a transfer drops it), so `cat-food` is re-filed under an income.
       final transaction = await filedUnderFood();
 
       expect(await updateTransaction(ok(transaction.update(type: TransactionType.income))), mismatch);
@@ -144,7 +140,6 @@ void main() {
       final result = await updateTransaction(ok(transaction.update(note: 'Phở bò')));
 
       expect(result, isA<GPOk<TransactionEntity>>());
-      // The id stays, as ADR-0010 has it: one category deleted is one row changed, not a rewrite of every transaction filed under it.
       expect((await stored(transaction.id)).categoryId, 'cat-food');
     });
 
@@ -183,8 +178,7 @@ void main() {
     });
 
     test('a stale edit is reported as a conflict, not judged by its category', () async {
-      // The row moved on elsewhere (a pull wrote version 2). Judging the edit's category against a row it was not based on could only produce a wrong
-      // sentence; the version guard gives the right one, which invites a reload.
+      // A pull wrote version 2; `cat-deleted` would be refused if the category were judged first.
       final transaction = await filedUnderFood();
       await (db.update(db.transactionsTable)..where((t) => t.id.equals(transaction.id))).write(const TransactionsTableCompanion(version: Value(2)));
 
@@ -194,7 +188,7 @@ void main() {
     });
 
     test('a stored row that cannot be read is a database failure', () async {
-      // A `refund` from a newer build: the mapper refuses it, so the read that says what the edit changed has no answer.
+      // A `refund` row from a newer build: the mapper refuses it, so the use case cannot read what the edit changes.
       await db
           .into(db.transactionsTable)
           .insert(

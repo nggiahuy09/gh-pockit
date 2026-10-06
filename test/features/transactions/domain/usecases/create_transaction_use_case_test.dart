@@ -18,11 +18,7 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
 
-/// `CreateTransactionUseCase` (W4 flex) over the real repositories on an in-memory database — no fake repository, for the reason
-/// `account_repository_impl_test.dart` gives, and because the answer that matters here is the one a real `watchCategory` gives: live, deleted, another
-/// owner's, or unreadable.
-///
-/// What is covered is rule 3 of ADR-0010 and nothing the repository already owns: the repository's own failures are only checked to come back unchanged.
+/// Real repositories on in-memory SQL: what matters is the answer a real `watchCategory` gives (live, deleted, another owner's, unreadable).
 void main() {
   late GPAppDatabase db;
   late CreateTransactionUseCase createTransaction;
@@ -79,7 +75,7 @@ void main() {
     await category('cat-salary', type: 'income');
     await category('cat-deleted', deletedAt: 1);
     await category('cat-theirs', ownerId: 'someone-else');
-    // A type this build does not know, written by a newer one: the category mapper refuses the row, so `watchCategory` errors.
+    // 'savings' is a type this build does not know, so the mapper refuses the row and `watchCategory` errors.
     await category('cat-unreadable', type: 'savings');
   });
 
@@ -115,7 +111,7 @@ void main() {
   });
 
   test('refuses a category that is not live — deleted, missing, or not the owner’s — as not found', () async {
-    // A missing one is the case the use case changes the answer for: the repository alone would reach the foreign key and report local storage failing.
+    // Without the use case, a missing category would reach the foreign key and come back as a database failure.
     for (final categoryId in ['cat-deleted', 'cat-missing', 'cat-theirs']) {
       expect(await create(categoryId: categoryId), const GPErr<TransactionEntity>(GPNotFoundFailure()), reason: categoryId);
     }
@@ -133,7 +129,6 @@ void main() {
   });
 
   test("a transfer's leftover category is not judged — the entity drops it", () async {
-    // What a form sends when the type was switched to transfer after a category was picked. Judging it would refuse a field that is no longer on screen.
     final result = await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: 'cat-deleted');
 
     expect(result, isA<GPOk<TransactionEntity>>());
@@ -149,7 +144,6 @@ void main() {
   });
 
   test("the category is judged first, so its failure is the one returned when the entity's rules fail as well", () async {
-    // The documented price of checking it outside the repository. An amount of zero under the wrong kind of category reports the category.
     expect(await create(categoryId: 'cat-salary', amount: 0), const GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionCategoryTypeMismatch)));
   });
 }

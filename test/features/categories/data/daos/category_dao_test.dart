@@ -1,4 +1,3 @@
-// `isNull`/`isNotNull` are both drift SQL predicates and matcher expectations; this file wants the matchers.
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,11 +5,6 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 
-/// `CategoryDao` (W3 T5).
-///
-/// The reads and writes it shares with `AccountDao` are asserted here too rather than assumed — owner scoping and the soft-delete filter are one forgotten
-/// `where` away from being wrong per DAO, and "the other DAO does it right" is not a test. What is genuinely new is [CategoryDao.insertMissing]: the first
-/// write in this app that happens without a user asking for it, which makes "runs twice, changes nothing the second time" a property worth pinning.
 void main() {
   const t0 = 1757800000000;
   const t1 = 1757800060000;
@@ -28,7 +22,6 @@ void main() {
     await db.close();
   });
 
-  /// Stands in for `CategoryMapper` until T6 builds it — the DAO takes a companion, never a field list.
   CategoriesTableCompanion row({
     String id = 'c1',
     String ownerId = localOwnerId,
@@ -83,7 +76,7 @@ void main() {
     });
 
     test('orders by creation, then by id', () async {
-      // `a` keeps the helper's default `createdAt` of t0; the other two are explicitly later, so the expected order is not the insertion order.
+      // `a` takes the default t0 but is inserted second; `b` and `c` share t1, so the id breaks their tie.
       await dao.insertCategory(row(id: 'b', nameKey: 'category.bills', createdAt: t1));
       await dao.insertCategory(row(id: 'a'));
       await dao.insertCategory(row(id: 'c', nameKey: 'category.health', createdAt: t1));
@@ -107,7 +100,6 @@ void main() {
 
   group('findById', () {
     test('finds a tombstoned row, unlike every other read', () async {
-      // The W14 reconciliation read: the applier has to find a row it already deleted, or it re-inserts the server's copy as a duplicate.
       await dao.insertCategory(row());
       await dao.softDelete('c1', now: t1);
 
@@ -125,8 +117,6 @@ void main() {
     });
 
     test('leaves an existing row exactly as it is, renames included', () async {
-      // The reason it is `insertOrIgnore` and not an upsert: re-seeding must never undo the user's edits. An `insertOrReplace` here would silently reset
-      // every renamed category on the next launch.
       await dao.insertCategory(row(name: 'Ăn uống của tôi'));
 
       expect(await dao.insertMissing([row()]), 0);
@@ -134,8 +124,6 @@ void main() {
     });
 
     test('does not resurrect a category the user deleted', () async {
-      // The tombstoned row still holds the id, so the ignore hits it. This only works because seeded ids are derived rather than random — with `v7()` the
-      // next run would mint a new id and the deleted category would come back.
       await dao.insertMissing([row()]);
       await dao.softDelete('c1', now: t1);
 
@@ -169,10 +157,8 @@ void main() {
       final updated = await dao.findById('c1');
       expect(written, 1);
       expect(updated?.name, 'Ăn uống');
-      // Still there: renaming a seeded category keeps its provenance.
       expect(updated?.nameKey, 'category.food');
       expect(updated?.updatedAt, t1);
-      // The server's number, never the client's (§7).
       expect(updated?.version, 1);
     });
 
@@ -191,7 +177,6 @@ void main() {
     });
 
     test('refuses to edit a tombstone', () async {
-      // Editing a deleted row would move its `updated_at` and push a resurrected row at the next sync.
       await dao.insertCategory(row());
       await dao.softDelete('c1', now: t1);
 
@@ -209,8 +194,6 @@ void main() {
 
   group('softDelete', () {
     test('stamps both deleted_at and updated_at', () async {
-      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W14's delta pull. Writing only the first produces a row
-      // that is locally gone and permanently invisible to sync.
       await dao.insertCategory(row());
 
       expect(await dao.softDelete('c1', now: t1), 1);

@@ -27,8 +27,6 @@ void main() {
     });
 
     testWidgets('hands the locale to Material as well, not just to our own strings', (WidgetTester tester) async {
-      // Without this, `showDatePicker` month names and the Cut/Copy/Paste menu stay English while the rest of the app is Vietnamese — the gap the
-      // reference project this pattern came from still has.
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.vi)));
       await tester.pumpAndSettle();
 
@@ -47,15 +45,12 @@ void main() {
       await tester.tap(find.text('Tiếng Việt'));
       await tester.pumpAndSettle();
 
-      // The bar belongs to the shell, the title to the page inside the branch: both must follow, or half the app stays in the old language.
       expect(navLabel('Trang chủ'), findsOneWidget);
       expect(navLabel('Home'), findsNothing);
       expect(find.widgetWithText(AppBar, 'Cài đặt'), findsOneWidget);
     });
 
     testWidgets('also repaints a branch that is alive but off screen', (WidgetTester tester) async {
-      // The stateful shell (ADR-0003) keeps visited branches mounted. A language change must reach them too, or coming back to a tab shows the
-      // previous language until something else rebuilds it.
       await tester.pumpWidget(GPApp(initialLocation: Routes.budgets, localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, 'Budgets'), findsOneWidget);
@@ -71,7 +66,6 @@ void main() {
 
   group('SettingsPage in isolation', () {
     testWidgets('pumps with no service locator configured', (WidgetTester tester) async {
-      // The reason the scope carries the controller: a page that called `getIt` would need DI booted for a test this small.
       final localization = await localizationFor(GPLocale.en);
       await tester.pumpWidget(localizedHarness(child: const SettingsPage(), localization: localization));
 

@@ -396,8 +396,7 @@ draft PR sớm.
 
 **Dependency**
 
-- [x] `flutter_bloc` 9.1.1 (kéo `bloc` 9.2.1, `provider`, `nested`); comment pubspec trả lời 5 câu của §5. Không `bloc_concurrency` — transformer tự
-      viết, ở T3 cùng subscription.
+- [x] `flutter_bloc` 9.1.1 (kéo `bloc` 9.2.1, `provider`, `nested`). Không `bloc_concurrency` — transformer tự viết, ở T3 cùng subscription.
 - [x] `bloc_test` **không** thêm được: nó cần `package:test`, mọi `test` chấp nhận `test_api 0.7.6` (do `flutter_test` pin) đều cần `analyzer <8`, còn
       `build_runner` 2.15.1 cần `≥8`. Test đọc `bloc.stream` bằng `flutter_test`; seed state bằng subclass khai báo trong file test gọi `emit` — đúng
       việc `seed` của `bloc_test` làm. Ghi ở pubspec, CLAUDE.md §5 và §8.

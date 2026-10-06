@@ -2,10 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 
-/// ADR-0006's return type under test.
-///
-/// Most of its value is a compile-time property — a caller cannot reach the value without naming the failure branch — and a test cannot assert that. What
-/// is asserted here is the part that would silently rot: equality, so `expect(result, GPOk(account))` compares what it looks like it compares.
 void main() {
   group('GPOk', () {
     test('is equal by value', () {
@@ -15,8 +11,7 @@ void main() {
     });
 
     test('carries void for an operation with nothing to return', () {
-      // `archiveAccount` and friends return `GPResult<void>`. Asserted because `const GPOk<void>(null)` is the one call shape that looks like it should
-      // not compile.
+      // `const GPOk<void>(null)` looks like it should not compile; `archiveAccount` and friends rely on it.
       const GPResult<void> result = GPOk<void>(null);
 
       expect(result, isA<GPOk<void>>());
@@ -30,8 +25,6 @@ void main() {
     });
 
     test('compares two validation codes apart', () {
-      // The case the new `operator ==` on GPValidationFailure exists for: without it these would be distinct runtime objects and every form-validation
-      // expectation would fail for the wrong reason.
       expect(
         const GPErr<int>(GPValidationFailure(GPValidationCode.accountNameEmpty)),
         const GPErr<int>(GPValidationFailure(GPValidationCode.accountNameEmpty)),
@@ -48,7 +41,6 @@ void main() {
   });
 
   test('a switch over a result is exhaustive without a default branch', () {
-    // The whole point of `sealed`, and the reason this compiles: adding a third subtype would break every switch that has to care.
     const results = <GPResult<int>>[GPOk<int>(7), GPErr<int>(GPDatabaseFailure())];
 
     final described = results

@@ -8,22 +8,14 @@ import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:go_router/go_router.dart';
 
-/// Root widget.
-///
-/// Themes come from `GPAppTheme`, which folds the design tokens in `core/theme/` into one `ThemeData` per brightness. The theme follows the device:
-/// `MaterialApp` already defaults `themeMode` to `ThemeMode.system`, so passing it explicitly would only be noise. There is still no in-app theme switch,
-/// but the reason changed at W2 T4: the `settings` table and `GPDriftLocaleStore` exist now, so a theme choice has somewhere to live — what is missing is
-/// a `GPThemeModeStore` beside the locale one and a control to drive it, not a place to put the answer (ADR-0005).
-///
-/// Stateful because the router is built once and kept, instead of being rebuilt inside `build`. A `GoRouter` holds the navigation stack of every
-/// branch; rebuilding it on a parent rebuild (a theme change, a language change) would throw that stack away and drop the user back on `/home`.
+/// Stateful so the `GoRouter` is built once: rebuilding it on a theme or language change would drop every branch's navigation stack.
 class GPApp extends StatefulWidget {
   const GPApp({this.initialLocation, this.localization, super.key});
 
-  /// Overrides where the app starts. Production passes nothing and gets `Routes.initial`; widget tests pass a path to simulate a deep link.
+  /// For tests: start on this path, as a deep link would.
   final String? initialLocation;
 
-  /// Overrides the language source. Production resolves it from `get_it`; tests inject one already set to the locale under test.
+  /// For tests. Null resolves it from `getIt`.
   final GPLocalization? localization;
 
   @override

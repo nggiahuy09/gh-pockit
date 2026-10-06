@@ -1,6 +1,5 @@
 part of 'locale_base.dart';
 
-/// Strings that belong to no single feature: the app name and the shell chrome around every tab.
 abstract class GPLocaleBaseRoot {
   const GPLocaleBaseRoot();
 

@@ -24,7 +24,6 @@ void main() {
     });
 
     test('names each language in its own language', () {
-      // Translating these would be the bug: a Vietnamese speaker on an English UI has to recognise their own option.
       expect(GPLocale.vi.displayName, 'Tiếng Việt');
       expect(GPLocale.en.displayName, 'English');
     });
@@ -58,7 +57,6 @@ void main() {
     });
 
     test('has usable strings before init runs', () {
-      // A widget built during bootstrap must not meet a null locale.
       expect(GPLocalization(store: GPInMemoryLocaleStore()).current.root.bottomNav.home, isNotEmpty);
     });
   });
@@ -92,7 +90,6 @@ void main() {
     });
 
     test('choosing the device language explicitly still notifies', () async {
-      // The device is Vietnamese, the user taps Vietnamese: same strings, but the choice is now theirs and must be persisted.
       final store = GPInMemoryLocaleStore();
       final localization = GPLocalization(store: store);
       await localization.init(deviceLocale: const Locale('vi'));

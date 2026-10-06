@@ -2,12 +2,6 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
 
-/// The first query this app ever runs (W2 T2).
-///
-/// What is under test is not the `settings` table — it is that ADR-0001 actually holds: that a schema declared in Dart reaches SQLite, that a write is
-/// visible to a read, and above all that a `watch()` re-emits on its own. That last one is the property the whole decision rests on: golden rule 1 says the
-/// UI reads the local DB and nothing else, and it is only livable because a write from anywhere — a tap, or a sync pull in P4 — repaints the list with no
-/// manual invalidation. If that ever stops being true, it should fail here rather than as a stale screen.
 void main() {
   late GPAppDatabase db;
 
@@ -22,10 +16,7 @@ void main() {
   SettingsTableCompanion setting(String key, String value, {int at = 1757800000000}) => SettingsTableCompanion.insert(key: key, value: value, updatedAt: at);
 
   test('creates the current schema and round-trips a row', () async {
-    // Deliberately not pinned to a number any more. This was `expect(db.schemaVersion, 1)` and it failed on the W2 T3 bump — correctly, but uselessly:
-    // the assertion said nothing a reader did not already know from `database.dart`, and its only effect was one extra edit per migration. What the bump
-    // must not break is the line below: `forTesting` still lands on a schema where a `settings` write round-trips. Which version that is belongs to
-    // `migration_test.dart`, which checks it against the fixtures instead of against a literal.
+    // Not pinned to a number: which version `forTesting` lands on belongs to `migration_test.dart`, checked against the fixtures.
     expect(db.schemaVersion, greaterThanOrEqualTo(1));
 
     await db.into(db.settingsTable).insert(setting('locale.selected', 'vi'));
@@ -33,7 +24,7 @@ void main() {
     final row = await (db.select(db.settingsTable)..where((t) => t.key.equals('locale.selected'))).getSingle();
 
     expect(row.value, 'vi');
-    // Epoch millis, not an ISO string (§6). Asserted because an `IntColumn` holding a formatted date would still pass every other test in this file.
+    // Epoch millis, not an ISO string (§6).
     expect(row.updatedAt, 1757800000000);
   });
 
@@ -43,8 +34,7 @@ void main() {
     final emissions = <String?>[];
     final subscription = query.watchSingleOrNull().listen((row) => emissions.add(row?.value));
 
-    // No `Future.delayed`: `pump` here only yields to the event loop so the stream can deliver what is already queued. Sync tests will need a fake clock
-    // (§8); a stream that has already fired needs nothing but a turn of the loop.
+    // A turn of the event loop, never `Future.delayed`: the stream only has to deliver what is already queued.
     await pumpEventQueue();
     await db.into(db.settingsTable).insert(setting('locale.selected', 'vi'));
     await pumpEventQueue();
@@ -54,7 +44,6 @@ void main() {
 
     await subscription.cancel();
 
-    // null (no row yet) → 'vi' → 'en'. Nothing invalidated the query by hand; the writes did it.
     expect(emissions, [null, 'vi', 'en']);
   });
 
@@ -70,19 +59,12 @@ void main() {
 
     await subscription.cancel();
 
-    // 'vi' twice — the second emission is the unrelated `theme.mode` insert. Drift invalidates a stream query per *table*, not per row, so a watcher
-    // re-runs its query whenever anything in `settings` changes, even when the result is identical.
-    //
-    // Harmless here (one table, a handful of rows) and exactly the thing to remember at W8: a `watchTransactions(query)` over 50k rows re-runs on every
-    // insert from a sync pull, whether or not a single visible row moved. The fix when it bites is `.distinct()` on the stream, or a narrower query —
-    // not a hand-rolled invalidation scheme, which is the `sqflite` failure mode ADR-0001 rejected. Written down as a test so the behaviour is a known
-    // property rather than a surprise in a benchmark.
+    // Drift invalidates a stream query per table, not per row: the unrelated `theme.mode` insert re-emits an identical 'vi'.
     expect(emissions, ['vi', 'vi']);
   });
 
   test('beforeOpen turns on foreign key enforcement', () async {
-    // Off by default in SQLite and re-set per connection, so this asserts the `beforeOpen` hook ran on the connection the test is actually using — not
-    // that the pragma exists. Without it, every foreign key added from W4 onwards would be documentation.
+    // Off by default in SQLite and set per connection, so this shows the hook ran on the connection in use.
     final result = await db.customSelect('PRAGMA foreign_keys').getSingle();
 
     expect(result.data.values.first, 1);

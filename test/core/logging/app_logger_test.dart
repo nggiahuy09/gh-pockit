@@ -62,8 +62,7 @@ void main() {
   });
 
   group('GPDeveloperLogger', () {
-    /// Collects what would have reached `dart:developer`, which a test process
-    /// cannot read back.
+    /// Collects what would have reached `dart:developer`, which a test process cannot read back.
     ({List<String> messages, List<({String name, int level})> tags, GPLogSink sink}) capture() {
       final messages = <String>[];
       final tags = <({String name, int level})>[];

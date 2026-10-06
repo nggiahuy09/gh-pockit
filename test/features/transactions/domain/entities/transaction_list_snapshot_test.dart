@@ -5,7 +5,6 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_entit
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
-/// `TransactionListSnapshot` (W4 T4, ADR-0011).
 void main() {
   TransactionEntity transaction(String id, {String note = 'Phở bò'}) {
     final created = TransactionEntity.create(
@@ -26,7 +25,6 @@ void main() {
       TransactionListSnapshot(transactions: [for (final id in ids) transaction(id)], unreadableCount: unreadableCount, hasMore: hasMore);
 
   test('counts every row the query returned: the ones that mapped and the ones that did not', () {
-    // What `hasMore` is decided on. Counting only the mapped rows would make one unreadable row look like the end of the list.
     final withOneUnreadable = snapshot(unreadableCount: 1);
 
     expect(withOneUnreadable.transactions, hasLength(2));
@@ -37,7 +35,6 @@ void main() {
     final rows = [transaction('tx-1')];
     final built = TransactionListSnapshot(transactions: rows, unreadableCount: 0, hasMore: false);
 
-    // The repository that built it keeps its own list; a screen already showing this snapshot must not see it move.
     rows.add(transaction('tx-2'));
 
     expect(built.transactions, hasLength(1));
@@ -50,8 +47,6 @@ void main() {
 
   group('equality', () {
     test('is by value, element by element', () {
-      // A write elsewhere in the table re-runs the query and maps fresh instances of the same rows. Without this, `flutter_bloc` would rebuild the list
-      // after every one of them.
       expect(snapshot(), snapshot());
       expect(snapshot().hashCode, snapshot().hashCode);
     });
@@ -80,7 +75,6 @@ void main() {
   });
 
   test('toString carries counts only — no amount and no note', () {
-    // Golden rule 9. The entities would log safely on their own, but a snapshot is fifty of them, and one line of fifty is noise.
     final text = snapshot(unreadableCount: 1, hasMore: true).toString();
 
     expect(text, 'TransactionListSnapshot(transactions: 2, unreadableCount: 1, hasMore: true)');

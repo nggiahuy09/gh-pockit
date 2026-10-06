@@ -1,124 +1,68 @@
 import 'package:meta/meta.dart';
 
-/// Everything that can go wrong, as a closed set of types.
-///
-/// `sealed` is the point. The compiler knows the complete list of subtypes, so a `switch` over a `GPFailure` that forgets a case is a compile error
-/// instead of a silent fallthrough to "Something went wrong". That is also what makes it safe to add a failure later: the new subtype breaks every
-/// switch that has to care, and the analyzer names them.
-///
-/// **A failure carries a type, never a message** (ADR-0004). Appendix B of the blueprint had `ValidationFailure(this.message)`; that field is
-/// deliberately absent here. A message would have to be written by whoever constructs the failure — the domain or the data layer — and neither of
-/// them knows the active language. Presentation maps the type to `l10n.error.*` instead; see `failure_message.dart`.
-///
-/// No Flutter import, on purpose: `domain/` is allowed to depend on this file (CLAUDE.md §3), and the moment it pulls in `widgets.dart` that rule is
-/// gone. `@immutable` therefore comes from `package:meta` rather than `package:flutter/foundation.dart`, and it sits on the sealed base so the
-/// analyzer holds every present and future subtype to it — a failure that can be mutated after the fact would make retry and conflict handling
-/// unreadable.
+/// Carries a type, never a message: presentation maps it to `l10n.error.*` (ADR-0004).
 @immutable
 sealed class GPFailure {
   const GPFailure();
 }
 
-/// The request never left the device, or never got an answer back.
-///
-/// Retryable (CLAUDE.md §7). Note what this does *not* mean: `connectivity_plus` reporting "offline" is a signal, not a failure — only a real request
-/// produces one of these.
 final class GPNetworkFailure extends GPFailure {
   const GPNetworkFailure();
 }
 
-/// The request was sent and the deadline passed with no response.
-///
-/// Kept separate from [GPNetworkFailure] even though both are retryable, because a timeout says the server may well have applied the write. That is
-/// exactly the case idempotency keys exist for, and a sync test asserting "a timed-out push is retried with the same key" has to be able to name it.
+/// Unlike [GPNetworkFailure], the server may have applied the write: a retry must reuse the idempotency key.
 final class GPTimeoutFailure extends GPFailure {
   const GPTimeoutFailure();
 }
 
-/// Not signed in, or the session expired — HTTP 401.
-///
-/// The one 4xx that is not terminal: it has a refresh flow (CLAUDE.md §7). Everything else in the 4xx range is a bug on the client side and must not
-/// be retried.
+/// HTTP 401: the one 4xx with a refresh flow, so not terminal.
 final class GPAuthenticationFailure extends GPFailure {
   const GPAuthenticationFailure();
 }
 
-/// Signed in as somebody who may not touch this row — HTTP 403.
-///
-/// Distinct from [GPAuthenticationFailure] because re-authenticating fixes nothing here. Retrying is pointless; on a row-level-security backend this
-/// usually means an `owner_id` mismatch, which is a data bug worth surfacing rather than swallowing.
+/// HTTP 403: re-authenticating fixes nothing, so never retried.
 final class GPAuthorizationFailure extends GPFailure {
   const GPAuthorizationFailure();
 }
 
-/// Which domain rule said no.
-///
-/// One constant per rule, and one `l10n.error.*` getter per constant. The enum is what turns "Please check the information you entered" into "Account name
-/// can't be empty" — a generic validation message makes the user hunt for the field, which is the whole cost this type exists to remove.
-///
-/// It appeared at W2 T5 rather than W4 as [GPValidationFailure] originally predicted: `AccountEntity` is the first entity with a rule, and it has two. The
-/// constraint that kept it honest still holds — a constant is added when a rule is written, never in anticipation of one (§12.11).
-///
-/// Named `<entity><Field><Problem>` so the list stays sorted by entity as it grows across features.
 enum GPValidationCode {
-  /// An account name that is empty, or only whitespace. Names are trimmed before the check, so `'   '` lands here rather than being stored as a blank name.
+  /// Also whitespace-only: names are trimmed before the check.
   accountNameEmpty,
 
-  /// An account name past `AccountEntity.nameMaxLength`.
   accountNameTooLong,
 
-  /// An account asked to be deleted while a live transaction still touches it, on either side of a transfer (ADR-0010). Deleted, it would leave a balance
-  /// nobody can see that still moves the accounts at the other end of its transfers — so the answer is archiving, and the message says so. Checked by
-  /// `DeleteAccountUseCase`, not by the entity: it needs the transactions' rows.
+  /// A live transaction touches the account, on either side of a transfer. Checked by `DeleteAccountUseCase`, not the entity (ADR-0010).
   accountHasTransactions,
 
-  /// A category with no name at all: no `name_key` and no typed name. For a user-created category that is a blank field; for a seeded one it would mean a
-  /// row that lost its key, which `CategoryEntity.update` makes unreachable by not accepting one.
+  /// Neither a `name_key` (seeded) nor a typed name.
   categoryNameEmpty,
 
-  /// A category name past `CategoryEntity.nameMaxLength`.
   categoryNameTooLong,
 
-  /// An amount of zero or less. `amount_minor` is a magnitude and the transaction's type gives the direction (ADR-0009), so a negative expense is not a
-  /// smaller expense but a malformed one — and zero moves nothing.
+  /// The amount is a magnitude; the type gives the direction (ADR-0009).
   transactionAmountNotPositive,
 
-  /// A transfer with no account to move the money into: the user has not picked one yet.
   transactionDestinationMissing,
 
-  /// A transfer into the account it leaves. It would net to zero on the one account it touches, which is never what the user meant.
   transactionDestinationSameAsSource,
 
-  /// A note past `TransactionEntity.noteMaxLength`.
   transactionNoteTooLong,
 
-  /// An amount in another currency than its account's (ADR-0010). A balance is a SQL `SUM` that never goes through `Money`, so storing it would add dollars
-  /// to a dong balance without a word. A correct user can reach it: another device can change the account after the form opened.
+  /// `Money` cannot catch this, because balances are a SQL `SUM` (ADR-0010). A correct user can hit it: another device may change the account mid-edit.
   transactionCurrencyMismatch,
 
-  /// A transfer between two accounts that keep different currencies. One row carries one amount in one currency, and moving it into an account that counts
-  /// in another would need an exchange rate this app does not model (multi-currency is W37+). Unlike the mismatch above, a user picks this directly.
   transactionTransferCurrenciesDiffer,
 
-  /// An expense filed under an income category, or an income under an expense one (ADR-0010) — W7's breakdown would count the one as the other. Checked by
-  /// `CreateTransactionUseCase` and `UpdateTransactionUseCase`, not by the entity, because it needs the category's row.
+  /// Checked by the use cases, not the entity: it needs the category's row (ADR-0010).
   transactionCategoryTypeMismatch,
 }
 
-/// A domain rule said no. The write never reached persistence.
-///
-/// The only failure a *correct* user can produce by ordinary typing, which is why it is the one that has to be specific: [code] names the rule, and
-/// `failure_message.dart` turns it into a sentence about that rule.
-///
-/// It is still a failure and not an exception, because form validation is precisely the case ADR-0006 was written for — the user pressed Save, nothing
-/// was written, and the screen has to say why rather than sit still.
 final class GPValidationFailure extends GPFailure {
   const GPValidationFailure(this.code);
 
   final GPValidationCode code;
 
-  /// Value equality, for the same reason [GPConflictFailure] has it: these are built at runtime from whichever rule tripped, so without it every
-  /// `expect(result, GPErr(GPValidationFailure(...)))` would compare identities and fail.
+  /// Only failures with fields need `==`: the fieldless ones are `const`, so identity already is equality.
   @override
   bool operator ==(Object other) => identical(this, other) || other is GPValidationFailure && other.code == code;
 
@@ -129,11 +73,6 @@ final class GPValidationFailure extends GPFailure {
   String toString() => 'GPValidationFailure(code: ${code.name})';
 }
 
-/// The server refused a write because the row moved on since this client last read it.
-///
-/// Optimistic versioning: the client sends `baseVersion`, the server runs `UPDATE ... WHERE version = ?`, and zero affected rows is this (CLAUDE.md
-/// §7). The only failure carrying data, because the conflict resolver needs it — and none of that data is a message or a financial value, so golden
-/// rule 9 is satisfied: an id and two integers are exactly what a log line is allowed to hold.
 final class GPConflictFailure extends GPFailure {
   const GPConflictFailure({required this.entityId, required this.localVersion, required this.remoteVersion});
 
@@ -141,9 +80,6 @@ final class GPConflictFailure extends GPFailure {
   final int localVersion;
   final int remoteVersion;
 
-  /// Value equality, unlike every other failure here. The fieldless ones are `const` and therefore canonicalised by the compiler, so identity already
-  /// is equality for them. This one is built at runtime from real version numbers, so without this two conflicts describing the same row would
-  /// compare unequal and every `expect(result, GPConflictFailure(...))` in a sync test would fail for the wrong reason.
   @override
   bool operator ==(Object other) =>
       identical(this, other) || other is GPConflictFailure && other.entityId == entityId && other.localVersion == localVersion && other.remoteVersion == remoteVersion;
@@ -155,30 +91,16 @@ final class GPConflictFailure extends GPFailure {
   String toString() => 'GPConflictFailure(entityId: $entityId, localVersion: $localVersion, remoteVersion: $remoteVersion)';
 }
 
-/// The row this operation names is not there any more — deleted, or never existed.
-///
-/// Added at W2 T6, when `AccountRepositoryImpl` needed to answer a write that matched zero rows. Kept apart from [GPConflictFailure], which is the *other*
-/// zero-row case, because the two need different words and different buttons: "changed on another device" invites a reload, "no longer exists" invites
-/// closing the screen. Collapsing them would have made a deleted account report a conflict the user can never resolve.
-///
-/// Not an error condition worth a crash report: on a synced account it is the normal result of deleting something on one device and editing it on another
-/// before the pull lands.
+/// Deleted or never there. Routine across devices, so not worth a crash report.
 final class GPNotFoundFailure extends GPFailure {
   const GPNotFoundFailure();
 }
 
-/// The local database could not be read or written.
-///
-/// This one is louder than it looks. The local DB is the source of truth for the UI (golden rule 1), so a failure here is not a degraded-offline
-/// state the app can shrug off — there is no remote copy to fall back to by design.
 final class GPDatabaseFailure extends GPFailure {
   const GPDatabaseFailure();
 }
 
-/// Nothing above matched.
-///
-/// Deliberately the last resort and not a default: because [GPFailure] is sealed, no switch is ever *forced* to route an unhandled case here. If this
-/// starts showing up in crash reports for a case that has a name, the fix is a new subtype, not a better message.
+/// Last resort: a case that keeps showing up here deserves its own subtype.
 final class GPUnknownFailure extends GPFailure {
   const GPUnknownFailure();
 }

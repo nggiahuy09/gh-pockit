@@ -10,7 +10,7 @@ Widget _host(Widget child) => MaterialApp(
   home: Scaffold(body: Center(child: child)),
 );
 
-/// How many shadow-bearing boxes the tree holds. The button paints its focus ring as one, and nothing else in these tests paints any.
+/// The focus ring is the only shadow-bearing box these tests paint.
 int _ringCount(WidgetTester tester) =>
     tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).where((DecoratedBox box) => (box.decoration as BoxDecoration).boxShadow?.isNotEmpty ?? false).length;
 
@@ -46,7 +46,6 @@ void main() {
     });
 
     testWidgets('keeps its footprint while loading, when it has an icon to swap', (WidgetTester tester) async {
-      // The spinner takes over the leading slot, so nothing moves. This is the case a form's submit button is in.
       await tester.pumpWidget(_host(GPButton(label: 'Save', leading: const Icon(Icons.check), onPressed: () {})));
       final restingSize = tester.getSize(find.byType(FilledButton));
 
@@ -57,8 +56,7 @@ void main() {
     });
 
     testWidgets('grows by the spinner when there is no icon to swap', (WidgetTester tester) async {
-      // Documented, not accidental: with no leading slot to take over, the spinner has to make room. Asserting it means a future change to that
-      // behaviour has to be a deliberate one rather than a surprise.
+      // Intended: with no leading slot to take over, the spinner has to make room.
       await tester.pumpWidget(_host(GPButton(label: 'Save', onPressed: () {})));
       final restingWidth = tester.getSize(find.byType(FilledButton)).width;
 
@@ -68,7 +66,6 @@ void main() {
     });
 
     testWidgets('an expanded button does not move while loading', (WidgetTester tester) async {
-      // Which is the answer to the test above, and the reason the doc tells form submits to be expanded.
       await tester.pumpWidget(_host(GPButton(label: 'Save', expanded: true, onPressed: () {})));
       final restingSize = tester.getSize(find.byType(FilledButton));
 
@@ -100,8 +97,7 @@ void main() {
     });
 
     testWidgets('no size is ever smaller than a 48px touch target', (WidgetTester tester) async {
-      // `small` paints at 40, and Material pads its hit area back to 48. That padding is the only reason a 40px button is allowed to exist; if a
-      // future style change sets `tapTargetSize: shrinkWrap` to reclaim the space, this catches the accessibility regression.
+      // `small` paints at 40 and relies on Material padding the hit area to 48; `tapTargetSize: shrinkWrap` would break it.
       for (final size in GPButtonSize.values) {
         await tester.pumpWidget(_host(GPButton(label: 'Save', size: size, onPressed: () {})));
 
@@ -116,8 +112,6 @@ void main() {
     });
 
     testWidgets('picks the right Material button per variant', (WidgetTester tester) async {
-      // Not cosmetic: OutlinedButton and TextButton bring their own minimum sizes and overlay behaviour, and a filled variant rendered as a
-      // TextButton would silently lose its background.
       await tester.pumpWidget(_host(GPButton(label: 'A', variant: GPButtonVariant.outlined, onPressed: () {})));
       expect(find.byType(OutlinedButton), findsOneWidget);
 
@@ -146,10 +140,7 @@ void main() {
     });
 
     testWidgets('draws a focus ring once focus lands on it, and none at rest', (WidgetTester tester) async {
-      // Focus arrives by Tab, not by wrapping the button in an outer `Focus`: the ring reads the button's *own* states controller, and an outer
-      // focus node would leave that controller untouched — the test would then pass against a broken widget.
-      //
-      // The ring is the reason this widget is stateful at all. If the states listener stops firing, this is what notices.
+      // Focus arrives by Tab: an outer `Focus` would leave the button's own states controller untouched, and the test would pass against a broken ring.
       await tester.pumpWidget(_host(GPButton(label: 'Save', onPressed: () {})));
       await tester.pump();
 
@@ -170,8 +161,7 @@ void main() {
     });
 
     testWidgets('survives being rebuilt into a loading state mid-frame', (WidgetTester tester) async {
-      // The regression this guards: the Material button updates its states controller during build, which used to fire setState inside a build and
-      // trip Flutter's '!_dirty' assertion. Toggling isLoading is exactly the path that triggers it.
+      // Material updates its states controller during build; a setState there once tripped Flutter's '!_dirty' assertion.
       await tester.pumpWidget(_host(GPButton(label: 'Save', onPressed: () {})));
       await tester.pumpWidget(_host(GPButton(label: 'Save', isLoading: true, onPressed: () {})));
       await tester.pumpWidget(_host(GPButton(label: 'Save', onPressed: () {})));

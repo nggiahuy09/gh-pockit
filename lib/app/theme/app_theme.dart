@@ -5,10 +5,8 @@ import 'package:ghpockit/core/theme/shadows.dart';
 import 'package:ghpockit/core/theme/typography.dart';
 
 abstract final class GPAppTheme {
-  /// The light theme.
   static ThemeData light() => _build(colors: const GPColors.light(), shadows: const GPShadows.light());
 
-  /// The dark theme.
   static ThemeData dark() => _build(colors: const GPColors.dark(), shadows: const GPShadows.dark());
 
   static ThemeData _build({required GPColors colors, required GPShadows shadows}) {

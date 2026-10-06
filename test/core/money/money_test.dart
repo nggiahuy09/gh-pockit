@@ -1,21 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/money/money.dart';
 
-/// Golden rule 2 under test (W2 T5, pulled forward from W3 T2).
-///
-/// What is asserted here is not "integers add up" — it is the set of decisions that make this type worth having over a bare `int`: the currency travels
-/// with the amount, mixing currencies is loud rather than silent, and zero dong is not zero dollars.
 void main() {
   group('construction', () {
     test('keeps minor units exactly, with no scaling of its own', () {
-      // VND has exponent 0, so the integer is the whole dong amount; USD has exponent 2, so 1234 is $12.34. Money does not know the difference and must
-      // not — applying an exponent here would mean the same call meant two things depending on the currency.
+      // Money never applies the exponent: 1234 is 1234 dong but $12.34.
       expect(Money(1500000, 'VND').minorUnits, 1500000);
       expect(Money(1234, 'USD').minorUnits, 1234);
     });
 
     test('accepts a negative amount', () {
-      // An overdrawn balance and a refund are both real. Rejecting negatives here would push every caller into carrying a sign beside the amount.
+      // Overdrawn balances and refunds are real.
       expect(Money(-5000, 'VND').isNegative, isTrue);
     });
 
@@ -27,7 +22,7 @@ void main() {
     });
 
     test('rejects a currency code that is not three uppercase letters', () {
-      // Shape only — whether VND exists is the W3 T4 catalog's question. What this guards is that `minorUnits` stays interpretable at all.
+      // Shape only; whether the currency exists is the catalog's question.
       expect(() => Money(1, 'vnd'), throwsArgumentError);
       expect(() => Money(1, 'VN'), throwsArgumentError);
       expect(() => Money(1, 'VNDD'), throwsArgumentError);
@@ -38,7 +33,6 @@ void main() {
     });
 
     test('accepts an unknown but well-formed code', () {
-      // Membership is not this type's job, and hard-coding a list here would mean a new currency needs a change in `core/`.
       expect(Money(1, 'XYZ').currencyCode, 'XYZ');
     });
   });
@@ -50,8 +44,7 @@ void main() {
     });
 
     test('returns null instead of throwing on a malformed code', () {
-      // The boundary twin of the throwing constructor. Inside the program a bad code is a bug; coming back out of SQLite it is data, and `AccountMapper`
-      // turns this null into a GPDatabaseFailure rather than catching an `Error`.
+      // A malformed code read from SQLite is data, not a bug (ADR-0006): null, never a throw.
       expect(Money.fromStorage(1, 'vnd'), isNull);
       expect(Money.fromStorage(1, 'VN'), isNull);
       expect(Money.fromStorage(1, ''), isNull);
@@ -80,7 +73,6 @@ void main() {
     });
 
     test('subtraction may go negative rather than clamping', () {
-      // Clamping at zero would turn "you are 50k short" into "you have nothing", which is a different and wrong statement.
       expect(Money(1000, 'VND') - Money(3000, 'VND'), Money(-2000, 'VND'));
     });
 
@@ -91,7 +83,6 @@ void main() {
     });
 
     test('mixing currencies throws instead of converting', () {
-      // The blueprint's one hard rule for this type. A conversion needs a rate and a date; picking either silently produces a number that looks right.
       expect(() => Money(1, 'VND') + Money(1, 'USD'), throwsA(isA<MoneyCurrencyMismatchError>()));
       expect(() => Money(1, 'VND') - Money(1, 'USD'), throwsA(isA<MoneyCurrencyMismatchError>()));
       expect(() => Money(1, 'VND').compareTo(Money(1, 'USD')), throwsA(isA<MoneyCurrencyMismatchError>()));
@@ -99,14 +90,12 @@ void main() {
     });
 
     test('the mismatch error is an Error, not an Exception', () {
-      // ADR-0006's dividing line, asserted rather than assumed: no UI offers "add dong to dollars", so this is a bug and must not be caught and shown to
-      // a user. `Error` is how Dart says that.
       expect(MoneyCurrencyMismatchError('VND', 'USD'), isA<Error>());
       expect(MoneyCurrencyMismatchError('VND', 'USD'), isNot(isA<Exception>()));
     });
 
     test('the mismatch error names both currencies and no amounts', () {
-      // Golden rule 9: this one is printable, so it must stay free of financial payloads.
+      // Golden rule 9: printable, so no amounts.
       final error = MoneyCurrencyMismatchError('VND', 'USD').toString();
 
       expect(error, contains('VND'));
@@ -116,16 +105,12 @@ void main() {
   });
 
   group('magnitude', () {
-    // W3 T3's "số lớn". The point of these is not that `int` can hold a big number — it is that the ceiling is a decision with a written reason, so the
-    // day a balance behaves strangely at 9.2 quintillion nobody re-derives it from scratch.
     const ceiling = 9223372036854775807;
     const floor = -9223372036854775808;
 
     test('counts exactly at magnitudes where a double has stopped counting', () {
-      // 2^53 + 1 is the first integer a double cannot represent: it rounds down to 2^53. In VND, exponent 0, that is only ~9 quadrillion dong — far-fetched
-      // for a wallet, entirely reachable for a lifetime `SUM()`. This is golden rule 2 in one assertion.
-      // `avoid_js_rounded_ints` is exactly right and exactly beside the point here: this literal is unrepresentable in a double, which is the assertion.
-      // Android and iOS only (CLAUDE.md §1), so there is no JS target to round it.
+      // 2^53 + 1 is the first integer a double cannot represent; a lifetime `SUM()` in VND can reach it.
+      // `avoid_js_rounded_ints`: being unrepresentable in a double is the point, and there is no JS target.
       // ignore: avoid_js_rounded_ints
       const beyondDoublePrecision = 9007199254740993;
 
@@ -138,30 +123,26 @@ void main() {
     test('carries an amount at either end of the 64-bit range', () {
       expect(Money(ceiling, 'VND').minorUnits, ceiling);
       expect(Money(floor, 'VND').minorUnits, floor);
-      // Written out rather than `ceiling - 1`, so the expected value is not computed by the operation under test. Same JS caveat as above.
+      // Written out, not `ceiling - 1`, so the expectation is not computed by the operation under test. Same JS caveat.
       // ignore: avoid_js_rounded_ints
       expect(Money(ceiling, 'VND') - Money(1, 'VND'), Money(9223372036854775806, 'VND'));
       expect(Money(floor, 'VND') + Money(1, 'VND'), Money(-9223372036854775807, 'VND'));
     });
 
     test('fromStorage round-trips the whole range a SQLite INTEGER can hold', () {
-      // The storage column is the same 64 bits, so anything the DB can return must survive the read. A narrower guard here would reject rows the schema
-      // allows — the corrupt-row path is for a malformed *code*, never for a large amount.
+      // Same 64 bits as the column: anything the database returns must be readable.
       expect(Money.fromStorage(ceiling, 'VND'), Money(ceiling, 'VND'));
       expect(Money.fromStorage(floor, 'VND'), Money(floor, 'VND'));
     });
 
     test('addition past the ceiling wraps instead of throwing — the documented bound, not a bug', () {
-      // Accepted deliberately (W3 T3, option A): guarding every `+` buys nothing a personal ledger can reach, and would not cover the `SUM()` that W6's
-      // balances and W7's aggregates run inside SQLite anyway. Asserted so the behaviour is pinned: if a future change starts throwing here, that is a decision being
-      // reversed, and this test is where it has to be argued.
+      // Deliberately unguarded (ROADMAP W3 T3, option A): a throw here would reverse that decision, not fix a bug.
       expect(Money(ceiling, 'VND') + Money(1, 'VND'), Money(floor, 'VND'));
       expect(Money(floor, 'VND') - Money(1, 'VND'), Money(ceiling, 'VND'));
     });
 
     test('the floor is its own negation, so abs() of it stays negative', () {
-      // Two's complement has one more negative than positive, so `floor` has no positive twin to flip to. The only sharp edge in the range worth naming:
-      // `abs()` is documented as "magnitude", and at exactly this value it is not.
+      // Two's complement: `floor` has no positive twin, so `abs()` is not a magnitude at exactly this value.
       expect(-Money(floor, 'VND'), Money(floor, 'VND'));
       expect(Money(floor, 'VND').abs().isNegative, isTrue);
       expect(Money(ceiling, 'VND').abs(), Money(ceiling, 'VND'));
@@ -191,16 +172,13 @@ void main() {
     });
 
     test('the same number in two currencies is not the same money', () {
-      // The test that stops a mixed-currency bug from passing: if these compared equal, a VND amount rendered as USD would look correct here.
       expect(Money.zero('VND'), isNot(Money.zero('USD')));
       expect(Money(1000, 'VND'), isNot(Money(1000, 'USD')));
     });
   });
 
   test('toString carries the amount, for test output only', () {
-    // Documented hazard rather than an oversight: `AccountEntity.toString` omits its balance and `redactSensitiveFields` blanks `amount`/`balance`/`minorunits`
-    // keys, so an amount only reaches a log if somebody interpolates this by hand. The alternative — a redacted `Money(VND)` — makes every failing
-    // expectation in this file unreadable.
+    // Prints the amount on purpose: entities leave it out of their own `toString`, and the log redactor blanks amount keys.
     expect(Money(1500000, 'VND').toString(), 'Money(1500000, VND)');
   });
 }

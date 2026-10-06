@@ -10,22 +10,9 @@ import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 import 'package:go_router/go_router.dart';
 
-/// Builds the app router.
+/// A function, not a global: a `GoRouter` owns navigation state, and a shared one would leak between tests.
 ///
-/// A function, not a global `final router = GoRouter(...)`: a `GoRouter` owns navigation state, and a global one is shared between tests, so test A
-/// leaves test B on `/settings`. Every caller — `GPApp`, every widget test — gets its own instance.
-///
-/// [initialLocation] exists for tests and for deep-link entry: a widget test can start directly on `/budgets` and assert what the shell does with it,
-/// which is exactly the case a hand-rolled `int _currentTab` would get wrong.
-///
-/// **Why `StatefulShellRoute.indexedStack` and not a plain `ShellRoute`** (ADR-0003): each branch keeps its own `Navigator` and its own stack, so
-/// opening `/transactions/:id`, switching to Accounts and coming back returns to that detail page with its scroll position intact. A plain
-/// `ShellRoute` has one `Navigator` for all five tabs and resets the stack on every tab switch — which would have to be undone in W5–W6 as soon as
-/// the first child route exists.
-///
-/// **A route's builder is where its page's dependencies are resolved.** The page takes them through its constructor and never names `getIt`, so it can be
-/// pumped in a widget test with nothing configured; the builder is the widget-tree entry point `injector.dart` allows to touch the locator. Branches build
-/// lazily, so a tab nobody opened resolves nothing and subscribes to nothing.
+/// Each tab keeps its own stack (ADR-0003). Builders resolve pages' dependencies from `getIt`; branches build lazily, so an unopened tab resolves nothing.
 GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
   initialLocation: initialLocation,
   routes: <RouteBase>[

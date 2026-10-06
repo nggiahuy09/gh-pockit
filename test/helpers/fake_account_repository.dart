@@ -4,16 +4,9 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 
-/// An [AccountRepository] whose account list is whatever stream the test hands it.
-///
-/// For the states the real `AccountRepositoryImpl` cannot produce on request — a list that has not arrived yet, or an error that is not a `GPFailure` —
-/// and for the router tests, which only need the Accounts tab to build. Everything else runs on the real repository over in-memory Drift, for the reason
-/// `account_repository_impl_test.dart` gives.
-///
-/// Writes throw: no test that uses this double should reach one, and a fake that pretended to write would be asserting against itself.
+/// Serves whatever account stream the test hands it, for states the real repository cannot produce on request (a list not yet arrived). Writes throw.
 class FakeAccountRepository implements AccountRepository {
-  /// With no [accounts], every subscription gets one empty list — all a navigation test needs, and a fresh stream per call because `Stream.value` can be
-  /// listened to only once.
+  /// With no [accounts], each call gets a fresh one-empty-list stream: `Stream.value` can be listened to only once.
   FakeAccountRepository({Stream<List<AccountEntity>>? accounts}) : _accounts = accounts;
 
   final Stream<List<AccountEntity>>? _accounts;

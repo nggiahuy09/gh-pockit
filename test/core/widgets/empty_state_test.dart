@@ -48,15 +48,11 @@ void main() {
     });
 
     test('refuses a label without a handler, and a handler without a label', () {
-      // A labelled button that does nothing is worse than no button: it reads as an offer and then ignores the tap. The assert makes that
-      // combination impossible to construct rather than something a reviewer has to notice.
       expect(() => GPEmptyState(icon: const Icon(Icons.add), title: 'Empty', actionLabel: 'Add'), throwsAssertionError);
       expect(() => GPEmptyState(icon: const Icon(Icons.add), title: 'Empty', onAction: () {}), throwsAssertionError);
     });
 
     testWidgets('scrolls rather than overflowing on a short viewport', (WidgetTester tester) async {
-      // A landscape phone with the keyboard up leaves very little height. A fixed Column would throw an overflow here, which in release mode is a
-      // silently clipped screen.
       tester.view.physicalSize = const Size(400, 200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);

@@ -371,6 +371,9 @@ A feature is Done only when **all** of these hold:
 - When touching the schema: call out the `schemaVersion` bump, the migration, and the fixture test. Never wipe the DB unilaterally.
 - When a trade-off is unclear: propose two options with their consequences, let the user choose, then write the ADR.
 - Explain the _why_ briefly. Do not re-teach Flutter basics.
+- **Comment only what a normal read of the code would not give you**: tricky logic, magic values, non-obvious flow, code that looks wrong on purpose, a
+  contract the signature cannot show. One line where possible. No dartdoc essays, no history or week/task provenance, nothing a name or a test name already
+  says — rationale belongs in the ADR or the ROADMAP spec, and a one-line `ADR-00xx` pointer is all the code needs. Same for config files.
 
 ---
 

@@ -3,22 +3,17 @@ import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:go_router/go_router.dart';
 
-/// One tab of the bottom navigation.
-///
-/// Kept as data rather than five hand-written `NavigationDestination`s so the branch order in `app_router.dart` and the destination order here cannot
-/// drift apart: [AppShell] asserts they have the same length, and both read this one list.
 @immutable
 class ShellTab {
   const ShellTab({required this.label, required this.icon, required this.selectedIcon});
 
-  /// Reads this tab's label off the active strings, rather than holding one. A tab outlives a language change, the string does not.
+  /// A function, not a string: the tab outlives a language change, the string does not.
   final String Function(GPLocaleBaseRootBottomNav) label;
   final IconData icon;
   final IconData selectedIcon;
 }
 
-/// The five tabs, in branch order. Changing this order changes which branch index each tab maps to — keep it in sync with the branch list in
-/// `app_router.dart`.
+/// In branch order: must match the branch list in `app_router.dart`.
 const List<ShellTab> shellTabs = <ShellTab>[
   ShellTab(label: _homeLabel, icon: Icons.home_outlined, selectedIcon: Icons.home),
   ShellTab(label: _accountsLabel, icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet),
@@ -34,19 +29,14 @@ String _transactionsLabel(GPLocaleBaseRootBottomNav nav) => nav.transactions;
 String _budgetsLabel(GPLocaleBaseRootBottomNav nav) => nav.budgets;
 String _settingsLabel(GPLocaleBaseRootBottomNav nav) => nav.settings;
 
-/// The persistent chrome around every tab: the bottom navigation bar, and the branch [Navigator] currently on screen.
-///
-/// This widget owns no state of its own. `navigationShell.currentIndex` is the single source of truth for which tab is selected, which means a deep
-/// link straight into `/budgets` selects the Budgets tab without anybody having to synchronise an `int` by hand.
+/// Holds no selected-tab state: `navigationShell.currentIndex` is the only source, so a deep link selects its tab with nothing to sync.
 class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key}) : assert(shellTabs.length == 5, 'shellTabs must match the branch count in app_router.dart');
 
-  /// The shell built by `StatefulShellRoute.indexedStack` — it holds one [Navigator] per branch and keeps all five alive.
   final StatefulNavigationShell navigationShell;
 
   void _onDestinationSelected(int index) {
-    // `initialLocation: true` only when the tab is re-tapped: that is the platform convention of "tap the active tab to pop back to its root".
-    // Tapping a different tab must NOT reset it — the whole point of the stateful shell is that the other branch is still where the user left it.
+    // Re-tapping the active tab pops it to its root (platform convention); switching to another tab must not reset it.
     navigationShell.goBranch(index, initialLocation: index == navigationShell.currentIndex);
   }
 

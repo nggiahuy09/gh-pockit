@@ -4,9 +4,7 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import '../../helpers/fake_clock.dart';
 
 void main() {
-  // 8-4-4-4-12 hex with the version nibble and the RFC 9562 variant bits
-  // ('8'..'b') pinned — a generator that returned plain random hex would pass
-  // a looser pattern.
+  // Version nibble and RFC 9562 variant bits pinned: plain random hex would pass a looser pattern.
   RegExp canonical(int version) => RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-$version[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\$');
 
   int timestampOf(String id) => int.parse(id.substring(0, 8) + id.substring(9, 13), radix: 16);
@@ -24,8 +22,7 @@ void main() {
     });
 
     test('carries no timestamp — an idempotency key must not leak one', () {
-      // Nothing about the clock may reach a v4. Read the same 48 bits that
-      // hold the timestamp in a v7 and they must not be the current time.
+      // The 48 bits that hold a v7's timestamp must not hold the clock in a v4.
       final clock = FakeClock(DateTime.utc(2026, 9, 9, 21, 30));
 
       expect(timestampOf(GPUuidGeneratorImpl(clock: clock).v4()), isNot(clock.nowEpochMillis()));
@@ -51,9 +48,7 @@ void main() {
     });
 
     test('sorts in creation order within one millisecond', () {
-      // The clock never moves, so ordering here can only come from the
-      // monotonic counter — this is the case `package:uuid` alone gets wrong
-      // and the reason entity keys can be sorted at all.
+      // The clock never moves, so order can only come from the monotonic counter — what `package:uuid` alone gets wrong.
       final generator = GPUuidGeneratorImpl(clock: FakeClock());
       final ids = [for (var i = 0; i < 500; i++) generator.v7()];
 
@@ -74,9 +69,7 @@ void main() {
     });
 
     test('stays ordered when the wall clock jumps backwards', () {
-      // NTP correction mid-session. An ID handed out after the jump must not
-      // sort before one handed out before it, or the tiebreaker in
-      // `ORDER BY occurred_at DESC, id DESC` starts lying.
+      // An NTP correction mid-session: ids must still sort in issue order, or the `id DESC` tie-break lies.
       final clock = FakeClock(DateTime.utc(2026, 9, 9, 21, 30));
       final generator = GPUuidGeneratorImpl(clock: clock);
 
@@ -89,8 +82,7 @@ void main() {
     });
 
     test('borrows the next millisecond when the counter overflows', () {
-      // 4096 IDs is the whole 12-bit counter; the 4097th cannot reuse a value
-      // without breaking ordering, so it advances the timestamp instead.
+      // 4096 ids exhaust the 12-bit counter; the 4097th advances the timestamp instead of reusing a value.
       final clock = FakeClock(DateTime.utc(2026, 9, 9, 21, 30));
       final generator = GPUuidGeneratorImpl(clock: clock);
       final ids = [for (var i = 0; i < 4097; i++) generator.v7()];
@@ -103,14 +95,12 @@ void main() {
   });
 
   group('v5', () {
-    // Added at W3 T5 for the category seeder. Everything here is the *opposite* of what the v4 and v7 groups assert: the point of this one is that the
-    // output is boringly repeatable, because two devices have to arrive at the same id without talking to each other.
+    // The opposite of v4/v7: two devices must derive the same id without talking (the category seeder).
     test('returns the same id for the same name, every time and on every instance', () {
       final first = GPUuidGeneratorImpl(clock: FakeClock());
       final second = GPUuidGeneratorImpl(clock: FakeClock(DateTime.utc(2030)));
 
       expect(first.v5('local|category.food'), first.v5('local|category.food'));
-      // A different instance, a different clock, a different day: still the same id. This is the property the seeder's cross-device test relies on.
       expect(second.v5('local|category.food'), first.v5('local|category.food'));
     });
 
@@ -118,19 +108,18 @@ void main() {
       final generator = GPUuidGeneratorImpl(clock: FakeClock());
 
       expect(generator.v5('local|category.food'), isNot(generator.v5('local|category.bills')));
-      // The owner half matters as much as the key half: without it every user on the server would share one set of category ids.
+      // The owner half matters as much as the key: without it every user would share one set of category ids.
       expect(generator.v5('local|category.food'), isNot(generator.v5('someone-else|category.food')));
     });
 
     test('is a well-formed v5 UUID', () {
-      // Version nibble 5 and an RFC 4122 variant. Nothing in the app parses a UUID, but a server column typed `uuid` at W10 will.
+      // A server column typed `uuid` (W10) will parse these.
       final id = GPUuidGeneratorImpl(clock: FakeClock()).v5('local|category.food');
 
       expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
     });
 
     test('carries no timestamp, so it cannot be mistaken for a v7', () {
-      // A v7 leads with the clock; a v5 leads with a hash. Asserting they differ for the same instant guards against someone "unifying" the two.
       final clock = FakeClock();
       final generator = GPUuidGeneratorImpl(clock: clock);
 

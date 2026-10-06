@@ -1,16 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ghpockit/core/theme/tokens/typography.dart';
 
-/// Semantic text styles, as a [ThemeExtension].
-///
-/// Read through `context.text`. Fifteen roles, matching Material's names so [toTextTheme] can hand them straight to built-in widgets — but sized for
-/// a phone rather than for Material's defaults.
-///
-/// Styles carry no color. Color comes from the enclosing `DefaultTextStyle` or from an explicit `context.colors.*`, because the same role renders in
-/// three different colors depending on what it sits on, and baking one in would mean fifteen more roles.
-///
-/// Money is not a role here. It arrives in W3 with `Money` and `MoneyFormatter`, and it needs a tabular-figures font feature so digits do not shift
-/// width as an amount changes — a decision that belongs with the value object, not ahead of it.
+/// Styles carry no color: it comes from the enclosing `DefaultTextStyle` or an explicit `context.colors`.
 @immutable
 class GPTypography extends ThemeExtension<GPTypography> {
   const GPTypography({
@@ -138,52 +129,22 @@ class GPTypography extends ThemeExtension<GPTypography> {
         letterSpacing: GPTypographyTokens.trackingLabel,
       );
 
-  /// The account balance on the dashboard. The one genuinely large number in the app.
   final TextStyle displayLarge;
-
-  /// A month total.
   final TextStyle displayMedium;
-
-  /// A large screen header.
   final TextStyle displaySmall;
-
-  /// A screen title.
   final TextStyle headlineLarge;
-
-  /// The app-bar title.
   final TextStyle headlineMedium;
-
-  /// A section header.
   final TextStyle headlineSmall;
-
-  /// A card title.
   final TextStyle titleLarge;
-
-  /// A list-item title, and the button label.
   final TextStyle titleMedium;
-
-  /// A dense list-item title.
   final TextStyle titleSmall;
-
-  /// Body copy that carries a screen — an empty-state paragraph, a dialog body.
   final TextStyle bodyLarge;
-
-  /// The default. Most text in the app is this.
   final TextStyle bodyMedium;
-
-  /// Supporting text under a list item.
   final TextStyle bodySmall;
-
-  /// A field label.
   final TextStyle labelLarge;
-
-  /// A date header, a chip, a badge.
   final TextStyle labelMedium;
-
-  /// The smallest text allowed. Below this Inter stops being legible on a low-DPI Android panel.
   final TextStyle labelSmall;
 
-  /// Builds a Material [TextTheme] so built-in widgets inherit the same scale.
   TextTheme toTextTheme() => TextTheme(
     displayLarge: displayLarge,
     displayMedium: displayMedium,

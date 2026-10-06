@@ -15,19 +15,14 @@ import 'package:ghpockit/features/transactions/presentation/pages/transactions_p
 import '../../helpers/fake_account_repository.dart';
 import '../../helpers/localization_harness.dart';
 
-/// Taps a bottom-navigation destination by its label.
-///
-/// Scoped to the [NavigationBar] on purpose: once a tab is open its name also appears in the app bar and in the page body, and an unscoped
-/// `find.text('Accounts')` would match three widgets and fail.
+/// Scoped to the [NavigationBar]: an open tab's name also appears in the app bar and the page body.
 Future<void> tapTab(WidgetTester tester, String label) async {
   await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)));
   await tester.pumpAndSettle();
 }
 
 void main() {
-  // The Accounts route resolves its repository from the locator (see `createRouter`), so a test that opens that tab needs one registered. A fake rather than
-  // the real graph: these tests are about which page a path shows, and none of them reads an account. Reset after each test, because this is the global
-  // locator the router reads — the one place a test here cannot use a private `GetIt`.
+  // The Accounts route resolves its repository from the global locator (see `createRouter`), so no private `GetIt` here. No test reads an account.
   setUp(() => getIt.registerSingleton<AccountRepository>(FakeAccountRepository()));
   tearDown(getIt.reset);
 
@@ -45,8 +40,6 @@ void main() {
 
       final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
 
-      // Guards the invariant asserted in AppShell: the destination list and the branch list are two hand-written lists that must stay the same
-      // length and the same order, or tab N opens page M.
       expect(bar.destinations, hasLength(shellTabs.length));
       expect(
         bar.destinations.map((Widget d) => (d as NavigationDestination).label),
@@ -79,7 +72,6 @@ void main() {
 
   group('deep link', () {
     testWidgets('opening a tab path directly renders that page with the right tab selected', (WidgetTester tester) async {
-      // The case a hand-rolled `int _currentTab` gets wrong: the OS hands the app a path, and nothing taps anything.
       await tester.pumpWidget(GPApp(initialLocation: Routes.budgets, localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
@@ -91,7 +83,7 @@ void main() {
       await tester.pumpWidget(GPApp(initialLocation: '/nope', localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
-      // go_router's default error page. Asserted so that replacing it with a real 404 screen later is a deliberate, visible change.
+      // go_router's default error page, not Home: replacing it with a real 404 screen should be a visible change.
       expect(tester.takeException(), isNull);
       expect(find.byType(HomePage), findsNothing);
     });
@@ -99,8 +91,6 @@ void main() {
 
   group('branch state', () {
     testWidgets('a visited tab stays alive after switching away', (WidgetTester tester) async {
-      // This is the entire reason for StatefulShellRoute.indexedStack over a plain ShellRoute (ADR-0003). A plain ShellRoute has one Navigator for
-      // all five tabs, so leaving Budgets would dispose its subtree — and in W5–W6 that means losing an open detail page and its scroll position.
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 
@@ -114,7 +104,6 @@ void main() {
     });
 
     testWidgets('an unvisited tab is never built', (WidgetTester tester) async {
-      // Lazy branches: five tabs must not mean five database subscriptions on the first frame.
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
 

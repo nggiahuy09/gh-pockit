@@ -1,6 +1,6 @@
 part of 'locale_base.dart';
 
-/// Settings tab. The language names themselves are NOT here — a language is always written in its own language, so `GPLocale.displayName` owns them.
+/// No language names here: each is written in its own language, by `GPLocale.displayName`.
 abstract class GPLocaleBaseSettings {
   const GPLocaleBaseSettings();
 

@@ -17,8 +17,7 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
 
-/// `DeleteAccountUseCase` (W4 flex), over the real account and transaction repositories on one in-memory database — the two features ADR-0010 makes
-/// depend on each other, meeting where they do in the app.
+/// Real repositories on one in-memory database: the rule under test spans the account and transaction tables.
 void main() {
   late GPAppDatabase db;
   late FakeClock clock;
@@ -120,7 +119,6 @@ void main() {
   });
 }
 
-/// A [TransactionDao] whose one existence check fails, attached to the same database so everything else about it behaves.
 class LookupFailingTransactionDao extends TransactionDao {
   LookupFailingTransactionDao(super.attachedDatabase);
 
