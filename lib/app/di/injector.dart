@@ -22,6 +22,7 @@ import 'package:ghpockit/features/transactions/data/repositories/transaction_rep
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/watch_transactions_use_case.dart';
 
 /// Only `bootstrap()`, the `configure*Dependencies()` functions and widget-tree entry points may touch it; the rest take constructor arguments.
 final GetIt getIt = GetIt.instance;
@@ -104,5 +105,6 @@ void configureTransactionsDependencies({GetIt? container}) {
     )
     ..registerLazySingleton<UpdateTransactionUseCase>(
       () => UpdateTransactionUseCase(transactionRepository: c<TransactionRepository>(), categoryRepository: c<CategoryRepository>()),
-    );
+    )
+    ..registerLazySingleton<WatchTransactionsUseCase>(() => WatchTransactionsUseCase(transactionRepository: c<TransactionRepository>()));
 }

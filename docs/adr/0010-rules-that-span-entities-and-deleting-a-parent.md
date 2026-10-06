@@ -5,7 +5,9 @@
 Accepted — 2026-09-27, before W4. Closes the question that
 `AccountRepository.deleteAccount` (W2 T5) and `CategoryRepository.deleteCategory`
 (W3 T6) both left for W4 — "cascade, block, or orphan". Implemented at W4 T6
-(the repository rules) and W4 flex (the use cases).
+(the repository rules) and W4 flex (the use cases). "A use case exists only when
+it owns a rule" is superseded by ADR-0013 (2026-10-06): a BLoC now reaches the
+domain only through use cases, forwarding ones included.
 
 ## Context
 
@@ -120,7 +122,7 @@ whatever the rules above do:
 - a deleted category's spending shows as "Uncategorised" in analytics (W7) and
   in budgets (W24).
 
-**A use case exists only when it owns a rule.** Hence
+**A use case exists only when it owns a rule** _(superseded by ADR-0013)_. Hence
 `CreateTransactionUseCase`, `UpdateTransactionUseCase` and
 `DeleteAccountUseCase` — and no `DeleteTransactionUseCase`: deleting a
 transaction has no rule beyond what the repository already does, and a use case

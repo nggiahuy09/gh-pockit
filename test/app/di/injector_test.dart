@@ -18,6 +18,7 @@ import 'package:ghpockit/features/transactions/data/repositories/transaction_rep
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/watch_transactions_use_case.dart';
 
 void main() {
   group('configureCoreDependencies', () {
@@ -161,6 +162,7 @@ void main() {
 
       expect(container.isRegistered<CreateTransactionUseCase>(), isTrue);
       expect(container.isRegistered<UpdateTransactionUseCase>(), isTrue);
+      expect(container.isRegistered<WatchTransactionsUseCase>(), isTrue);
     });
 
     test('each resolves once every module it reads is configured — in any order, since every registration is lazy', () {
@@ -172,6 +174,7 @@ void main() {
       expect(container<DeleteAccountUseCase>(), same(container<DeleteAccountUseCase>()));
       expect(container<CreateTransactionUseCase>(), isA<CreateTransactionUseCase>());
       expect(container<UpdateTransactionUseCase>(), isA<UpdateTransactionUseCase>());
+      expect(container<WatchTransactionsUseCase>(), isA<WatchTransactionsUseCase>());
     });
   });
 }

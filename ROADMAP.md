@@ -381,7 +381,7 @@ draft PR sớm.
 | Ngày | Task                                                                                     | Trạng thái                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ---- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | `TransactionBloc`: events `Started / FilterChanged / LoadMoreRequested`, immutable state | ✅ Done (04/10, sớm một ngày) — `features/transactions/presentation/bloc/`: `TransactionListBloc`, event và state là `part` của cùng library. Mới là **phần tính query**, chưa subscribe gì: handler đồng bộ, đọc state, tính `TransactionQuery` kế tiếp, emit — T3 nối `query` vào `watchTransactions`. Đặt tên lệch ROADMAP: **`TransactionListBloc`**, vì form của W6 là BLoC khác (§12.4). `flutter_bloc` 9.1.1 vào pubspec; **`bloc_test` không cài được** trên Dart 3.9.2 (`test` cần `analyzer <8`, `build_runner` 2.15.1 cần `≥8` — CLAUDE.md §5) nên test đọc `bloc.stream` bằng `flutter_test`, T6 cũng vậy. 23 test mới (suite: 641). Spec và bốn chỗ chốt trong lúc làm ở _W5 T2_ dưới (ADR-0011) |
-| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     | ✅ Done (06/10) — `core/bloc/restartable.dart`: `switchMap` tự viết, huỷ handler đang chạy **trước** khi chạy handler mới. `TransactionListBloc` nhận repository; chỉ event private `_TransactionListWatchRequested` subscribe (`emit.forEach` dưới `restartable()`), emission trễ của query cũ bị bỏ. **ADR-0012**. 14 test mới (suite: 655), có một test trên repository thật + Drift in-memory: ghi row là list tự cập nhật. Spec ở _W5 T3_ dưới                                                                                                                                                                                                                                                           |
+| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     | ✅ Done (06/10) — `core/bloc/restartable.dart`: `switchMap` tự viết, huỷ handler đang chạy **trước** khi chạy handler mới. `TransactionListBloc` nhận `WatchTransactionsUseCase`, không giữ repository (**ADR-0013**); chỉ event private `_TransactionListWatchRequested` subscribe (`emit.forEach` dưới `restartable()`), emission trễ của query cũ bị bỏ. **ADR-0012**. 15 test mới (suite: 656), có một test trên repository thật + Drift in-memory: ghi row là list tự cập nhật. Spec ở _W5 T3_ dưới                                                                                                                                                                                                      |
 | T4   | Transaction list UI: group theo ngày, hiển thị `Money` đã format                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | T5   | Loading / empty / error state cho list                                                   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | T6   | Test BLoC cho `TransactionListBloc` — bằng `flutter_test`, không có `bloc_test` (W5 T2)  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -463,23 +463,26 @@ khi đã có row, nên các trạng thái chồng lên nhau
 
 **BLoC**
 
-- [x] `TransactionListBloc({required TransactionRepository repository})`. Ba handler public đồng bộ như T2, đi qua `_watch`: emit state mới ngay, rồi
-      `add(_TransactionListWatchRequested(query))`.
+- [x] `TransactionListBloc({required WatchTransactionsUseCase watchTransactions})` — BLoC không giữ repository (ADR-0013). `WatchTransactionsUseCase` chỉ
+      chuyển tiếp `TransactionRepository.watchTransactions`, đăng ký DI ở module transactions; route builder (T4) resolve nó từ `getIt`.
+- [x] Ba handler public đồng bộ như T2, đi qua `_watch`: emit state mới ngay, rồi `add(_TransactionListWatchRequested(query))`.
 - [x] Chỉ event private subscribe: `emit.forEach(watchTransactions(query))` dưới `restartable()`. `onData` → snapshot mới, xoá failure; `onError` →
       `GPFailure` giữ row và đặt failure, lỗi khác ném lại (ADR-0006).
 - [x] Emission trễ: state mới emit trước event private một microtask, trong khe đó watch cũ vẫn có thể giao — so `event.query` với `state.query`, lệch thì
       bỏ.
 - [x] `close()`: bloc huỷ handler đang chạy, kéo theo watch — không thêm code.
 
-**Chốt trong lúc làm** (ADR-0012)
+**Chốt trong lúc làm** (ADR-0012, ADR-0013)
 
+- [x] BLoC chỉ nói chuyện với use case, kể cả use case chỉ chuyển tiếp (ADR-0013, thay phần "use case chỉ khi có rule" của ADR-0010): giữ repository thì
+      BLoC gọi được write vòng qua rule — `deleteAccount` không qua `DeleteAccountUseCase`. `AccountsPage` (W3, chưa có BLoC) là ngoại lệ còn lại.
 - [x] Tự viết thay `bloc_concurrency` có thêm lý do thứ hai ngoài bớt một dependency: thứ tự huỷ-trước-chạy-sau.
 - [x] Event private + chặn emission trễ, thay vì một handler sống lâu nghe `StreamController` các query — cách đó không có khe, nhưng query đi kênh riêng,
       ngoài `BlocObserver`, và phải tự đóng controller.
 - [x] Watch lỗi tự hồi ở lần ghi tiếp theo vào bảng: `emit.forEach` có `onError` không huỷ subscription, Drift giữ query stream sau lần chạy lỗi (đã đọc
       source cả hai).
 
-**Test** — 14 test mới (suite: 655)
+**Test** — 15 test mới (suite: 656)
 
 - [x] `test/core/bloc/restartable_test.dart` (5): huỷ inner cũ trước khi listen inner mới; chuyển lỗi; kết thúc đúng lúc; cancel dây chuyền; trong một bloc
       thật, handler cũ dừng trước khi handler mới chạy.
@@ -487,6 +490,8 @@ khi đã có row, nên các trạng thái chồng lên nhau
       watch; đổi filter huỷ watch cũ trước; emission trễ của filter cũ không lên màn hình; load more giữ row tới khi cửa sổ lớn trả về; 5 lần load more mở
       một watch; lỗi giữ row và tự xoá ở emission sau; lỗi không phải `GPFailure` không bị nuốt; `close()` huỷ watch; trên repository thật + Drift
       in-memory, ghi row là list tự cập nhật mà không cần event.
+- [x] `watch_transactions_use_case_test.dart` (1): chuyển nguyên query và stream, cả lỗi. `injector_test`: use case đăng ký ở module transactions và
+      resolve được.
 - [x] Mutation check: bỏ chặn emission trễ → test emission trễ fail; đổi transformer sang gọi-mapper-trước-huỷ-sau → 4 test fail.
 
 ## W6 · 12–18/10 🔴 CRUD UI + balances

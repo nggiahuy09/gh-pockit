@@ -6,9 +6,9 @@ Accepted — 2026-10-06 (W5 T3). First user: `TransactionListBloc`.
 
 ## Context
 
-`TransactionListBloc` shows `TransactionRepository.watchTransactions(query)`, and
-the query changes: a new filter replaces it, "load more" grows its limit
-(ADR-0011). Whenever it changes, three things have to hold:
+`TransactionListBloc` shows what `WatchTransactionsUseCase(query)` streams
+(ADR-0013), and the query changes: a new filter replaces it, "load more" grows
+its limit (ADR-0011). Whenever it changes, three things have to hold:
 
 - **Exactly one watch is live.** A watch re-runs on every write to its table, so
   two live watches double the work, and the older one keeps writing into the
@@ -34,8 +34,8 @@ starts the next handler — and cancels the previous handler after.
    out the next query, drops the event if it changes nothing, emits the new state
    at once — so the next event already sees it — and adds a private
    `_TransactionListWatchRequested(query)`.
-2. Only that event's handler subscribes: `emit.forEach` over
-   `watchTransactions(query)`, registered with `restartable()` from
+2. Only that event's handler subscribes: `emit.forEach` over the use case's
+   stream for `query`, registered with `restartable()` from
    `core/bloc/restartable.dart`. The transformer is our own: a `switchMap` that
    cancels the running handler **before** it starts the next one. It does not
    forward pause; bloc never pauses its event stream.

@@ -24,3 +24,9 @@ final class TransactionListFilterChanged extends TransactionListEvent {
 final class TransactionListLoadMoreRequested extends TransactionListEvent {
   const TransactionListLoadMoreRequested();
 }
+
+final class _TransactionListWatchRequested extends TransactionListEvent {
+  const _TransactionListWatchRequested(this.query);
+
+  final TransactionQuery query;
+}
