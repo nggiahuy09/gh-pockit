@@ -444,6 +444,39 @@ void main() {
       ]);
     });
 
+    test('a failure of the old filter that lands after the change never reaches the screen', () async {
+      final bloc = await started();
+
+      final states = await statesDuring(bloc, () {
+        bloc.add(const TransactionListFilterChanged(types: {TransactionType.income}));
+        repository.watches.first.fail(const GPDatabaseFailure());
+      });
+
+      expect(states, [
+        TransactionListState(
+          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
+        ),
+      ]);
+    });
+
+    test('a filter change while a larger window loads drops both the old rows and that window', () async {
+      final bloc = await started();
+      await statesDuring(bloc, () => repository.watches.first.emit(snapshotOf(limit: page, rows: page)));
+      await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+
+      await statesAfter(bloc, [
+        const TransactionListFilterChanged(types: {TransactionType.income}),
+      ]);
+
+      expect(
+        bloc.state,
+        TransactionListState(
+          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
+        ),
+      );
+      expect(repository.log, ['listen #0', 'cancel #0', 'listen #1', 'cancel #1', 'listen #2']);
+    });
+
     test('load more keeps the rows on screen until the larger window answers on its own watch', () async {
       final bloc = await started();
       final firstPage = snapshotOf(limit: page, rows: page);
