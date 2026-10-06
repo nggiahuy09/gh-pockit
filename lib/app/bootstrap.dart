@@ -5,6 +5,7 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 /// No `runZonedGuarded` on purpose: `PlatformDispatcher.onError` catches uncaught async errors without forcing every error through one zone.
 Future<void> bootstrap(Widget Function() builder) async {
@@ -32,6 +33,9 @@ Future<void> bootstrap(Widget Function() builder) async {
     // `true` = handled; `false` would re-report it to the platform and duplicate every line once Sentry is wired.
     return true;
   };
+
+  // `DateFormat` throws for `vi` until these are loaded.
+  await initializeDateFormatting();
 
   // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
   await getIt<GPLocalization>().init(deviceLocale: PlatformDispatcher.instance.locale);
