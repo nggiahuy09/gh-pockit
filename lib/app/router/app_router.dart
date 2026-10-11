@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
+import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
+import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -37,7 +40,10 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
             GoRoute(
               path: Routes.transactions,
               name: RouteNames.transactions,
-              builder: (BuildContext context, GoRouterState state) => const TransactionsPage(),
+              builder: (BuildContext context, GoRouterState state) => BlocProvider<TransactionListBloc>(
+                create: (_) => TransactionListBloc()..add(const TransactionListStarted()),
+                child: TransactionsPage(clock: getIt<GPClock>()),
+              ),
             ),
           ],
         ),
