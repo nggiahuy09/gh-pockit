@@ -1,10 +1,15 @@
-import 'dart:ui' show PlatformDispatcher;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ghpockit/app/di/injector.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
+import 'package:ghpockit/core/utils/clock.dart';
+import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
+import 'package:ghpockit/features/settings/presentation/debug/sample_data.dart';
+import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/seed_sample_data_use_case.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 /// No `runZonedGuarded` on purpose: `PlatformDispatcher.onError` catches uncaught async errors without forcing every error through one zone.
@@ -46,6 +51,21 @@ Future<void> bootstrap(Widget Function() builder) async {
   if (seeded > 0) {
     // Count only: a renamed category's name is user data (golden rule 9).
     logger.info('seeded default categories', fields: {'count': seeded});
+  }
+
+  // `--dart-define=SAMPLE_DATA=true`: a debug run starts with the sample dataset. Only into an empty database, so a restart does not double it.
+  if (kDebugMode && const bool.fromEnvironment('SAMPLE_DATA')) {
+    final sample = await SeedSampleDataUseCase(
+      accountRepository: getIt<AccountRepository>(),
+      transactionRepository: getIt<TransactionRepository>(),
+      clock: getIt<GPClock>(),
+    )(accounts: sampleAccounts, transactions: sampleTransactions, onlyIfEmpty: true);
+    switch (sample) {
+      case GPOk<int>(:final value):
+        logger.info('seeded sample data', fields: {'count': value});
+      case GPErr<int>(:final failure):
+        logger.error('sample data seed failed', fields: {'failure': failure.runtimeType.toString()});
+    }
   }
 
   logger.info('app bootstrapped');

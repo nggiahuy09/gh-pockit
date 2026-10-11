@@ -6,4 +6,11 @@ abstract class GPLocaleBaseSettings {
 
   String get title;
   String get language;
+  String get debugTitle;
+  String get debugAddSample;
+  String get debugSampleAdded;
+  String get debugSampleAccountName;
+  String get debugSampleNote;
+  String get debugSeedDataset;
+  String debugDatasetSeeded(int count);
 }
