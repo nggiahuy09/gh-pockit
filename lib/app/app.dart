@@ -38,6 +38,7 @@ class _GPAppState extends State<GPApp> {
     builder: (BuildContext context, Widget? child) => GPLocalizationScope(
       localization: _localization,
       child: MaterialApp.router(
+        debugShowCheckedModeBanner: false,
         title: _localization.current.root.appName,
         theme: GPAppTheme.light(),
         darkTheme: GPAppTheme.dark(),
