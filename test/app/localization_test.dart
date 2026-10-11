@@ -1,28 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
+import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 
 import '../helpers/localization_harness.dart';
-
-Future<void> tapTab(WidgetTester tester, String label) async {
-  await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text(label)));
-  await tester.pumpAndSettle();
-}
-
-Finder navLabel(String label) => find.descendant(of: find.byType(NavigationBar), matching: find.text(label));
+import '../helpers/shell_harness.dart';
 
 void main() {
+  setUp(registerShellFakes);
+  tearDown(getIt.reset);
+
   group('startup language', () {
     testWidgets('renders Vietnamese throughout when the locale is vi', (WidgetTester tester) async {
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.vi)));
       await tester.pumpAndSettle();
 
-      expect(navLabel('Trang chủ'), findsOneWidget);
-      expect(navLabel('Giao dịch'), findsOneWidget);
+      expect(dockLabel('Trang chủ'), findsOneWidget);
+      expect(dockLabel('Giao dịch'), findsOneWidget);
       expect(find.widgetWithText(AppBar, 'Trang chủ'), findsOneWidget);
     });
 
@@ -39,14 +37,14 @@ void main() {
     testWidgets('repaints the shell chrome and the open page', (WidgetTester tester) async {
       await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
       await tester.pumpAndSettle();
-      expect(navLabel('Home'), findsOneWidget);
+      expect(dockLabel('Home'), findsOneWidget);
 
-      await tapTab(tester, 'Settings');
+      await openSettings(tester);
       await tester.tap(find.text('Tiếng Việt'));
       await tester.pumpAndSettle();
 
-      expect(navLabel('Trang chủ'), findsOneWidget);
-      expect(navLabel('Home'), findsNothing);
+      expect(dockLabel('Trang chủ'), findsOneWidget);
+      expect(dockLabel('Home'), findsNothing);
       expect(find.widgetWithText(AppBar, 'Cài đặt'), findsOneWidget);
     });
 
@@ -55,7 +53,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.widgetWithText(AppBar, 'Budgets'), findsOneWidget);
 
-      await tapTab(tester, 'Settings');
+      await tapTab(tester, 'Home');
+      await openSettings(tester);
       await tester.tap(find.text('Tiếng Việt'));
       await tester.pumpAndSettle();
       await tapTab(tester, 'Ngân sách');

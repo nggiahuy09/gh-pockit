@@ -7,7 +7,10 @@ abstract final class Routes {
   static const String accounts = '/accounts';
   static const String transactions = '/transactions';
   static const String budgets = '/budgets';
-  static const String settings = '/settings';
+  static const String newTransaction = '/transactions/new';
+
+  /// Under Home, not a tab of its own: it opens from Home's app bar and keeps the dock.
+  static const String settings = '$home/settings';
 }
 
 abstract final class RouteNames {
@@ -15,5 +18,6 @@ abstract final class RouteNames {
   static const String accounts = 'accounts';
   static const String transactions = 'transactions';
   static const String budgets = 'budgets';
+  static const String newTransaction = 'newTransaction';
   static const String settings = 'settings';
 }

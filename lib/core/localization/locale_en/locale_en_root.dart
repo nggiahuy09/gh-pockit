@@ -29,5 +29,5 @@ final class GPLocaleEnRootBottomNav implements GPLocaleBaseRootBottomNav {
   String get budgets => 'Budgets';
 
   @override
-  String get settings => 'Settings';
+  String get label => 'Main navigation';
 }

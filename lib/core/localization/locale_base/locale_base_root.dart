@@ -16,5 +16,7 @@ abstract class GPLocaleBaseRootBottomNav {
   String get accounts;
   String get transactions;
   String get budgets;
-  String get settings;
+
+  /// The landmark a screen reader announces for the bar itself.
+  String get label;
 }

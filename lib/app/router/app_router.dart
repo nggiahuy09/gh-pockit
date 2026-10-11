@@ -10,6 +10,7 @@ import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
+import 'package:ghpockit/features/transactions/presentation/pages/add_transaction_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,11 +21,24 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
   initialLocation: initialLocation,
   routes: <RouteBase>[
     StatefulShellRoute.indexedStack(
-      builder: (BuildContext context, GoRouterState state, StatefulNavigationShell navigationShell) => AppShell(navigationShell: navigationShell),
+      builder: (BuildContext context, GoRouterState state, StatefulNavigationShell navigationShell) => AppShell(navigationShell: navigationShell, location: state.uri.path),
       // Branch order defines the tab index. It must match `shellTabs` in app_shell.dart.
       branches: <StatefulShellBranch>[
         StatefulShellBranch(
-          routes: <RouteBase>[GoRoute(path: Routes.home, name: RouteNames.home, builder: (BuildContext context, GoRouterState state) => const HomePage())],
+          routes: <RouteBase>[
+            GoRoute(
+              path: Routes.home,
+              name: RouteNames.home,
+              builder: (BuildContext context, GoRouterState state) => const HomePage(),
+              routes: <RouteBase>[
+                GoRoute(
+                  path: 'settings',
+                  name: RouteNames.settings,
+                  builder: (BuildContext context, GoRouterState state) => const SettingsPage(),
+                ),
+              ],
+            ),
+          ],
         ),
         StatefulShellBranch(
           routes: <RouteBase>[
@@ -52,12 +66,13 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
             GoRoute(path: Routes.budgets, name: RouteNames.budgets, builder: (BuildContext context, GoRouterState state) => const BudgetsPage()),
           ],
         ),
-        StatefulShellBranch(
-          routes: <RouteBase>[
-            GoRoute(path: Routes.settings, name: RouteNames.settings, builder: (BuildContext context, GoRouterState state) => const SettingsPage()),
-          ],
-        ),
       ],
+    ),
+    // Outside the shell: a form covers the dock.
+    GoRoute(
+      path: Routes.newTransaction,
+      name: RouteNames.newTransaction,
+      builder: (BuildContext context, GoRouterState state) => const AddTransactionPage(),
     ),
   ],
 );

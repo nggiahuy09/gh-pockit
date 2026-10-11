@@ -34,16 +34,6 @@ abstract final class GPAppTheme {
         centerTitle: false,
         titleTextStyle: typography.headlineMedium.copyWith(color: colors.onBackground),
       ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colors.background,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: colors.accentContainer,
-        elevation: 0,
-        labelTextStyle: WidgetStatePropertyAll<TextStyle>(typography.labelMedium.copyWith(color: colors.onSurfaceVariant)),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (Set<WidgetState> states) => IconThemeData(size: 24, color: states.contains(WidgetState.selected) ? colors.onAccentContainer : colors.onSurfaceVariant),
-        ),
-      ),
       dividerTheme: DividerThemeData(color: colors.outlineVariant, thickness: 1, space: 1),
       cardTheme: CardThemeData(
         color: colors.surface,
