@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — 2026-09-11 (W1 T6)
+Accepted — 2026-09-11 (W1 T6). Tab set and bar widget changed by ADR-0014 (W5 Flex): four tabs on a floating dock,
+Settings under `/home/settings`; the branch model below stands.
 
 ## Context
 

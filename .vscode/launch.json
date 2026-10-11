@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Pockit",
+      "request": "launch",
+      "type": "dart"
+    },
+    {
+      "name": "Pockit (sample data)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define=SAMPLE_DATA=true"]
+    }
+  ]
+}
