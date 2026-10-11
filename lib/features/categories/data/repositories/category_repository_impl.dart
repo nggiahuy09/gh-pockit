@@ -12,16 +12,6 @@ import 'package:ghpockit/features/categories/domain/entities/category_entity.dar
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 
-/// The offline-first half of [CategoryRepository] (W3 T6).
-///
-/// Same division of labour as `AccountRepositoryImpl`, and it is worth stating once more only because this is the second time it holds: the DAO has no
-/// clock, no id generator and no owner, and this class supplies all three so exactly one layer decides the id (`v7`, golden rule 4), the instant (one read
-/// of `GPClock` per operation), the owner, and what zero rows written means.
-///
-/// **One thing is genuinely new: two writers.** Accounts are only ever written by a user action; categories are also written by `CategorySeeder` at every
-/// launch. Nothing here has to coordinate with it — the seeder's ids are derived and its insert is `INSERT OR IGNORE`, so the two writers cannot produce the
-/// same row twice — but it is why [createCategory] mints a `v7` and never a `v5`: a category the user invented has nothing to derive an id from, and
-/// borrowing the seeder's scheme would let two different user-made categories with the same name collide.
 class CategoryRepositoryImpl implements CategoryRepository {
   const CategoryRepositoryImpl({
     required CategoryDao dao,
@@ -60,12 +50,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
                   case MappedCategory(:final category):
                     entities.add(category);
                   case UnmappableCategoryRow(:final reason, :final failure):
-                    // **The whole list fails rather than the bad row being skipped** — the same policy W2 T6 chose for accounts, and for the same reason at
-                    // the same scale: a picker quietly missing one category is worse than a screen that says it could not read local data, and golden rule 1
-                    // leaves no remote copy to reconcile against.
-                    //
-                    // It is a *re*-decision rather than a copy, because the policy is scale-dependent and ROADMAP W4 T6 says so out loud: at 50k
-                    // transactions the same rule hides a year of history. Tens of categories is the accounts case, not the transactions one.
+                    // One bad row fails the whole list, unlike transactions (ADR-0006, ADR-0011): a picker silently missing a category is worse.
                     _logRejectedRow(row.id, reason);
                     sink.addError(failure);
                     return;
@@ -74,7 +59,6 @@ class CategoryRepositoryImpl implements CategoryRepository {
 
               sink.add(entities);
             },
-            // What the query itself raised, as opposed to a row the mapper refused above — see `_reportQueryError`.
             handleError: (error, stackTrace, sink) => _reportQueryError('category list read failed', error, stackTrace, sink),
           ),
         );
@@ -108,9 +92,6 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<GPResult<CategoryEntity>> createCategory({required String name, required CategoryType type, String? iconKey, String? colorKey}) async {
     final now = _clock.nowUtc();
-
-    // No `nameKey` and `isSystem` left at its default of false: a category created through this interface is user-made by definition, and the absence of a
-    // parameter is what guarantees it rather than a check somewhere.
     final created = CategoryEntity.create(id: _uuidGenerator.v7(), name: name, type: type, iconKey: iconKey, colorKey: colorKey, createdAt: now, updatedAt: now);
 
     switch (created) {
@@ -130,7 +111,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<GPResult<CategoryEntity>> updateCategory(CategoryEntity category) async {
     final now = _clock.nowUtc();
-    // No validation branch: a `CategoryEntity` cannot exist unvalidated, so a blank rename has already been refused by `update` and shown under the field.
+    // No validation branch: a `CategoryEntity` is valid by construction.
     final stamped = category.stampedAt(now);
 
     try {
@@ -144,9 +125,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
 
         if (written == 1) return GPOk<CategoryEntity>(stamped);
 
-        // Zero rows is three situations the guarded UPDATE cannot tell apart, so this asks — inside the transaction, or a concurrent delete would make it
-        // report a conflict against a row that is already gone. `findById` is the one read that sees tombstones, which is what distinguishes "deleted" from
-        // "never existed".
+        // Zero rows: missing, deleted or stale. Asked inside the transaction so a concurrent delete cannot pass for a conflict.
         final current = await _dao.findById(stamped.id);
 
         if (current == null || current.deletedAt != null) return const GPErr<CategoryEntity>(GPNotFoundFailure());
@@ -161,8 +140,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<GPResult<void>> deleteCategory(String id) async {
     try {
-      // Unguarded by version: deleting is terminal and idempotent, so there is no merge to lose and refusing because a rename landed first would only make
-      // the user press delete twice. Zero rows therefore means one thing — no live row with that id.
+      // Not version-guarded: a delete has nothing to merge, so a rename that landed first must not block it.
       final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
 
       if (written == 0) return const GPErr<void>(GPNotFoundFailure());
@@ -173,27 +151,19 @@ class CategoryRepositoryImpl implements CategoryRepository {
     }
   }
 
-  /// An id, an entity type and a reason code — the three things golden rule 9 allows. The row's name is in scope at both call sites and is not logged.
+  /// Id, entity type and reason code only, never the name (golden rule 9).
   void _logRejectedRow(String id, CategoryMapperReason reason) =>
       _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': id, 'reason': reason.name});
 
-  /// `on Exception`, never `on Object`: an `Error` is a bug in this code and must not be dressed up as "could not read local data" (ADR-0006). The watch
-  /// streams draw the same line in [_reportQueryError].
+  /// Callers catch `on Exception` only: an `Error` is a bug, not "could not read local data" (ADR-0006).
   GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace) {
     _logger.error(message, fields: {'entity': 'category', 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
   }
 
-  /// Puts what a watched query raised back on its stream — the read-side [_databaseFailure], for the reason `AccountRepositoryImpl._reportQueryError`
-  /// gives in full.
-  ///
-  /// Without it, [CategoryRepository]'s promise of a [GPFailure] on the error channel held for mapper rejections only: a `SqliteException` raised while
-  /// running the query — a `DriftRemoteException` wrapping one, in the app, where SQLite runs on a background isolate — went through raw. An [Exception] is
-  /// logged and replaced by [GPDatabaseFailure]; anything else is a bug and is forwarded untouched — stack trace included, and not logged, so the crash
-  /// reporter sees it once.
-  ///
-  /// An entity type in the fields, plus the id when there is one, and never a name (golden rule 9).
+  /// The stream side of [_databaseFailure]: an [Exception] (in the app, a `DriftRemoteException` from the database isolate) is logged and becomes
+  /// [GPDatabaseFailure]; anything else is a bug, forwarded unlogged so the crash reporter sees it once.
   void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);

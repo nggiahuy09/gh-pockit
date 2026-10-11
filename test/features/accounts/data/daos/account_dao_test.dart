@@ -1,5 +1,3 @@
-// `isNull`/`isNotNull` are both drift SQL predicates and matcher expectations; this file wants the matchers. The SQL side stays reachable as `.isNull()`
-// on a column.
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,15 +5,6 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 
-/// The first DAO under test (W2 T4), and the file that closes W2: its **done** criterion is `create → watchAccounts emit`, asserted first below.
-///
-/// What is covered here is policy, not drift. That a write reaches SQLite and that a `watch()` re-emits are settled in `database_test.dart`, and the
-/// `accounts` columns and constraints in `accounts_table_test.dart`. What this file pins down is the set of decisions the DAO makes on every call — which
-/// rows a read may see, which columns a write may move, and which it must leave alone — because each one is invisible until P4, when getting it wrong
-/// shows up as a row that never syncs, an account visible to the wrong owner, or an edit reporting a conflict that is not one.
-///
-/// Instants are literals rather than a `FakeClock`: the DAO holds no clock by design (`docs/patterns/local-storage-with-drift.md` §6.2), so `now` is just
-/// an argument, and stating it inline is what makes "which instant landed where" readable.
 void main() {
   const t0 = 1757800000000;
   const t1 = 1757800060000;
@@ -33,7 +22,6 @@ void main() {
     await db.close();
   });
 
-  /// Stands in for `AccountMapper` until T6 builds it — the DAO takes a companion the mapper made, never a field list.
   AccountsTableCompanion row({
     String id = 'a1',
     String ownerId = localOwnerId,
@@ -53,25 +41,17 @@ void main() {
     version: 1,
   );
 
-  /// Soft-deletes through raw SQL, even though [AccountDao.softDelete] exists as of T6.
-  ///
-  /// Deliberate: every group below asserts that some *other* method ignores a tombstone, and writing that tombstone with the method under test in the same
-  /// file would make those tests pass together and fail together. Raw SQL keeps the setup independent of what is being measured.
-  ///
-  /// Written through drift's update builder rather than `customStatement`, which was the first version of this helper: a raw statement does not tell drift
-  /// which tables it touched, so every `watch()` in the file stayed silent and a stream test could not observe a deletion at all.
+  /// Not [AccountDao.softDelete], which is itself under test; not `customStatement`, which does not tell drift the table changed, so no `watch()` would re-emit.
   Future<void> softDelete(String id) => (db.update(db.accountsTable)..where((t) => t.id.equals(id))).write(
     const AccountsTableCompanion(deletedAt: Value(t1), updatedAt: Value(t1)),
   );
 
   group('watchAccounts', () {
     test('create → watchAccounts emits the new account', () async {
-      // The W2 done criterion, and the assertion ADR-0001 was waiting on before moving from draft to Accepted: a write with no manual invalidation
-      // repaints the list. Golden rule 1 is only livable because of it.
       final emissions = <List<String>>[];
       final subscription = dao.watchAccounts(localOwnerId).listen((rows) => emissions.add(rows.map((r) => r.name).toList()));
 
-      // `pumpEventQueue`, never `Future.delayed` (§8) — this only yields to the event loop so a stream can deliver what is already queued.
+      // Yields to the event loop so the stream can deliver what is already queued.
       await pumpEventQueue();
       await dao.insertAccount(row());
       await pumpEventQueue();
@@ -88,9 +68,6 @@ void main() {
       await dao.insertAccount(row(id: 'mine'));
       await dao.insertAccount(row(id: 'theirs', ownerId: otherOwner));
 
-      // Every row carries `localOwnerId` until W10, so today this filter changes nothing a user could see — which is exactly why it has to be asserted
-      // now. Written later, it would mean auditing every query for the one that was never scoped, and the symptom of missing it is one account's rows
-      // appearing under another account after a second sign-in on the same device.
       expect((await dao.watchAccounts(localOwnerId).first).map((r) => r.id), ['mine']);
       expect((await dao.watchAccounts(otherOwner).first).map((r) => r.id), ['theirs']);
     });
@@ -100,8 +77,6 @@ void main() {
       await dao.insertAccount(row(id: 'oldCard', name: 'Thẻ cũ'));
       await dao.archive('oldCard', now: t1);
 
-      // The default exists so archiving actually gets an account out of the way; an archived row that still appeared would make the feature a no-op. The
-      // opt-in branch is what the screen that un-archives reads.
       expect((await dao.watchAccounts(localOwnerId).first).map((r) => r.id), ['cash']);
       expect((await dao.watchAccounts(localOwnerId, includeArchived: true).first).map((r) => r.id), ['cash', 'oldCard']);
     });
@@ -113,8 +88,6 @@ void main() {
       await softDelete('live');
       await softDelete('archived');
 
-      // Golden rule 5: `deleted_at` is a tombstone the server still has to learn about, so the row stays on disk — and every list read filters it out. The
-      // archived-inclusive branch is checked too, because that is the query most likely to be written without the filter.
       expect(await dao.watchAccounts(localOwnerId).first, isEmpty);
       expect(await dao.watchAccounts(localOwnerId, includeArchived: true).first, isEmpty);
       expect(await db.select(db.accountsTable).get(), hasLength(2));
@@ -124,8 +97,7 @@ void main() {
       await dao.insertAccount(row(id: 'b', name: 'Ăn uống'));
       await dao.insertAccount(row(id: 'a', name: 'Ví', at: t1));
 
-      // Deliberately not alphabetical: SQLite's BINARY collation would sort "Ăn uống" after "Ví". The ids are chosen so a fallback to primary-key order
-      // would produce the opposite result and fail this test.
+      // Id order, or name order under SQLite's BINARY collation ("Ví" < "Ăn uống"), would both give ['a', 'b'].
       expect((await dao.watchAccounts(localOwnerId).first).map((r) => r.id), ['b', 'a']);
     });
   });
@@ -135,8 +107,6 @@ void main() {
       await dao.insertAccount(row());
       await softDelete('a1');
 
-      // The one deliberate exception to the `deleted_at IS NULL` filter. `RemoteChangeApplier` at W14 has to find a row it already soft-deleted in order
-      // to reconcile it against the server's tombstone; a lookup that hid it would make the applier insert a duplicate.
       final found = await dao.findById('a1');
 
       expect(found!.deletedAt, t1);
@@ -158,10 +128,8 @@ void main() {
       expect(written, 1);
       final updated = await dao.findById('a1');
       expect(updated!.name, 'Tiền mặt');
-      // Absent in the patch, so untouched — `Value.absent()` leaves a column alone where `Value(null)` would null it.
       expect(updated.initialBalance, 1500000);
       expect(updated.createdAt, t0);
-      // Stamped by the DAO, not taken from the patch, so a caller cannot build one that silently skips the pull cursor.
       expect(updated.updatedAt, t1);
     });
 
@@ -175,8 +143,7 @@ void main() {
         now: t1,
       );
 
-      // The §7 optimistic-concurrency token, and the server's to move. A hopeful client-side bump would push a base version the server never issued, so
-      // `UPDATE ... WHERE version = ?` would match zero rows and every edit would report a conflict that is not one. Nothing else would fail until P4.
+      // The server's to move (§7): a local bump would send a base version it never issued, and every edit would conflict.
       expect((await dao.findById('a1'))!.version, 1);
     });
 
@@ -190,8 +157,6 @@ void main() {
         now: t1,
       );
 
-      // 0 means the row moved under us. That return value is the local half of the conflict detection in §7, so it has to be a number the caller can act
-      // on rather than a silently ignored no-op.
       expect(written, 0);
       expect((await dao.findById('a1'))!.name, 'Ví tiền mặt');
     });
@@ -200,7 +165,6 @@ void main() {
       await dao.insertAccount(row());
       await softDelete('a1');
 
-      // Editing a tombstone would move its `updated_at` and push a resurrected row at the next sync.
       expect(
         await dao.updateAccount(
           'a1',
@@ -222,16 +186,13 @@ void main() {
 
       final archived = await dao.findById('a1');
       expect(archived!.isArchived, true);
-      // Two states, two columns. An archived account keeps its history and keeps syncing; only `deleted_at` is a tombstone.
       expect(archived.deletedAt, isNull);
       expect(archived.updatedAt, t1);
-      // Archiving is an ordinary field change as far as sync is concerned — same reasoning as updateAccount.
       expect(archived.version, 1);
       expect(await dao.watchAccounts(localOwnerId).first, isEmpty);
 
       expect(await dao.unarchive('a1', now: t1), 1);
 
-      // Without a way back, a default that hides archived rows would strand them where nothing can reach them.
       expect((await dao.watchAccounts(localOwnerId).first).single.id, 'a1');
     });
 
@@ -256,7 +217,6 @@ void main() {
       await pumpEventQueue();
       await subscription.cancel();
 
-      // Null is an ordinary emission here, not an error: it is how a detail screen learns the row it is showing no longer exists.
       expect(emissions.first!.id, 'a1');
       expect(emissions.last, isNull);
     });
@@ -268,14 +228,12 @@ void main() {
     test('hides an archived row, with no opt-in', () async {
       await dao.insertAccount(row(isArchived: true));
 
-      // Unlike watchAccounts: a detail screen is reached from a list, and the list does not show archived rows. Un-archiving works off watchAccounts.
       expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
     });
 
     test('never reaches across owners', () async {
       await dao.insertAccount(row(ownerId: otherOwner));
 
-      // The id is a UUID and would be unique anyway — which is exactly why the missing filter would be invisible until W10 made it matter.
       expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
     });
   });
@@ -287,11 +245,8 @@ void main() {
       expect(await dao.softDelete('a1', now: t1), 1);
 
       final deleted = await dao.findById('a1');
-      // Golden rule 5: the row survives, because the server has to be told it is gone.
       expect(deleted, isNotNull);
       expect(deleted!.deletedAt, t1);
-      // `deleted_at` is what reads filter on; `updated_at` is what makes the deletion visible to W14's delta pull. Writing only one of them loses the
-      // deletion on one side or the other.
       expect(deleted.updatedAt, t1);
       expect(deleted.version, 1);
     });
@@ -303,7 +258,7 @@ void main() {
       expect(await dao.watchAccounts(localOwnerId).first, isEmpty);
       expect(await dao.watchAccounts(localOwnerId, includeArchived: true).first, isEmpty);
       expect(await dao.watchAccount(localOwnerId, 'a1').first, isNull);
-      // The one read that still sees it, and the reason it exists: W14's applier has to find the row it already deleted.
+      // The one read that still sees it: sync has to find the rows it deleted.
       expect(await dao.findById('a1'), isNotNull);
     });
 
@@ -311,7 +266,6 @@ void main() {
       await dao.insertAccount(row());
 
       expect(await dao.softDelete('a1', now: t1), 1);
-      // Idempotent by outcome, but the row count is what the repository turns into "not found" — so deleting twice must not report success twice.
       expect(await dao.softDelete('a1', now: t1), 0);
       expect(await dao.softDelete('nope', now: t1), 0);
     });

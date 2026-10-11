@@ -1,13 +1,6 @@
 import 'dart:typed_data';
 
-/// The Unicode codepoints a TrueType / OpenType font maps to a glyph, read straight out of its `cmap` table.
-///
-/// Small on purpose. A font ships its Unicode mappings as format 4 (the BMP) and format 12 (every plane), so those are the two that are read; format 14
-/// holds variation sequences, which map no codepoint on their own, and is skipped. Any **other** format under a Unicode encoding throws instead of being
-/// skipped: a reader that quietly ignores a subtable it does not understand either reports glyphs missing that are there, or — worse — lets an assertion
-/// built on it pass over a table it never read.
-///
-/// A codepoint mapped to glyph 0 counts as unmapped. Glyph 0 is `.notdef`, the font's way of saying it has nothing for that character — the box.
+/// The Unicode codepoints a TrueType / OpenType font maps to a glyph, read from its `cmap` table. Glyph 0 (`.notdef`, the box) counts as unmapped.
 Set<int> mappedCodepoints(ByteData font) {
   if (font.getUint32(0) == _ttcfTag) throw ArgumentError('a font collection (ttcf) holds several fonts; pass one font');
 
@@ -26,6 +19,7 @@ Set<int> mappedCodepoints(ByteData font) {
       case 12:
         _readFormat12(font, subtable, codepoints);
       case 14:
+        // Variation sequences: they map no codepoint on their own.
         break;
       default:
         throw UnsupportedError('cmap subtable format $format is not read by this helper; teach it the format rather than skipping it');
@@ -34,7 +28,7 @@ Set<int> mappedCodepoints(ByteData font) {
   return codepoints;
 }
 
-/// `'cmap'` and `'ttcf'` as the big-endian `uint32` tags the sfnt table directory stores.
+/// `'cmap'` and `'ttcf'` as big-endian `uint32` tags.
 const int _cmapTag = 0x636D6170;
 const int _ttcfTag = 0x74746366;
 
@@ -48,13 +42,10 @@ int _tableOffset(ByteData font, int tag) {
   throw ArgumentError('the font has no table with tag 0x${tag.toRadixString(16)}');
 }
 
-/// Platform 0 is Unicode in every encoding; on platform 3 (Windows) encoding 1 is the BMP and 10 is every plane. The rest — Macintosh Roman, the Windows
-/// symbol encoding — number characters in other schemes, and reading them as Unicode would report the wrong letters.
+/// Platform 0 is Unicode in every encoding; on platform 3 (Windows) encoding 1 is the BMP and 10 is every plane. The other encodings are not Unicode.
 bool _isUnicode({required int platformId, required int encodingId}) => platformId == 0 || (platformId == 3 && (encodingId == 1 || encodingId == 10));
 
-/// Format 4: the BMP as segments of consecutive codepoints. A segment maps by adding `idDelta` (mod 65536) to the codepoint, or — when its
-/// `idRangeOffset` is non-zero — by looking the glyph up in an array addressed relative to that `idRangeOffset` entry itself, which is the one genuinely
-/// odd part of the format.
+/// Format 4: the BMP as segments. A non-zero `idRangeOffset` addresses the glyph array relative to that `idRangeOffset` entry itself.
 void _readFormat4(ByteData font, int table, Set<int> into) {
   final segmentCount = font.getUint16(table + 6) ~/ 2;
   final endCodes = table + 14;

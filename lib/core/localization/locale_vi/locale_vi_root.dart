@@ -29,5 +29,5 @@ final class GPLocaleViRootBottomNav implements GPLocaleBaseRootBottomNav {
   String get budgets => 'Ngân sách';
 
   @override
-  String get settings => 'Cài đặt';
+  String get label => 'Điều hướng chính';
 }

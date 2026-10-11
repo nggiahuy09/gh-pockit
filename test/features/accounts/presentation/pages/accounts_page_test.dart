@@ -22,21 +22,13 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/localization_harness.dart';
 import '../../../../helpers/recording_logger.dart';
 
-/// The first screen that reads the database (W3 flex), tested the way the user meets it: through the real `AccountRepositoryImpl` on in-memory Drift.
-///
-/// A fake repository would make the list, the empty state and the error state easy to stage — and would also make the two claims worth testing
-/// unfalsifiable: that a row written to SQLite reaches the screen with no refresh (golden rule 1), and that its integer minor units arrive as the amount the
-/// user entered (ADR-0007). So the fake is used only for what the real repository cannot produce on request: a list that has not arrived yet, and an error
-/// that is not a `GPFailure`.
-///
-/// No test here configures `getIt`. That is the property the constructor-injected repository exists for, asserted by every test rather than by one.
+/// Through the real repository on in-memory drift; the fake stages only what that cannot: a list not yet arrived, an error that is not a `GPFailure`.
 void main() {
   late GPAppDatabase db;
   late AccountRepositoryImpl repository;
 
   setUp(() {
-    // `closeStreamsSynchronously`: by default drift keeps a cancelled stream cached for one event-loop turn behind `Timer.run`, so the `StreamBuilder`'s
-    // subscription outlives the widget tree by one timer — and a widget test fails on any timer still pending when the tree is torn down.
+    // Otherwise drift keeps a cancelled stream cached behind `Timer.run`, and a widget test fails on a timer still pending at teardown.
     db = GPAppDatabase.forTesting(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
     final clock = FakeClock();
     repository = AccountRepositoryImpl(
@@ -65,7 +57,6 @@ void main() {
   }
 
   testWidgets('shows a progress indicator until the first list arrives', (WidgetTester tester) async {
-    // A stream that never emits. The real repository answers within a frame, which is too fast to catch reliably and says nothing about this state.
     final pending = StreamController<List<AccountEntity>>();
     addTearDown(pending.close);
 
@@ -89,7 +80,6 @@ void main() {
     await pumpPage(tester);
     await tester.pumpAndSettle();
 
-    // Integer minor units in, the amount the user entered out — exponent 0 for VND, 2 for USD, and no `double` anywhere between the row and this text.
     expect(find.text('Ví tiền mặt'), findsOneWidget);
     expect(find.text('Cash'), findsOneWidget);
     expect(find.text('₫1,500,000'), findsOneWidget);
@@ -105,12 +95,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tiền mặt'), findsOneWidget);
-    // Separators and symbol placement both move with the language — the same row reads `₫1,500,000` in English. The space is intl's non-breaking one.
+    // The space is intl's non-breaking one.
     expect(find.text('1.500.000 ₫'), findsOneWidget);
   });
 
   testWidgets('shows an account created after it opened, with no refresh', (WidgetTester tester) async {
-    // Golden rule 1 on screen: the page never asks again — the write lands in SQLite and the stream tells it.
     await pumpPage(tester);
     await tester.pumpAndSettle();
     expect(find.text('No accounts yet'), findsOneWidget);
@@ -123,8 +112,7 @@ void main() {
   });
 
   testWidgets('shows the failure message when a stored row cannot be read', (WidgetTester tester) async {
-    // A type this build does not know — a corrupt row, or one written by a newer version. The repository fails the whole list rather than hiding an
-    // account (ADR-0006), and this is the screen that decision produces.
+    // 'savings' is a type this build does not know.
     await db
         .into(db.accountsTable)
         .insert(
@@ -150,7 +138,6 @@ void main() {
   });
 
   testWidgets('does not dress up a bug as a message', (WidgetTester tester) async {
-    // Only a `GPFailure` is an outcome with a sentence; anything else on the error channel is a bug, and ADR-0006 wants it loud and in the crash report.
     final errors = StreamController<List<AccountEntity>>();
     addTearDown(errors.close);
     await pumpPage(tester, using: FakeAccountRepository(accounts: errors.stream));

@@ -10,7 +10,6 @@ part 'locale_vi_categories.dart';
 part 'locale_vi_settings.dart';
 part 'locale_vi_error.dart';
 
-/// Vietnamese strings.
 final class GPLocaleVi implements GPLocaleBase {
   const GPLocaleVi();
 

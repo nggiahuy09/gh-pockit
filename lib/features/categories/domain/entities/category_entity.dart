@@ -3,23 +3,8 @@ import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:meta/meta.dart';
 
-/// What a transaction is filed under (blueprint §Categories).
-///
-/// The row/entity split is the one `AccountEntity` documents — no `ownerId`, no `deletedAt`, `DateTime` instead of epoch millis, `version` visible because
-/// §7 makes conflicts a user-facing outcome. What is different here is the name, and it is different in a way the type has to carry rather than hide:
-///
-/// | | [nameKey] | [name] |
-/// | --- | --- | --- |
-/// | Seeded, untouched | `category.food` | null |
-/// | Seeded, renamed | `category.food` | `'Cà phê sáng'` |
-/// | Created by the user | null | `'Cà phê'` |
-///
-/// **Both are nullable and at least one is set** — the invariant [create] enforces and `categories`' `CHECK` enforces one layer down. A reader who wants
-/// text calls `categoryDisplayName` in presentation, because resolving a key needs the active locale and the domain carries no message (ADR-0004).
-///
-/// **The entity deliberately cannot resolve its own name.** A `String get displayName` here would need a `GPLocaleBase`, which would put a Flutter-adjacent
-/// import in `domain/` (§3) — and would also make an entity's equality depend on the language, so switching from English to Vietnamese would make every
-/// category "change" and rebuild the whole list.
+/// [nameKey] and [name] are both nullable and at least one is set: a seeded category has a key, a user-made one a name, a renamed seed both.
+/// No display name here: resolving a key needs the active locale, so that is `displayNameIn` in presentation (ADR-0004).
 @immutable
 final class CategoryEntity {
   const CategoryEntity._({
@@ -35,54 +20,38 @@ final class CategoryEntity {
     required this.version,
   });
 
-  /// Longest user-typed name accepted, in UTF-16 code units. Same limit and same reasoning as `AccountEntity.nameMaxLength`: `categories.name` is unbounded
-  /// `TEXT` that syncs, so without a limit a pasted document becomes a row pushed to every other device.
+  /// In UTF-16 code units. The only cap: `categories.name` is unbounded `TEXT` that syncs to every device.
   static const int nameMaxLength = 100;
 
   final String id;
 
-  /// The translation key of a seeded category, null for one the user created.
-  ///
-  /// **Never changed by an edit.** A user renaming "Food" to "Cà phê sáng" keeps this, so the row is still recognisably the default it came from — for a
-  /// later migration, for analytics, and for `CategorySeeder`'s idempotency, which matches on an id derived from exactly this key.
+  /// Translation key (`category.food`) of a seeded category, null for a user-made one. Survives a rename.
   final String? nameKey;
 
-  /// The name the user typed, trimmed, and **the one that wins** wherever a name is shown. Null when nobody has typed one.
-  ///
-  /// Empty is normalised to null by [create], so `''` and "no name" are one state rather than two that render identically and compare differently.
+  /// What the user typed, trimmed; wins over [nameKey] wherever a name is shown. Never `''`: [create] turns a blank name into null.
   final String? name;
 
   final CategoryType type;
 
-  /// A key into the app's icon set, resolved in presentation. Not a code point — see `categories_table.dart`.
+  /// A key into the app's icon set (`food`), resolved in presentation. Not a code point.
   final String? iconKey;
 
-  /// A key into the theme's palette, resolved in presentation. Null means "colour me by [type]", which is what the seeded categories do.
+  /// A key into the theme's palette, resolved in presentation. Null means colour by [type], as every seeded category does.
   final String? colorKey;
 
-  /// Provenance, not a permission: a system category can be renamed, recoloured and deleted like any other. It is what lets W6 offer "restore defaults"
-  /// and keep a fresh install's categories out of the "you created these" list.
+  /// Seeded by the app. Provenance, not a lock: a system category can be renamed, recoloured and deleted like any other.
   final bool isSystem;
 
-  /// UTC, always. [create] normalises.
+  /// Always UTC.
   final DateTime createdAt;
 
-  /// UTC. Half the pull cursor at W14 T2, stamped by the repository from `GPClock`.
+  /// Always UTC. Restamped by the repository on every write.
   final DateTime updatedAt;
 
-  /// Optimistic-concurrency token (§7). The server's number; the client sends it back as `baseVersion` and never increments it.
+  /// Optimistic-concurrency token (§7): the server's number, sent back as `baseVersion`. The client never increments it.
   final int version;
 
-  /// The only way to build a [CategoryEntity], and the only place the name rules live.
-  ///
-  /// Returns a [GPResult] rather than throwing, because the rule it enforces is one an ordinary user trips by pressing Save on an empty field — ADR-0006's
-  /// dividing line. Used by `CategoryMapper` too, so a row that went bad is caught at the boundary rather than flowing into a picker as a nameless entry.
-  ///
-  /// Three things happen to [name] before it is stored: it is trimmed, an empty result becomes null, and only then is the length checked. The middle step is
-  /// what makes `'   '` mean "no name" instead of a three-character one.
-  ///
-  /// [GPValidationCode.categoryNameEmpty] is returned when **both** names are absent. That is the same invariant as the table's `CHECK`, stated where a user
-  /// can be told about it: for a user-created category it means "you left the name blank", which is exactly the message they get.
+  /// Trims [name], a blank one counting as absent. Fails with a [GPValidationFailure] when neither a name nor [nameKey] is left, or the name is too long.
   static GPResult<CategoryEntity> create({
     required String id,
     required CategoryType type,
@@ -118,18 +87,8 @@ final class CategoryEntity {
     );
   }
 
-  /// A copy with some fields changed, re-validated.
-  ///
-  /// **[nameKey], [isSystem], [id] and [createdAt] are all absent, and each for its own reason.** The last two are identity — an entity that can change them
-  /// is one the sync engine can no longer match to a server row. `nameKey` and `isSystem` are *provenance*: they record where the row came from, and an edit
-  /// is not a change of origin. Leaving them out of this signature is what makes "a rename keeps the key" true by construction instead of by convention.
-  ///
-  /// [updatedAt] is absent for the reason `AccountEntity.update` spells out at length: the only correct value is "now", and only the repository holds a
-  /// clock. Restamping is [stampedAt].
-  ///
-  /// **[clearName] exists because `null` already means "leave it alone".** Setting a system category's name back to null — "use the default name again" — is
-  /// a real edit a settings screen offers, and with optional parameters alone it is unexpressible. A flag is uglier than a sentinel and impossible to pass
-  /// by accident.
+  /// Null keeps a field, so [clearName] is how a renamed seed falls back to its default name. No parameter for [nameKey] or [isSystem], on purpose:
+  /// an edit never changes provenance. [updatedAt] is the repository's to restamp ([stampedAt]).
   GPResult<CategoryEntity> update({
     String? name,
     CategoryType? type,
@@ -150,8 +109,6 @@ final class CategoryEntity {
     version: version ?? this.version,
   );
 
-  /// The same category with a new [updatedAt]. Cannot fail, because nothing validated changes — so not a [GPResult], for the reason
-  /// `AccountEntity.stampedAt` gives.
   CategoryEntity stampedAt(DateTime updatedAt) => CategoryEntity._(
     id: id,
     nameKey: nameKey,
@@ -165,7 +122,6 @@ final class CategoryEntity {
     version: version,
   );
 
-  /// Value equality over every field, so a Drift stream re-emitting freshly mapped instances does not rebuild every category widget on screen.
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -184,8 +140,7 @@ final class CategoryEntity {
   @override
   int get hashCode => Object.hash(id, nameKey, name, type, iconKey, colorKey, isSystem, createdAt, updatedAt, version);
 
-  /// **Carries no [name], deliberately** — golden rule 9, same as `AccountEntity.toString`. [nameKey] is safe and is the useful half anyway: it is our own
-  /// constant, not something a user typed, and it is what identifies the row in a log. A renamed category logs its key and not the rename.
+  /// No [name]: user-typed text never reaches a log (golden rule 9). [nameKey] is our own constant.
   @override
   String toString() => 'CategoryEntity(id: $id, nameKey: $nameKey, type: ${type.name}, isSystem: $isSystem, version: $version)';
 }

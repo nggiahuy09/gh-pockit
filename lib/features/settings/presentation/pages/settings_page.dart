@@ -1,20 +1,26 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ghpockit/core/error/failure_message.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
+import 'package:ghpockit/core/theme/theme_context.dart';
+import 'package:ghpockit/core/widgets/button.dart';
+import 'package:ghpockit/features/settings/presentation/bloc/sample_data_cubit.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 
-/// Settings tab. Fills up gradually: theme (W1 flex), biometric lock and the logout wipe (W23).
-///
-/// The language picker is here from day one rather than at W23, because it is what makes `GPLocalization.changeLocale` reachable at all — without a
-/// way to switch, the notifier and the rebuild path would be code nothing exercises.
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({this.showDebugTools = kDebugMode, super.key});
+
+  final bool showDebugTools;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    // From the tree, not from `getIt`: a page that reaches into the locator cannot be pumped in a widget test without booting DI first.
+    // From the tree, not `getIt`, so the page pumps in a widget test without DI.
     final localization = context.localization;
 
     return Scaffold(
@@ -23,7 +29,7 @@ class SettingsPage extends StatelessWidget {
         groupValue: l10n.locale,
         onChanged: (GPLocale? selected) {
           if (selected != null) {
-            // Fire and forget: the repaint is driven by the notifier, and the store write is local-only with nothing to roll back (ADR-0004).
+            // Fire and forget: the notifier drives the repaint, and a local-only write has nothing to roll back (ADR-0004).
             unawaited(localization.changeLocale(selected));
           }
         },
@@ -31,10 +37,77 @@ class SettingsPage extends StatelessWidget {
           children: <Widget>[
             ListTile(title: Text(l10n.settings.language), subtitle: Text(l10n.locale.displayName)),
             for (final GPLocale locale in GPLocale.values)
-              // `displayName` is never translated — each language names itself, so this list reads the same whatever the current language is.
+              // Untranslated on purpose: each language names itself.
               RadioListTile<GPLocale>(title: Text(locale.displayName), value: locale),
+            if (showDebugTools) BlocProvider<SampleDataCubit>(create: (_) => SampleDataCubit(), child: const _DebugTools()),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DebugTools extends StatelessWidget {
+  const _DebugTools();
+
+  Future<void> _addSample(BuildContext context) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await context.read<SampleDataCubit>().addSample(accountName: l10n.settings.debugSampleAccountName, note: l10n.settings.debugSampleNote);
+
+    final message = switch (result) {
+      GPOk<TransactionEntity>() => l10n.settings.debugSampleAdded,
+      GPErr<TransactionEntity>(:final failure) => failure.message(l10n),
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _seedDataset(BuildContext context) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await context.read<SampleDataCubit>().seedDataset();
+
+    final message = switch (result) {
+      GPOk<int>(:final value) => l10n.settings.debugDatasetSeeded(value),
+      GPErr<int>(:final failure) => failure.message(l10n),
+    };
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(spacing.md, spacing.lg, spacing.md, spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(l10n.settings.debugTitle, style: context.text.titleSmall.copyWith(color: context.colors.onSurfaceVariant)),
+          SizedBox(height: spacing.sm),
+          BlocBuilder<SampleDataCubit, bool>(
+            builder: (BuildContext context, bool isBusy) => Wrap(
+              spacing: spacing.sm,
+              runSpacing: spacing.sm,
+              children: <Widget>[
+                GPButton(
+                  label: l10n.settings.debugAddSample,
+                  variant: GPButtonVariant.tonal,
+                  leading: const Icon(Icons.add),
+                  onPressed: isBusy ? null : () => unawaited(_addSample(context)),
+                ),
+                GPButton(
+                  label: l10n.settings.debugSeedDataset,
+                  variant: GPButtonVariant.tonal,
+                  leading: const Icon(Icons.dataset_outlined),
+                  isLoading: isBusy,
+                  onPressed: () => unawaited(_seedDataset(context)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

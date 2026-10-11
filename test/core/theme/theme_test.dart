@@ -13,8 +13,7 @@ void main() {
     for (final (String name, ThemeData theme) in <(String, ThemeData)>[('light', GPAppTheme.light()), ('dark', GPAppTheme.dark())]) {
       group(name, () {
         test('registers every extension', () {
-          // `context.colors` and friends end in a `!`. If an extension is ever dropped from the list in GPAppTheme, that bang throws at runtime in
-          // whichever screen happens to read it first. This is the test that turns that into a build failure instead.
+          // `context.colors` and friends end in `!`: a dropped extension would throw on whichever screen reads it first.
           expect(theme.extension<GPColors>(), isNotNull);
           expect(theme.extension<GPTypography>(), isNotNull);
           expect(theme.extension<GPSpacing>(), isNotNull);
@@ -36,25 +35,20 @@ void main() {
           final text = theme.extension<GPTypography>()!;
           final body = theme.textTheme.bodyMedium!;
 
-          // Compared field by field rather than with `==`: ThemeData runs the TextTheme through `.apply()` to stamp a default text color on it, so
-          // the style Material ends up with is deliberately *not* identical to ours. The metrics are what must survive that pass.
+          // Field by field: ThemeData passes the TextTheme through `.apply()` to stamp a color, so it is deliberately not `==` to ours.
           expect(body.fontSize, text.bodyMedium.fontSize);
           expect(body.fontWeight, text.bodyMedium.fontWeight);
           expect(body.height, text.bodyMedium.height);
           expect(theme.textTheme.titleMedium?.fontFamily, GPTypographyTokens.fontFamily);
-          // Not the platform default: if this ever reads 'Roboto', the fonts block in pubspec.yaml is broken and every screen silently changed shape.
           expect(body.fontFamily, 'Inter');
         });
 
         test('Material stamps the palette text color onto the projected TextTheme', () {
-          // The reason GPTypography carries no color of its own: the styles arrive uncolored and ThemeData colors them from the scheme. If this ever
-          // stops holding, every `Text` in the app falls back to Material's own black regardless of the palette.
+          // GPTypography carries no color of its own and relies on this.
           expect(theme.textTheme.bodyMedium?.color, theme.extension<GPColors>()!.onSurface);
         });
 
         test('brightness agrees between the palette and the ThemeData', () {
-          // These are set in two different places and a mismatch is silent — the app renders a light palette while Material picks dark defaults for
-          // everything the palette does not cover.
           expect(theme.brightness, theme.extension<GPColors>()!.brightness);
         });
       });
@@ -71,7 +65,7 @@ void main() {
     });
 
     test('dark mode carries no ambient shadow', () {
-      // Documented behaviour, not an oversight: a shadow darkens what is behind it, and on a near-black ground there is nothing left to darken.
+      // Intended: on a near-black ground a shadow has nothing left to darken.
       final dark = GPAppTheme.dark().extension<GPShadows>()!;
 
       expect(dark.medium, isEmpty);
@@ -92,8 +86,7 @@ void main() {
     });
 
     test('every extension returns itself when handed a foreign extension', () {
-      // Flutter calls `lerp` with whatever sits in the same slot of the other theme. Returning `this` is the only safe answer, and getting it wrong
-      // means a null-cast crash mid-animation.
+      // Flutter lerps against whatever sits in the same slot of the other theme; anything but `this` crashes mid-animation.
       const colors = GPColors.light();
       const spacing = GPSpacing.standard();
 

@@ -13,23 +13,6 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 
-/// The offline-first half of `AccountRepository` (W2 T6).
-///
-/// **This is where the policy lives**, and naming it is the difference between a repository and the pass-through §12.2 rejects. `AccountDao` deliberately
-/// holds no clock, no id generator and no opinion; this class supplies all three, so exactly one layer decides:
-///
-/// - **the id**, minted by `GPUuidGenerator.v7` before the row exists (golden rule 4, ADR-0002) — never handed back by a server;
-/// - **the instant**, read from `GPClock` **once per operation** and passed everywhere that operation writes. From W12 T5 that same instant also lands on the
-///   `sync_mutations` row written in the same transaction (golden rule 3), so the entity and its mutation describe one moment rather than two;
-/// - **the owner**, which the domain never sees (see `AccountRepository`);
-/// - **what a failure means**: zero rows written is a conflict, or a tombstone, or a row that was never there, and only this layer can tell them apart.
-///
-/// **No network, on purpose.** Nothing here asks whether the device is online, and nothing here talks to a server: a write goes to SQLite and returns, and
-/// the sync engine of P4 pushes it afterwards from the outbox. That is why `GPNetworkFailure` cannot come out of any method below, and why there is no
-/// `bool isOnline` branching between a local and a remote path (§12.5) — the local path is the only path.
-///
-/// **What W12 T5 adds, and where.** Every write below becomes a transaction containing the entity write *and* an outbox insert. [updateAccount] already opens
-/// one for a different reason, which is a useful rehearsal: the shape does not change, only what goes inside the block.
 class AccountRepositoryImpl implements AccountRepository {
   const AccountRepositoryImpl({
     required AccountDao dao,
@@ -50,11 +33,6 @@ class AccountRepositoryImpl implements AccountRepository {
   final GPUuidGenerator _uuidGenerator;
   final GPAppLogger _logger;
   final AccountMapper _mapper;
-
-  /// `localOwnerId` today; the signed-in uid from W10.
-  ///
-  /// A constructor argument rather than something read per call, because nothing can change it yet. W10 turns this into a session lookup — and the reason
-  /// it is stated here instead of defaulted is that `grep localOwnerId` then finds the seam in one hop.
   final String _ownerId;
 
   @override
@@ -71,13 +49,7 @@ class AccountRepositoryImpl implements AccountRepository {
                   case MappedAccount(:final account):
                     entities.add(account);
                   case UnmappableAccountRow(:final reason, :final failure):
-                    // **The whole list fails, rather than the bad row being skipped.** Skipping would drop an account from the user's list silently, and a
-                    // balance that is quietly missing one account is worse than a screen that says it could not read local data. Golden rule 1 leaves no
-                    // remote copy to reconcile against, so a row that will not parse is a real problem and has to look like one.
-                    //
-                    // **This is also the policy with no way out yet**: one corrupt row makes the accounts screen unusable and the app offers no repair.
-                    // Named as debt in ADR-0006 rather than papered over — and `watchTransactions` at W4 T6 must decide it again from scratch, because at
-                    // 50k rows the same rule hides a year of history instead of five accounts.
+                    // The whole list fails rather than silently dropping an account; transactions decide differently (ADR-0006, ADR-0011).
                     _logRejectedRow(row.id, reason);
                     sink.addError(failure);
                     return;
@@ -86,7 +58,6 @@ class AccountRepositoryImpl implements AccountRepository {
 
               sink.add(entities);
             },
-            // What the query itself raised, as opposed to a row the mapper refused above — see `_reportQueryError`.
             handleError: (error, stackTrace, sink) => _reportQueryError('account list read failed', error, stackTrace, sink),
           ),
         );
@@ -100,7 +71,6 @@ class AccountRepositoryImpl implements AccountRepository {
           StreamTransformer<AccountRow?, AccountEntity?>.fromHandlers(
             handleData: (row, sink) {
               if (row == null) {
-                // Not an error: the DAO filters tombstones, so null means "gone", which is what a detail screen subscribes in order to learn.
                 sink.add(null);
                 return;
               }
@@ -120,12 +90,8 @@ class AccountRepositoryImpl implements AccountRepository {
 
   @override
   Future<GPResult<AccountEntity>> createAccount({required String name, required AccountType type, required Money initialBalance}) async {
-    // One read of the clock for the whole operation — `created_at` and `updated_at` must be the same instant on a fresh row, and from W12 T5 the outbox
-    // mutation joins them.
     final now = _clock.nowUtc();
 
-    // Validation runs before the row is built, so a blank name never reaches SQLite. The id is minted first and simply goes unused when validation fails;
-    // v7's counter tolerates a gap, and the alternative — duplicating the name rule here to avoid burning one — is the thing the domain exists to prevent.
     final created = AccountEntity.create(id: _uuidGenerator.v7(), name: name, type: type, initialBalance: initialBalance, createdAt: now, updatedAt: now);
 
     switch (created) {
@@ -134,8 +100,6 @@ class AccountRepositoryImpl implements AccountRepository {
       case GPOk<AccountEntity>(:final value):
         try {
           await _dao.insertAccount(_mapper.toInsert(value, ownerId: _ownerId));
-          // The entity is returned as built rather than read back: the caller already holds every value that was written (golden rule 4 again), and the
-          // stream from `watchAccounts` is what tells the UI, not this return value.
           return GPOk<AccountEntity>(value);
         } on Exception catch (error, stackTrace) {
           return _databaseFailure<AccountEntity>('account insert failed', value.id, error, stackTrace);
@@ -146,9 +110,6 @@ class AccountRepositoryImpl implements AccountRepository {
   @override
   Future<GPResult<AccountEntity>> updateAccount(AccountEntity account) async {
     final now = _clock.nowUtc();
-    // **No validation branch here, and that is not an omission.** An `AccountEntity` cannot exist unvalidated — `create` is the only way to build one and
-    // `update` is the only way to change one, and both refuse a broken name. So a form's validation failure has already been shown to the user, under the
-    // field, before this method is reachable. All that is left for the repository to decide is *when*, which is what `stampedAt` says.
     final stamped = account.stampedAt(now);
 
     try {
@@ -162,12 +123,7 @@ class AccountRepositoryImpl implements AccountRepository {
 
         if (written == 1) return GPOk<AccountEntity>(stamped);
 
-        // Zero rows is three different situations and the guarded UPDATE cannot tell them apart, so this asks. **Inside the transaction**, because the
-        // answer is only true if nothing moved between the write and the lookup — outside it, a concurrent delete would make this report a conflict
-        // against a row that is already gone.
-        //
-        // `findById` is the one read that sees tombstones, which is exactly what is needed here: a soft-deleted row must read as "not found" and not as
-        // "never existed", and both must read differently from "somebody else edited it".
+        // Zero rows: a conflict, or no live row. Re-read inside the transaction, so a delete cannot land between the write and the lookup.
         final current = await _dao.findById(stamped.id);
 
         if (current == null || current.deletedAt != null) {
@@ -192,11 +148,7 @@ class AccountRepositoryImpl implements AccountRepository {
   @override
   Future<GPResult<void>> deleteAccount(String id) => _write(id, 'account delete failed', (now) => _dao.softDelete(id, now: now));
 
-  /// The three unguarded writes, which differ only in which DAO method they call and what to say when it throws.
-  ///
-  /// None of them takes a `baseVersion`: archiving and deleting are idempotent and terminal respectively, so a stale version costs nothing and refusing on
-  /// one would only make the user press the button twice. Zero rows written therefore has a single meaning — there is no live row with that id — which is
-  /// why this does not need [updateAccount]'s follow-up lookup.
+  /// Unguarded writes: zero rows can only mean no live row, so unlike [updateAccount] there is nothing to re-read.
   Future<GPResult<void>> _write(String id, String failureMessage, Future<int> Function(int now) write) async {
     try {
       final written = await write(_clock.nowEpochMillis());
@@ -209,50 +161,17 @@ class AccountRepositoryImpl implements AccountRepository {
     }
   }
 
-  /// Logs a row the mapper refused.
-  ///
-  /// The user gets one sentence for all three reasons; the log gets the reason. That asymmetry is the point (see [UnmappableAccountRow.failure]): without
-  /// it, P7's crash reports would hold one undifferentiated "could not map a row" cluster covering a schema drift, a corrupted file and a row written by a
-  /// build that predates a rule.
-  ///
-  /// An id, an entity type and an error code — exactly the three things golden rule 9 allows. The row's name, balance and currency are all in scope at the
-  /// call sites and none of them is logged.
   void _logRejectedRow(String id, AccountMapperReason reason) => _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': id, 'reason': reason.name});
 
-  /// Logs a local-storage failure and reports it as one.
-  ///
-  /// `on Exception`, never `on Object`: a sqlite error, a closed database and a disk that is full all arrive as exceptions, while an `Error` is a bug in
-  /// this code — a null that should not be null, a broken invariant — and swallowing it into "could not read local data" would hide it behind a message the
-  /// user can do nothing about. Same line `GPDriftLocaleStore` draws, the same one ADR-0006 draws for the domain, and the one [_reportQueryError] draws for
-  /// the two watch streams.
-  ///
-  /// The fields carry an id and an entity type and nothing else (golden rule 9). The name of the account, its balance and its currency are all in scope at
-  /// every call site and none of them is logged.
+  /// For `on Exception` catches only: an `Error` is a bug and must not be dressed up as a failure (ADR-0006).
   GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace) {
     _logger.error(message, fields: {'entity': 'account', 'id': id}, error: error, stackTrace: stackTrace);
 
-    // Not `const`: a type parameter cannot appear in a constant expression, so only the failure itself is canonicalised.
     return GPErr<T>(const GPDatabaseFailure());
   }
 
-  /// Puts what a watched query raised back on its stream: a [GPDatabaseFailure] when it is the database refusing, the original object when it is a bug.
-  ///
-  /// **Why both watch streams need it.** `handleData` only ever sees rows, so on its own it converted exactly one kind of read failure — a row the mapper
-  /// refused. Anything Drift raised while *running* the query went through raw: a `SqliteException` from a corrupt file or a full disk — which in the app
-  /// arrives wrapped in a `DriftRemoteException`, because `driftDatabase` runs SQLite on a background isolate. That broke the one promise
-  /// [AccountRepository.watchAccounts] makes about its error channel, and `AccountsPage` rethrows whatever is not a [GPFailure] as a bug — so a disk error
-  /// crashed the Accounts tab instead of showing its error state.
-  ///
-  /// **The read-side [_databaseFailure], drawing the same line.** An [Exception] is the database refusing: it is logged, and replaced by the failure the
-  /// mapper path already emits, so every non-bug error on these streams is one type with one sentence. Anything else — an [Error] above all — is a bug and
-  /// is forwarded untouched, stack trace included, so it reaches the crash reporter just as a throw from a write does. It is not logged here either, as a
-  /// write does not log one: whoever receives the bug reports it, and one bug should be one report.
-  ///
-  /// The isolate blurs that line in one place, and identically for writes: a bug raised *on the database isolate* crosses back as a `DriftRemoteException`,
-  /// so it lands here as a logged failure with its remote cause attached rather than as a rethrown [Error]. The type is all this code can see.
-  ///
-  /// The fields carry an entity type, plus the id when the stream is about one account (golden rule 9). A failed query produced no row, so there is nothing
-  /// to leak; the list query has no id at all, which is why [id] is optional.
+  /// An [Exception] is the database refusing: logged and replaced by a [GPDatabaseFailure]. Anything else is a bug, forwarded untouched for the crash
+  /// reporter. Errors from drift's background isolate arrive as a `DriftRemoteException`, so even a bug raised there lands as a failure.
   void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);

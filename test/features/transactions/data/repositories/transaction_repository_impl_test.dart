@@ -1,4 +1,3 @@
-// `isNull`/`isNotNull` are both drift SQL predicates and matchers; this file wants the matchers.
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,12 +18,7 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
 
-/// `TransactionRepositoryImpl` (W4 T6), on a real in-memory database with the real DAO — the stance `account_repository_impl_test.dart` explains: what is
-/// worth asserting is what a user would notice, and that needs real SQL. The clock and the id generator are fakes because they are the two sources of
-/// nondeterminism the assertions have to name.
-///
-/// What is specific to this repository: the two account rules that run inside the write's transaction (ADR-0010), and a list that counts a bad row
-/// instead of failing (ADR-0011).
+/// Real in-memory SQL with the real DAO, not a mock: a mock would only restate which DAO methods the repository calls.
 void main() {
   late GPAppDatabase db;
   late TransactionDao dao;
@@ -113,8 +107,7 @@ void main() {
 
   Future<void> softDeleteAccount(String id) => (db.update(db.accountsTable)..where((t) => t.id.equals(id))).write(const AccountsTableCompanion(deletedAt: Value(1)));
 
-  /// A row the mapper refuses — a `refund`, a type from a newer build — written straight through drift, which the table allows: it has no vocabulary
-  /// CHECK (ADR-0009).
+  /// A `refund` row: the mapper refuses it, the table accepts it (no vocabulary CHECK, ADR-0009).
   Future<void> insertUnreadableRow(String id, {int occurredAtMillis = 1}) => db
       .into(db.transactionsTable)
       .insert(
@@ -144,7 +137,6 @@ void main() {
 
       final stored = (await storedRows()).single;
       expect(stored.id, created.id);
-      // The owner the repository was built with — the domain never sees one (the reasoning of `AccountRepository`).
       expect(stored.ownerId, localOwnerId);
       expect(stored.amountMinor, 125000);
       expect(stored.currencyCode, 'VND');
@@ -164,18 +156,15 @@ void main() {
 
       expect(await create(accountId: 'acc-missing'), refusedBy(const GPNotFoundFailure()));
       expect(await create(accountId: 'acc-bank'), refusedBy(const GPNotFoundFailure()));
-      // The foreign key alone would have accepted this one: the row exists. ADR-0010's rule is that the account is the owner's.
       expect(await create(accountId: 'acc-theirs'), refusedBy(const GPNotFoundFailure()));
       expect(await storedRows(), isEmpty);
     });
 
     test('accepts an archived account', () async {
-      // Archived is out of the picker, not out of the ledger (ADR-0010).
       expect(await create(accountId: 'acc-archived'), isA<GPOk<TransactionEntity>>());
     });
 
     test('refuses an amount in another currency than the account’s', () async {
-      // The balance is a SQL `SUM`; storing this would add 1234 cents to a dong balance as 1234 dong.
       expect(await create(amount: Money(1234, 'USD')), refusedBy(const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch)));
       expect(await storedRows(), isEmpty);
     });
@@ -192,18 +181,16 @@ void main() {
     });
 
     test('writes a transfer between two live accounts of one currency', () async {
-      // `create` passes `cat-food` by default — a transfer given a category, as a form switched from expense would send it.
+      // `create` passes `cat-food` by default, so this transfer arrives with a category.
       final created = ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank'));
 
       final stored = (await storedRows()).single;
       expect(stored.destinationAccountId, 'acc-bank');
-      // Dropped by the entity, so the table's CHECK never had to refuse it.
       expect(stored.categoryId, isNull);
       expect(created.categoryId, isNull);
     });
 
     test('a category that does not exist is a database failure — the foreign key refuses it', () async {
-      // Whether a category that does exist is live and of the right kind is the use cases' rule (ADR-0010); a dangling id never gets that far.
       expect(await create(categoryId: 'cat-ghost'), refusedBy(const GPDatabaseFailure()));
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'id-v7-1'});
     });
@@ -221,7 +208,6 @@ void main() {
       expect(stored.amountMinor, 95000);
       expect(stored.note, 'Bún chả');
       expect(stored.updatedAt, updated.updatedAt.millisecondsSinceEpoch);
-      // The server's number (§7); an edit never moves it.
       expect(stored.version, 1);
       expect(stored.syncStatus, 'pending');
     });
@@ -239,7 +225,7 @@ void main() {
 
     test('reports a conflict with the version that is actually stored', () async {
       final created = ok(await create());
-      // Another device's edit, as the pull of W14 will apply it.
+      // Stands in for another device's edit, as a sync pull would apply it.
       await (db.update(db.transactionsTable)..where((t) => t.id.equals(created.id))).write(const TransactionsTableCompanion(version: Value(2)));
 
       final result = await repository.updateTransaction(ok(created.update(note: 'Bún chả')));
@@ -264,7 +250,6 @@ void main() {
     });
 
     test('refuses when the account’s currency changed after the form opened', () async {
-      // The reachable-by-a-correct-user case ADR-0010 names — until an account's currency is frozen, another device can change it.
       final created = ok(await create());
       await (db.update(db.accountsTable)..where((t) => t.id.equals('acc-cash'))).write(const AccountsTableCompanion(currencyCode: Value('USD')));
 
@@ -275,7 +260,6 @@ void main() {
     });
 
     test('checks the account before the version', () async {
-      // Both are wrong at once. The account rule answers first, so nothing is written that should not be (the order ADR-0010 settles at W4 T6).
       final created = ok(await create());
       await (db.update(db.transactionsTable)..where((t) => t.id.equals(created.id))).write(const TransactionsTableCompanion(version: Value(2)));
       await softDeleteAccount('acc-cash');
@@ -317,7 +301,6 @@ void main() {
       ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
 
       expect(await repository.hasLiveTransactions('acc-cash'), const GPOk<bool>(true));
-      // The destination is the side a delete would strand without a word: its balance moves, and nothing lists the account it came from.
       expect(await repository.hasLiveTransactions('acc-bank'), const GPOk<bool>(true));
       expect(await repository.hasLiveTransactions('acc-usd'), const GPOk<bool>(false));
     });
@@ -395,7 +378,7 @@ void main() {
 
       expect(snapshot.transactions.map((t) => t.id), ['id-v7-1']);
       expect(snapshot.unreadableCount, 1);
-      // Two rows came back for a window of two. Counting only the mapped one would make a full window look short, and the list would stop loading.
+      // 1 mapped + 1 unreadable fill the window of two; counting the mapped row alone would make it look short.
       expect(snapshot.hasMore, isTrue);
     });
 
@@ -417,7 +400,6 @@ void main() {
 
       final rejected = logger.records.where((r) => r.message == 'transaction row could not be mapped').toList();
       expect(rejected, hasLength(1));
-      // Golden rule 9: an id, an entity type, a reason. The row's amount and note are in scope and neither is here.
       expect(rejected.single.fields, {'entity': 'transaction', 'id': 'tx-bad', 'reason': 'unknownType'});
     });
   });
@@ -446,8 +428,7 @@ void main() {
   });
 
   group('a write the database refuses', () {
-    /// A DAO whose writes fail on request — the double `account_repository_impl_test.dart` uses, for the reason it gives: real SQL does not fail when
-    /// asked, and the `catch` sites would otherwise be unreachable. Its reads stay real, so the account rules still run first.
+    /// A real database does not fail on request, so the `catch` sites are reached through a DAO that throws; its reads stay real.
     TransactionRepositoryImpl repositoryFailingWith(Object thrown) =>
         TransactionRepositoryImpl(dao: ThrowingTransactionDao(db, thrown), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
 
@@ -462,7 +443,6 @@ void main() {
 
       expect(result, refusedBy(const GPDatabaseFailure()));
       expect(logger.last.level, GPLogLevel.error);
-      // The amount and the note are both in scope at the call site; the log holds neither.
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'id-v7-1'});
     });
 
@@ -538,9 +518,7 @@ void main() {
   });
 }
 
-/// A [TransactionDao] whose three writes — and [hasLiveTransactions], the one read that answers with a future — fail with a given object:
-/// `ThrowingAccountDao`'s twin. Subclassed rather than faked through an interface, so it stays attached to the same database: `transaction()` and every
-/// other read still behave, and only the call under test misbehaves.
+/// Subclasses the real DAO so `transaction()` and the other reads still run against the in-memory database; only these calls fail.
 class ThrowingTransactionDao extends TransactionDao {
   ThrowingTransactionDao(super.attachedDatabase, this.thrown);
 
@@ -559,8 +537,6 @@ class ThrowingTransactionDao extends TransactionDao {
   Future<bool> hasLiveTransactions(String ownerId, String accountId) => Future<bool>.error(thrown);
 }
 
-/// A [TransactionDao] whose watch streams fail with a given object — `FailingStreamAccountDao`'s twin, and `Stream.error` for the same reason: that is how
-/// a watched query's failure really arrives.
 class FailingStreamTransactionDao extends TransactionDao {
   FailingStreamTransactionDao(super.attachedDatabase, this.error);
 

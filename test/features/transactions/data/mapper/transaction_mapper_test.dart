@@ -1,4 +1,3 @@
-// `isNull` is both a drift SQL predicate and a matcher; this file wants the matcher.
 import 'package:drift/drift.dart' hide isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
@@ -11,7 +10,6 @@ import 'package:ghpockit/features/transactions/data/mapper/transaction_mapper.da
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
-/// `TransactionMapper` (W4 T6) — rows built by hand, no database: the mapper is a pure translation, and what it refuses is the point of the file.
 void main() {
   const mapper = TransactionMapper();
 
@@ -75,7 +73,6 @@ void main() {
       expect(transaction.accountId, 'acc-cash');
       expect(transaction.destinationAccountId, isNull);
       expect(transaction.categoryId, 'cat-food');
-      // Two columns, one value — the amount never travels without its currency.
       expect(transaction.amount, Money(125000, 'VND'));
       expect(transaction.note, 'Phở bò');
       expect(transaction.version, 3);
@@ -99,12 +96,11 @@ void main() {
     });
 
     test('does not filter a tombstone — the DAO does, except where it deliberately does not', () {
-      // `findById` returns tombstones on purpose; a mapper that refused them would make that read useless.
       expect(mapper.toEntity(row(deletedAt: createdAt)), isA<MappedTransaction>());
     });
 
     test('refuses a type this build does not know, rather than guessing', () {
-      // No vocabulary CHECK on the column (ADR-0009), so a `refund` from a newer build reaches the mapper, and it must not become an expense.
+      // No vocabulary CHECK on the column (ADR-0009), so a `refund` from a newer build can reach the mapper.
       expect(refusal(row(type: 'refund')), TransactionMapperReason.unknownType);
     });
 
@@ -114,12 +110,11 @@ void main() {
     });
 
     test('refuses a row that breaks a rule of the entity', () {
-      // A note written by a build with a larger limit. The table has no length CHECK on purpose (§3), so this is the one rule a stored row can still break.
+      // The table has no length CHECK, so a note from a build with a larger limit is the one entity rule a stored row can break.
       expect(refusal(row(note: 'a' * (TransactionEntity.noteMaxLength + 1))), TransactionMapperReason.brokenDomainRule);
     });
 
     test('flattens every refusal to the same user-facing failure', () {
-      // The user is reading a list, not typing: "Note is too long" would be a sentence about an input that is not on screen.
       for (final unreadable in [row(type: 'refund'), row(currencyCode: 'vn1'), row(note: 'a' * 501)]) {
         expect((mapper.toEntity(unreadable) as UnmappableTransactionRow).failure, const GPDatabaseFailure());
       }
@@ -156,14 +151,13 @@ void main() {
       for (final present in [patch.type, patch.accountId, patch.destinationAccountId, patch.categoryId, patch.amountMinor, patch.currencyCode, patch.occurredAt, patch.note]) {
         expect(present.present, isTrue);
       }
-      // Identity, birth, the server's version, the tombstone — and the two the DAO stamps itself on every write.
+      // `updatedAt` and `syncStatus` too: the DAO stamps both on every write.
       for (final absent in [patch.id, patch.ownerId, patch.createdAt, patch.version, patch.deletedAt, patch.updatedAt, patch.syncStatus]) {
         expect(absent.present, isFalse);
       }
     });
 
     test('writes a missing reference as null rather than leaving the old one in place', () {
-      // Switching a transfer back to an expense must clear its destination, and the reverse must clear the category — or the table's CHECK refuses the row.
       final expensePatch = mapper.toPatch(entity(categoryId: null));
       final transferPatch = mapper.toPatch(entity(type: TransactionType.transfer, destinationAccountId: 'acc-bank'));
 

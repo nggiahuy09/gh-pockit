@@ -1,4 +1,3 @@
-// `isNull`/`isNotNull` are both drift SQL predicates and matchers; this file wants the matchers. The SQL side stays reachable as `.isNull()` on a column.
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,13 +5,6 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 
-/// `TransactionDao` (W4 T5), on an in-memory database with real SQL — the same stance as `account_dao_test.dart`.
-///
-/// What is covered is the DAO's own policy: which rows a read may see and in what order, what each filter means, which columns a write stamps and which
-/// it leaves alone, and — because this is the table fifty thousand rows land in — which plan SQLite picks for the queries the list really sends. The
-/// constraints themselves are `transactions_table_test.dart`'s.
-///
-/// Instants are small literals rather than a `FakeClock`: the DAO holds no clock by design, so `now` is just an argument.
 void main() {
   const t0 = 1000;
   const t1 = 2000;
@@ -70,8 +62,7 @@ void main() {
     await db.close();
   });
 
-  /// Stands in for `TransactionMapper` until T6 builds it. `syncStatus` defaults to `'synced'` on purpose: every write test below then proves the DAO
-  /// stamps `'pending'` over whatever the companion carried.
+  /// `syncStatus` is 'synced' on purpose, so every write test proves the DAO stamps 'pending' over it.
   TransactionsTableCompanion row({
     String id = 'tx-1',
     String ownerId = localOwnerId,
@@ -102,12 +93,10 @@ void main() {
   TransactionsTableCompanion transfer({required String id, required String from, required String to, int occurredAt = t0}) =>
       row(id: id, type: 'transfer', accountId: from, destinationAccountId: to, categoryId: null, occurredAt: occurredAt);
 
-  /// Soft-deletes through drift's update builder rather than [TransactionDao.softDelete] — the reason `account_dao_test.dart` gives: the groups that
-  /// assert some *other* method ignores a tombstone must not share a setup with the method under test.
+  /// Not [TransactionDao.softDelete], which is itself under test; not `customStatement`, which does not tell drift the table changed, so no `watch()` would re-emit.
   Future<void> tombstone(String id) =>
       (db.update(db.transactionsTable)..where((t) => t.id.equals(id))).write(const TransactionsTableCompanion(deletedAt: Value(t1), updatedAt: Value(t1)));
 
-  /// The ids of the first emission of [watchTransactions] with these filters.
   Future<List<String>> idsOf({
     int limit = 50,
     Set<String>? accountIds,
@@ -128,7 +117,7 @@ void main() {
       final emissions = <List<String>>[];
       final subscription = dao.watchTransactions(localOwnerId, limit: 50).listen((rows) => emissions.add(rows.map((r) => r.id).toList()));
 
-      // `pumpEventQueue`, never `Future.delayed` (§8): it only yields so the stream can deliver what is already queued.
+      // Yields to the event loop so the stream can deliver what is already queued.
       await pumpEventQueue();
       await dao.insertTransaction(row());
       await pumpEventQueue();
@@ -181,8 +170,7 @@ void main() {
     });
 
     test('orders newest first, and by id — descending — among rows that share an instant', () async {
-      // Rows entered with a date and no time share `occurred_at`. Without `id DESC` their order is whatever SQLite returns, and it may change between two
-      // emissions of the same list (ADR-0011).
+      // Inserted out of id order, so insertion (rowid) order would not pass.
       await dao.insertTransaction(row(id: 'tx-a'));
       await dao.insertTransaction(row(id: 'tx-c'));
       await dao.insertTransaction(row(id: 'tx-b'));
@@ -200,7 +188,6 @@ void main() {
     });
 
     test('matches an account on either side of a transfer', () async {
-      // Matching only `account_id` would give the cash account a history with every transfer into it missing (ADR-0011).
       await dao.insertTransaction(row(id: 'tx-spent-cash', occurredAt: t0 + 3));
       await dao.insertTransaction(transfer(id: 'tx-bank-to-cash', from: 'acc-bank', to: 'acc-cash', occurredAt: t0 + 2));
       await dao.insertTransaction(row(id: 'tx-spent-bank', accountId: 'acc-bank', occurredAt: t0 + 1));
@@ -227,7 +214,6 @@ void main() {
     });
 
     test('reads the range as [from, to) — from inclusive, to exclusive', () async {
-      // So one month's `to` can be the next month's `from` without a transaction at exactly midnight landing in both.
       await dao.insertTransaction(row(id: 'tx-before', occurredAt: 100));
       await dao.insertTransaction(row(id: 'tx-at-from', occurredAt: 200));
       await dao.insertTransaction(row(id: 'tx-inside', occurredAt: 250));
@@ -248,7 +234,7 @@ void main() {
     });
 
     test('reads an empty set as SQL does — it matches nothing', () async {
-      // `IN ()` is false. The domain never sends an empty set (`TransactionQuery` turns one into no filter), so the DAO does not guess on its behalf.
+      // The domain never sends one: `TransactionQuery` turns an empty set into no filter.
       await dao.insertTransaction(row());
 
       expect(await idsOf(accountIds: <String>{}), isEmpty);
@@ -280,7 +266,6 @@ void main() {
   });
 
   test('findById finds a tombstone, unlike every other read', () async {
-    // The row `updateTransaction` needs in order to tell a conflict from a deletion, and the one W14's applier reconciles the server's copy against.
     await dao.insertTransaction(row());
     await tombstone('tx-1');
 
@@ -294,7 +279,6 @@ void main() {
     test("answers with the account's currency while it is live — archived included", () async {
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-cash'), 'VND');
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-usd'), 'USD');
-      // An old transaction on an archived account must stay editable (ADR-0010).
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-archived'), 'VND');
     });
 
@@ -303,7 +287,6 @@ void main() {
 
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-bank'), isNull);
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-missing'), isNull);
-      // A foreign key would accept `acc-theirs` — the row exists. The rule is that the account is the owner's (ADR-0010).
       expect(await dao.liveAccountCurrency(localOwnerId, 'acc-theirs'), isNull);
     });
   });
@@ -376,9 +359,7 @@ void main() {
       expect(stored.amountMinor, 95000);
       expect(stored.note, 'Bún chả');
       expect(stored.updatedAt, t1);
-      // A row the server had is `pending` again the moment it is edited locally.
       expect(stored.syncStatus, 'pending');
-      // The server's number (§7): bumping it here would send a base version the server never issued.
       expect(stored.version, 1);
       expect(stored.createdAt, t0);
     });
@@ -398,7 +379,6 @@ void main() {
     });
 
     test('refuses a soft-deleted row', () async {
-      // Editing a tombstone would move its `updated_at` and push a resurrected row at the next sync.
       await dao.insertTransaction(row());
       await tombstone('tx-1');
 
@@ -422,7 +402,6 @@ void main() {
       final stored = await db.select(db.transactionsTable).getSingle();
 
       expect(written, 1);
-      // Still on disk (golden rule 5), and moved on `updated_at` so W14's pull sees the deletion.
       expect(stored.deletedAt, t1);
       expect(stored.updatedAt, t1);
       expect(stored.syncStatus, 'pending');
@@ -435,14 +414,12 @@ void main() {
 
       expect(await dao.softDelete('tx-1', now: t1 + 1), 0);
       expect(await dao.softDelete('tx-missing', now: t1), 0);
-      // The first deletion's instant is the one kept.
       expect((await dao.findById('tx-1'))!.deletedAt, t1);
     });
   });
 
   group('query plan, on the SQL the DAO really sends', () {
-    // `selectTransactions` is the statement `watchTransactions` watches, so these plans cannot drift from the query. `SEARCH` is an index seek; `SCAN` is
-    // a full pass over a table or an index, which is what fifty thousand rows cannot afford on every emission.
+    // `selectTransactions` is the statement `watchTransactions` watches, so these plans cannot drift from the query.
     Future<String> planOf(SimpleSelectStatement<$TransactionsTableTable, TransactionRow> statement) async {
       final query = statement.constructQuery();
       final rows = await db.customSelect('EXPLAIN QUERY PLAN ${query.sql}', variables: query.introducedVariables).get();
@@ -465,10 +442,7 @@ void main() {
     });
 
     test('the account filter never scans the table — the two plans SQLite may pick are pinned until W8', () async {
-      // An `OR` across two columns cannot be served in order by one index. SQLite picks by cost, and the pick differs between versions: walk the owner
-      // index newest-first and filter (no sort, but a rarely used account reads far back), or merge the two account indexes and sort what matched
-      // (`MULTI-INDEX OR` + `TEMP B-TREE`). Both are known and both wait for W8's numbers; the `UNION ALL` fix is written up on
-      // `TransactionDao.watchTransactions`. What must never happen is a `SCAN`.
+      // SQLite's pick for an OR across two columns differs between versions: the owner index plus a filter, or `MULTI-INDEX OR` plus a sort. Never a `SCAN`.
       final plan = await planOf(dao.selectTransactions(localOwnerId, limit: 50, accountIds: {'acc-cash'}));
 
       expect(plan, isNot(contains('SCAN transactions')));
@@ -476,9 +450,7 @@ void main() {
     });
 
     test('the delete check seeks both account indexes and never walks the owner one', () async {
-      // Written with the query builder, this plan was the owner index plus a filter — every row the owner has, read end to end for an account with no
-      // transactions, which is the account the check lets the user delete. `+owner_id` takes the owner term out of the index choice, and this pins that
-      // the planner then has nothing left to pick but the two account indexes. Unlike the list above, there is one plan and no ordering to pay for.
+      // `+owner_id` takes the owner term out of the index choice; without it, SQLite read every row the owner has for an account with none.
       final rows = await db
           .customSelect(
             'EXPLAIN QUERY PLAN ${TransactionDao.hasLiveTransactionsSql}',

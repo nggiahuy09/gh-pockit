@@ -9,8 +9,7 @@ void main() {
   const locales = <GPLocaleBase>[GPLocaleEn(), GPLocaleVi()];
 
   test('every account type has a label in every language we ship', () {
-    // The switch will not compile without a case and the getter will not compile until both locales implement it, so this mostly states the invariant — and
-    // catches a getter that compiles while returning an empty string.
+    // The compiler already demands every case in both locales; what this catches is a getter that returns ''.
     for (final locale in locales) {
       for (final type in AccountType.values) {
         expect(type.labelIn(locale), isNotEmpty, reason: '${type.storageValue} has no label in ${locale.locale.languageCode}');
@@ -19,7 +18,6 @@ void main() {
   });
 
   test('no two types share a label within a language', () {
-    // W6's picker groups by type; two groups with the same heading would be two groups the user cannot tell apart.
     for (final locale in locales) {
       final labels = AccountType.values.map((type) => type.labelIn(locale)).toList();
       expect(labels.toSet(), hasLength(labels.length), reason: 'duplicate label in ${locale.locale.languageCode}');
@@ -27,7 +25,6 @@ void main() {
   });
 
   test('the two languages actually differ', () {
-    // Guards against a copy-paste that leaves the Vietnamese file holding English — which compiles and passes both tests above.
     expect(AccountType.eWallet.labelIn(const GPLocaleEn()), 'E-wallet');
     expect(AccountType.eWallet.labelIn(const GPLocaleVi()), 'Ví điện tử');
   });

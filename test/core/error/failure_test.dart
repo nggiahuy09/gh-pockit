@@ -8,18 +8,13 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 
-/// Every subtype of [GPFailure], listed by hand.
-///
-/// Dart cannot enumerate the subtypes of a sealed class at runtime, so this list is the manual mirror of the exhaustive switch in
-/// `failure_message.dart`. It is not redundant with the compiler check: the compiler guarantees the switch handles every subtype, this guarantees the
-/// *tests* see every subtype. Forget to add a row and a new failure ships untested — that is the only gap the compiler leaves.
+/// Every [GPFailure] subtype, by hand: Dart cannot enumerate a sealed class's subtypes at runtime, so a new one must be added here.
 const allFailures = <GPFailure>[
   GPNetworkFailure(),
   GPTimeoutFailure(),
   GPAuthenticationFailure(),
   GPAuthorizationFailure(),
-  // Every code, not one representative: each maps to its own sentence, so the "no two failures share a message" check below is what proves a new code did
-  // not quietly reuse an existing string.
+  // Every code, not one representative: each maps to its own message.
   GPValidationFailure(GPValidationCode.accountNameEmpty),
   GPValidationFailure(GPValidationCode.accountNameTooLong),
   GPValidationFailure(GPValidationCode.accountHasTransactions),
@@ -41,7 +36,7 @@ const allFailures = <GPFailure>[
 void main() {
   group('GPFailure', () {
     test('fieldless failures compare equal without a hand-written operator', () {
-      // `const` canonicalisation is what makes this work, which is why only GPConflictFailure needs an explicit `==`.
+      // Equal through `const` canonicalisation: each is one shared instance.
       expect(const GPNetworkFailure(), const GPNetworkFailure());
       expect(const GPUnknownFailure(), const GPUnknownFailure());
       expect(const GPNetworkFailure(), isNot(const GPTimeoutFailure()));
@@ -59,15 +54,13 @@ void main() {
 
   group('GPValidationFailure', () {
     test('every validation code appears in allFailures', () {
-      // The same manual-mirror problem the `allFailures` doc describes, one level down: a code with no row above ships with an untested message.
       final covered = allFailures.whereType<GPValidationFailure>().map((failure) => failure.code).toSet();
 
       expect(covered, GPValidationCode.values.toSet());
     });
 
     test('is equal by value, not by identity', () {
-      // Built without `const` on purpose, for the same reason as GPConflictFailure below: `const` would hand back one canonicalised object and the
-      // `identical` check would pass without saying anything about `operator ==`.
+      // Not `const`: canonicalisation would make both one object, leaving `operator ==` untested.
       // ignore: prefer_const_constructors
       final first = GPValidationFailure(GPValidationCode.accountNameEmpty);
       // Same reason as above.
@@ -81,19 +74,16 @@ void main() {
     });
 
     test('toString carries the code and nothing else', () {
-      // Golden rule 9: a code is exactly what a log line may hold, and the field name it refers to is not user data.
       expect(const GPValidationFailure(GPValidationCode.accountNameEmpty).toString(), 'GPValidationFailure(code: accountNameEmpty)');
     });
   });
 
   group('GPConflictFailure', () {
     test('is equal by value, not by identity', () {
-      // Built without `const` on purpose: at runtime the conflict resolver constructs these from real version numbers, so they are two distinct
-      // objects rather than one canonicalised instance. That is exactly the case `operator ==` exists for, which is why `prefer_const_constructors`
-      // is suppressed here instead of obeyed — obeying it would turn this into a test of const canonicalisation and assert nothing about equality.
+      // Not `const`: the resolver builds these at runtime, and canonicalisation would make both one object, leaving `operator ==` untested.
       // ignore: prefer_const_constructors
       final first = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
-      // Same reason as above: `const` here would hand back the very same object and `identical` below would pass for the wrong reason.
+      // Same reason as above.
       // ignore: prefer_const_constructors
       final second = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
 
@@ -111,8 +101,6 @@ void main() {
     });
 
     test('toString carries the id and versions and nothing else', () {
-      // Golden rule 9: id + entity type + error code may be logged, financial payloads may not. There is no amount or note to leak here, and there
-      // must never be one — this test is the guard for whoever adds a field later.
       const failure = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
 
       expect(failure.toString(), 'GPConflictFailure(entityId: tx-1, localVersion: 3, remoteVersion: 4)');
@@ -131,8 +119,6 @@ void main() {
         });
 
         test('no two failures share a message', () {
-          // A duplicate would mean the user cannot tell two situations apart — "no internet" and "the server rejected your change" need different
-          // actions from them.
           final messages = allFailures.map((failure) => failure.message(locale)).toList();
 
           expect(messages.toSet(), hasLength(messages.length));
@@ -141,16 +127,12 @@ void main() {
     }
 
     test('English and Vietnamese never return the same string', () {
-      // Catches the copy-paste that leaves an untranslated English sentence in GPLocaleVi. The analyzer cannot see that — it only checks that the
-      // getter exists.
       for (final failure in allFailures) {
         expect(failure.message(const GPLocaleEn()), isNot(failure.message(const GPLocaleVi())), reason: '${failure.runtimeType} is not translated');
       }
     });
 
     test('a validation message names the rule that broke, not just "invalid"', () {
-      // The reason GPValidationCode exists: a single generic sentence makes the user hunt for the field that is wrong. If these two ever converge, that
-      // has been given up.
       const empty = GPValidationFailure(GPValidationCode.accountNameEmpty);
       const tooLong = GPValidationFailure(GPValidationCode.accountNameTooLong);
 
@@ -159,10 +141,7 @@ void main() {
     });
 
     test('a validation message carries no limit number', () {
-      // `AccountEntity.nameMaxLength` lives in a feature's domain and presentation must not import it to build a sentence; a hard-coded 100 in two languages is
-      // a number that goes stale silently. The form field shows the limit with a live counter instead.
-      //
-      // The limits are read from the entities rather than typed out here, so this keeps checking the right number when one of them moves.
+      // The form field shows the limit with a live counter; a number hard-coded in the copy would go stale silently.
       final limits = {
         GPValidationCode.accountNameTooLong: AccountEntity.nameMaxLength,
         GPValidationCode.categoryNameTooLong: CategoryEntity.nameMaxLength,
@@ -177,7 +156,6 @@ void main() {
     });
 
     test('a conflict reads the same regardless of which row conflicted', () {
-      // The message is a function of the type, not the payload (ADR-0004). If this ever fails, the entity id has leaked into user-facing copy.
       const first = GPConflictFailure(entityId: 'tx-1', localVersion: 1, remoteVersion: 2);
       const second = GPConflictFailure(entityId: 'acc-9', localVersion: 7, remoteVersion: 8);
 

@@ -10,7 +10,6 @@ part 'locale_en_categories.dart';
 part 'locale_en_settings.dart';
 part 'locale_en_error.dart';
 
-/// English strings.
 final class GPLocaleEn implements GPLocaleBase {
   const GPLocaleEn();
 

@@ -4,59 +4,28 @@ import 'package:ghpockit/core/theme/colors.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/theme/tokens/dimensions.dart';
 
-/// How much emphasis a [GPButton] carries.
 enum GPButtonVariant {
-  /// The highest-emphasis action on a screen: near-black fill, light label. There should be at most one on screen at a time.
   primary,
 
-  /// The brand action — terracotta fill. Reserved for the one gesture that defines the screen, typically "add transaction".
+  /// Terracotta, reserved for the one gesture that defines the screen, typically "add transaction".
   accent,
 
-  /// A neutral tonal fill. A secondary action sitting beside a [primary] one.
   tonal,
-
-  /// A bordered, unfilled action. Lower emphasis than [tonal], still clearly a button.
   outlined,
-
-  /// No fill, no border. Inline actions and the lowest-emphasis slot — "Cancel", "Skip".
   text,
-
-  /// A destructive action: delete, discard, sign out. Red fill.
   danger,
 }
 
-/// The height of a [GPButton].
-///
-/// Three steps, not the five the source kit carries — those were drawn for a web layout. [medium] is 48 logical pixels because that is Android's
-/// minimum touch target; [small] is below it and is only legitimate inside a row that is itself tappable.
 enum GPButtonSize {
-  /// 40 — dense contexts, inside a list row or a chip bar.
+  /// 40 — under Android's 48 touch target, so only inside a row that is itself tappable.
   small,
 
-  /// 48 — the default, and Android's minimum touch target.
+  /// 48 — Android's minimum touch target.
   medium,
 
-  /// 56 — a full-width primary action at the bottom of a form.
   large,
 }
 
-/// The app's action button.
-///
-/// Ported from `ngh09_ui_kit`'s `GHAppButton` (branch `dev`) and re-cut for this app: the five Finesse variants became the six roles Pockit actually
-/// has, five sizes became three, and the corner enum was dropped — every button uses the theme's medium radius until something needs otherwise.
-///
-/// Hover handling was dropped with it. Pockit is Android-first (CLAUDE.md §1) and a touch screen has no hover state; what survives is the **focus
-/// ring**, which is not decoration — it is how a keyboard or switch-access user knows where they are.
-///
-/// ```dart
-/// GPButton(label: l10n.transactions.save, onPressed: _save);
-/// GPButton(label: l10n.root.cancel, variant: GPButtonVariant.text, onPressed: _cancel);
-/// GPButton(label: l10n.accounts.delete, variant: GPButtonVariant.danger, onPressed: _delete);
-/// ```
-///
-/// The button is disabled when [onPressed] is null or [isLoading] is true. While loading it swaps the leading icon for a spinner and keeps the label,
-/// so a button that already has an icon does not change size under a finger that is still on the screen. A button with *no* icon grows by the
-/// spinner's width instead — which is why a form's submit button should be [expanded], where the width is fixed and the question does not arise.
 class GPButton extends StatefulWidget {
   const GPButton({
     required this.label,
@@ -70,29 +39,20 @@ class GPButton extends StatefulWidget {
     super.key,
   });
 
-  /// The button's text. Always a string, never a widget: a button whose label can be an arbitrary widget is a button that will eventually hold a
-  /// `Row` nobody can translate.
   final String label;
-
-  /// Called on tap. Null renders the disabled state.
   final VoidCallback? onPressed;
-
-  /// How much emphasis this button carries.
   final GPButtonVariant variant;
-
-  /// The button's height step.
   final GPButtonSize size;
 
-  /// Optional icon before the label. Replaced by the spinner while [isLoading].
+  /// Replaced by the spinner while [isLoading]. Without one the button grows by the spinner's width, so make a form's submit button [expanded].
   final Widget? leading;
 
-  /// Optional icon after the label. Hidden while [isLoading].
+  /// Hidden while [isLoading].
   final Widget? trailing;
 
-  /// Whether to show a spinner and refuse input.
+  /// Shows a spinner and refuses input.
   final bool isLoading;
 
-  /// Whether to stretch to the available width.
   final bool expanded;
 
   @override
@@ -100,8 +60,7 @@ class GPButton extends StatefulWidget {
 }
 
 class _GPButtonState extends State<GPButton> {
-  // Shared with the underlying Material button so the focus ring reads exactly the states that button reports, rather than a second Focus widget
-  // guessing at them.
+  // The Material button updates these during build, where setState throws: hence the post-frame listener and the deferred setState.
   final WidgetStatesController _statesController = WidgetStatesController();
 
   bool get _isEnabled => widget.onPressed != null && !widget.isLoading;
@@ -130,8 +89,6 @@ class _GPButtonState extends State<GPButton> {
     }
   }
 
-  // ── Metrics ──────────────────────────────────────────────────────────────
-
   double get _height => switch (widget.size) {
     GPButtonSize.small => 40,
     GPButtonSize.medium => 48,
@@ -151,13 +108,11 @@ class _GPButtonState extends State<GPButton> {
 
   double get _gap => widget.size == GPButtonSize.small ? 6 : 8;
 
-  /// Always semi-bold. A button label is a target, not prose: at Inter's regular weight a 14sp label inside a filled shape loses against its own background.
+  /// Heavier than the title roles: at their weight a 14sp label inside a filled shape loses against its own background.
   TextStyle _labelStyle(BuildContext context) => switch (widget.size) {
     GPButtonSize.small => context.text.titleSmall,
     GPButtonSize.medium || GPButtonSize.large => context.text.titleMedium,
   }.copyWith(fontWeight: FontWeight.w600);
-
-  // ── Colors ───────────────────────────────────────────────────────────────
 
   Color _foreground(GPColors colors) => switch (widget.variant) {
     GPButtonVariant.primary => colors.onPrimary,
@@ -175,13 +130,7 @@ class _GPButtonState extends State<GPButton> {
     GPButtonVariant.danger => colors.danger,
   };
 
-  /// The focus ring, built from the palette rather than from a fixed shadow token.
-  ///
-  /// Two decisions here. Its **color follows the variant**, so a destructive button's ring is red — the ring has to agree with what pressing Enter is
-  /// about to do. And it is drawn at **full opacity**, not as a soft halo: WCAG 1.4.11 asks a focus indicator to reach 3:1 against the ground, and a
-  /// 24%-alpha version of the same color lands around 1.5:1. A ring nobody can see is not an accessibility feature.
-  ///
-  /// It is a shadow rather than a border because a border would change the button's size and shift everything beside it on focus.
+  /// Full opacity: WCAG 1.4.11 wants 3:1 and a soft halo lands near 1.5:1. A shadow, not a border, so focus does not resize the button.
   List<BoxShadow> _focusRing(GPColors colors) {
     if (!_isEnabled) return const <BoxShadow>[];
 
@@ -204,7 +153,6 @@ class _GPButtonState extends State<GPButton> {
 
     return ButtonStyle(
       animationDuration: GPDurationTokens.fast,
-      // Material's own elevation would fight the theme's shadow layer, which is where every other surface in this app gets its depth.
       elevation: const WidgetStatePropertyAll<double>(0),
       minimumSize: WidgetStatePropertyAll<Size>(Size(0, _height)),
       fixedSize: WidgetStatePropertyAll<Size?>(Size.fromHeight(_height)),
@@ -252,7 +200,6 @@ class _GPButtonState extends State<GPButton> {
   }
 }
 
-/// Lays out leading icon, label and trailing icon, swapping the leading slot for a spinner while loading.
 class _GPButtonContent extends StatelessWidget {
   const _GPButtonContent({
     required this.label,

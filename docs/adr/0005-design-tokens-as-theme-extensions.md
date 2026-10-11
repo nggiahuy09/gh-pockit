@@ -135,8 +135,8 @@ new role touches four places. `freezed` would remove it but cannot generate a
 this was paid at W2 — the `settings` table landed at T2 and `GPDriftLocaleStore`
 at T4 — so a theme choice now has somewhere to live, and the language picker is
 out of the debt it shared. What is left is a `GPThemeModeStore` beside the
-locale one plus the control to drive it, which is scope rather than a blocker. `GPMoneyText` is not built; it needs `Money`
-and tabular figures, which arrive in W3.
+locale one plus the control to drive it, which is scope rather than a blocker. `GPMoneyText` landed at W5 Flex (`core/widgets/money_text.dart`):
+sign by tone, `income`/`expense` color, tabular figures.
 
 ## Alternatives rejected
 

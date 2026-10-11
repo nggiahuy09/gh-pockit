@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 
-/// Placeholder. Budgets are a Phase 6 feature (W24) — the tab exists now so the shell has its final shape and no tab has to be inserted later.
+/// Placeholder until Phase 6 (W24); the tab exists now so the shell already has its final shape.
 class BudgetsPage extends StatelessWidget {
   const BudgetsPage({super.key});
 

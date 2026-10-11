@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ghpockit/core/theme/tokens/colors.dart';
 
-/// Semantic color roles, as a [ThemeExtension].
-///
-/// Widgets read these through `context.colors`; they never touch [GPColorTokens]. That indirection is the whole design system: a role says what a
-/// color is *for*, so swapping the palette is one file and not a grep.
-///
-/// Roles come in `x` / `onX` pairs — a fill and the content legible on it. Every pair is checked against WCAG AA in
-/// `test/core/theme/contrast_test.dart`, so picking a prettier hue that fails contrast breaks the build rather than shipping.
+/// Contrast is a build gate: `test/core/theme/contrast_test.dart` holds these pairings to WCAG AA (ADR-0005).
 @immutable
 class GPColors extends ThemeExtension<GPColors> {
   const GPColors({
@@ -205,7 +199,6 @@ class GPColors extends ThemeExtension<GPColors> {
     if (other is! GPColors) return this;
 
     return GPColors(
-      // Brightness is a mode, not a value: half a Brightness does not exist, so it flips at the midpoint instead of interpolating.
       brightness: t < 0.5 ? brightness : other.brightness,
       primary: Color.lerp(primary, other.primary, t)!,
       onPrimary: Color.lerp(onPrimary, other.onPrimary, t)!,

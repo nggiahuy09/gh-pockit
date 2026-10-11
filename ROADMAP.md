@@ -168,7 +168,7 @@ sửa được. Sửa một trong hai là làm hỏng mọi transaction đã n�
 | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Xoá account/category còn transaction: cascade, block hay orphan                        | `AccountRepository.deleteAccount` (W2 T5) và `CategoryRepository.deleteCategory` (W3 T6) ghi rõ "W4's decision"                                                                                 | Chốt ở T2; code ở flex               | ✅ Chốt 27/09 (Q10–Q12) — ADR-0010, hai dartdoc đã sửa; code xong ở flex 30/09 (`DeleteAccountUseCase`)                                                            |
 | Sort account để hiển thị                                                               | `AccountDao.watchAccounts`: "sorting for display is W4's problem"; `AccountsPage` vẫn theo thứ tự tạo                                                                                           | Chốt ở T2                            | ✅ Chốt 27/09 (Q14) — giữ thứ tự tạo, sửa dartdoc `AccountDao` + `AccountRepository`                                                                               |
-| `GPMoneyText` + role typography cho tiền (`tnum` — subset ADR-0008 đã giữ feature này) | ADR-0005 _Owed_; `typography.dart` hẹn "arrives in W3"                                                                                                                                          | W5 T4 — list tiền đầu tiên           | Hẹn W5 T4                                                                                                                                                          |
+| `GPMoneyText` + role typography cho tiền (`tnum` — subset ADR-0008 đã giữ feature này) | ADR-0005 _Owed_; `typography.dart` hẹn "arrives in W3"                                                                                                                                          | W5 T4 — list tiền đầu tiên           | ✅ 11/10 (W5 Flex) — `core/widgets/money_text.dart`: dấu theo tone, màu `income`/`expense`, `tnum`; style do chỗ dùng truyền vào                                   |
 | ADR cho id `v5` của category seed (ngoại lệ golden rule 4)                             | W3 T5 chỉ ghi ở dartdoc + ROADMAP; ADR-0002 chỉ có v7 (entity) + v4 (idempotency key), CLAUDE.md rule 4 vẫn ghi "v4/v7"                                                                         | T2                                   | ✅ 27/09 (Q16) — ADR-0002 bổ sung + golden rule 4                                                                                                                  |
 | CI chưa có bước `build`                                                                | `ci.yml` hoãn tới khi có flavor, mà flavor chưa có lịch; lệnh `flutter run --flavor dev --dart-define-from-file=env/dev.json` ở CLAUDE.md §9 hiện không chạy (không có flavor, không có `env/`) | Chốt ở T2                            | ✅ 27/09 (Q15) — bước build + JDK 17, giữ tên job vì đó là required check; `flutter build apk --debug` chạy local 49s; lần chạy CI đầu tiên là ở PR W4             |
 | Chưa có ghi nhận app chạy thật từ khi có Drift                                         | W3 flex: iOS `pod install` lỗi CDN; không ghi lần chạy Android nào                                                                                                                              | T2 — máy có sẵn emulator `Pixel_10`  | ✅ 27/09 — debug APK trên emulator `Pixel_10`: Home, Accounts (empty state đọc từ Drift), Settings; tiếng Việt đủ dấu; ngôn ngữ còn nguyên sau force-stop + mở lại |
@@ -378,16 +378,165 @@ draft PR sớm.
 
 ## W5 · 05–11/10 🔴 BLoC + list UI
 
-| Ngày | Task                                                                                     |
-| ---- | ---------------------------------------------------------------------------------------- |
-| T2   | `TransactionBloc`: events `Started / FilterChanged / LoadMoreRequested`, immutable state |
-| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     |
-| T4   | Transaction list UI: group theo ngày, hiển thị `Money` đã format                         |
-| T5   | Loading / empty / error state cho list                                                   |
-| T6   | `bloc_test` cho `TransactionBloc`                                                        |
-| Flex | Widget test list, polish nhẹ                                                             |
+| Ngày | Task                                                                                     | Trạng thái                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | `TransactionBloc`: events `Started / FilterChanged / LoadMoreRequested`, immutable state | ✅ Done (04/10, sớm một ngày) — `features/transactions/presentation/bloc/`: `TransactionListBloc`, event và state là `part` của cùng library. Mới là **phần tính query**, chưa subscribe gì: handler đồng bộ, đọc state, tính `TransactionQuery` kế tiếp, emit — T3 nối `query` vào `watchTransactions`. Đặt tên lệch ROADMAP: **`TransactionListBloc`**, vì form của W6 là BLoC khác (§12.4). `flutter_bloc` 9.1.1 vào pubspec; **`bloc_test` không cài được** trên Dart 3.9.2 (`test` cần `analyzer <8`, `build_runner` 2.15.1 cần `≥8` — CLAUDE.md §5) nên test đọc `bloc.stream` bằng `flutter_test`, T6 cũng vậy. 23 test mới (suite: 641). Spec và bốn chỗ chốt trong lúc làm ở _W5 T2_ dưới (ADR-0011) |
+| T3   | Nối BLoC vào Drift stream (`emit.forEach` / `StreamSubscription`), xử lý cancel đúng     | ✅ Done (06/10) — `core/bloc/restartable.dart`: `switchMap` tự viết, huỷ handler đang chạy **trước** khi chạy handler mới. `TransactionListBloc()` tự tạo `WatchTransactionsUseCase` từ repository lấy qua `getIt`, use case không đăng ký DI (**ADR-0013**); chỉ event private `_TransactionListWatchRequested` subscribe (`emit.forEach` dưới `restartable()`), emission trễ của query cũ bị bỏ (**ADR-0012**). 17 test mới, bỏ 2 (suite: 656), có một test trên repository thật + Drift in-memory: ghi row là list tự cập nhật. Spec ở _W5 T3_ dưới                                                                                                                                                        |
+| T4   | Transaction list UI: group theo ngày, hiển thị `Money` đã format                         | ✅ Done (06/10), phần không phải UI — `presentation/transaction_days.dart` (`groupByLocalDay`, `dayLabel`) + `transaction_labels.dart` (nhãn loại, `titleIn`, `amountLabel` có dấu theo loại), 5 string EN/VI, `initializeDateFormatting()` trong `bootstrap()`. 13 test mới (suite: 669). Phần UI dồn vào Flex. Spec ở _W5 T4_ dưới                                                                                                                                                                                                                                                                                                                                                                          |
+| T5   | Loading / empty / error state cho list                                                   | ✅ Done (11/10) trong Flex — skeleton, empty, lỗi chưa có dòng (`GPEmptyState`, không thử lại), banner lỗi khi đã có dòng, thông báo "N giao dịch không hiển thị được"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| T6   | Test BLoC cho `TransactionListBloc` — bằng `flutter_test`, không có `bloc_test` (W5 T2)  | ✅ Done (06/10) — phần lớn đã viết cùng T2/T3 (34 test BLoC, 5 transformer, 1 use case). T6 thêm 2 test: lỗi trễ của filter cũ không lên màn hình (mutation check: bỏ chặn ở `onError` → fail), đổi filter khi đang load more. Suite: 671                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Flex | Widget test list, polish nhẹ                                                             | ✅ Done (11/10) — làm theo canvas "Pockit Design" (trang Foundations + W5): `TransactionsPage` nhóm ngày với header dính, `GPMoneyText`, trạng thái T5, dock kính 4 tab + nút thêm ở mọi tab (**ADR-0014**: Settings chuyển về `/home/settings`, nút thêm mở `/transactions/new` — placeholder tới W6), nút debug "Thêm giao dịch mẫu" trong Settings. "Done khi" đạt, có widget test trên repository thật. 30 test mới (suite: 701). Chi tiết ở _W5 Flex_ dưới                                                                                                                                                                                                                                               |
 
 **Done khi:** thêm 1 row vào DB bằng tay → UI tự update, không gọi refresh.
+
+### W5 T2 — spec `TransactionListBloc` (ADR-0011)
+
+> Phần tính toán, chưa có plumbing: mỗi handler đồng bộ, đọc state, tính `TransactionQuery` kế tiếp rồi emit; event không đổi query thì bị bỏ, không
+> emit gì. T3 nối `state.query` vào `watchTransactions`. Bốn chỗ ROADMAP chưa nói, chốt trong lúc làm theo đề xuất và ghi vào ADR-0011 (04/10).
+
+**Dependency**
+
+- [x] `flutter_bloc` 9.1.1 (kéo `bloc` 9.2.1, `provider`, `nested`). Không `bloc_concurrency` — transformer tự viết, ở T3 cùng subscription.
+- [x] `bloc_test` **không** thêm được: nó cần `package:test`, mọi `test` chấp nhận `test_api 0.7.6` (do `flutter_test` pin) đều cần `analyzer <8`, còn
+      `build_runner` 2.15.1 cần `≥8`. Test đọc `bloc.stream` bằng `flutter_test`; seed state bằng subclass khai báo trong file test gọi `emit` — đúng
+      việc `seed` của `bloc_test` làm. Ghi ở pubspec, CLAUDE.md §5 và §8.
+
+**Cấu trúc**
+
+- [x] `presentation/bloc/transaction_list_bloc.dart` + `part` `transaction_list_event.dart`, `transaction_list_state.dart` — layout `flutter_bloc`
+      hướng dẫn. Cùng library nên event vẫn `sealed` mà T3 vẫn thêm được event private nếu cần.
+- [x] Event: `TransactionListStarted` / `TransactionListFilterChanged` / `TransactionListLoadMoreRequested`. Không có refresh (list là query sống), không
+      có create / edit / delete (form của W6, đi qua DB như mọi write khác).
+- [x] Chưa nhận repository, chưa bind DI: T3 thêm repository cùng subscription; T4 tạo BLoC trong route builder, như `AccountsPage` nhận repository
+      qua constructor.
+
+**State** — một class immutable, không phải family `Initial / Loading / Ready / Failure`: row còn trên màn hình trong lúc load more, và lỗi có thể đến
+khi đã có row, nên các trạng thái chồng lên nhau
+
+- [x] Ba field: `query` (cửa sổ đang hoặc sắp watch), `snapshot` (row trên màn hình — của `query`, hoặc của cửa sổ nhỏ hơn trong lúc load more), `failure`
+      (lỗi trên error channel, giữ **cạnh** snapshot chứ không thay; hiện thế nào là việc của T5).
+- [x] Cờ đều suy ra, không lưu: `isLoading` = chưa có snapshot và không có lỗi; `hasMore` = snapshot đầy; `isLoadingMore` = snapshot đầy nhưng ít row hơn
+      `query.limit`, và không có lỗi.
+- [x] Value equality, vì `Bloc.emit` bỏ state bằng state đang có. `toString` chỉ có id, instant, số đếm (golden rule 9).
+
+**Event**
+
+- [x] `Started`: cửa sổ đầu là không lọc, một trang. `Started` lần hai bị bỏ — không reset list user đã cuộn.
+- [x] `FilterChanged` mang **cả bộ lọc**, không phải phần thay đổi: field null là bỏ lọc đó. Lọc khác → về một trang, bỏ snapshot và failure — không row
+      nào của filter cũ được hiện dưới filter mới. Lọc y hệt → bỏ qua, giữ cửa sổ và row; so ở limit hiện tại, nên set khác thứ tự hay set rỗng (= null)
+      đều là y hệt nhờ equality của `TransactionQuery`. Trước `Started` → bỏ. `from` sau `to` → `ArgumentError` từ `TransactionQuery`, không bị nuốt
+      (ADR-0006). Chưa màn nào gửi event này trước thanh lọc của W26 T4.
+- [x] `LoadMoreRequested`: chỉ khi snapshot đầy; giữ snapshot (nó là prefix của cửa sổ mới), bỏ failure.
+
+**Chốt trong lúc làm** (ADR-0011)
+
+- [x] `pageSize = 50`: khoảng bốn màn hình trước lần load more đầu, map 50 entity mỗi emission không đáng kể. Là ước lượng; W8 T3 đo first frame.
+- [x] Load more hỏi `snapshot.rowCount + pageSize` — đếm row thô, kể cả row hỏng — chứ không `query.limit + pageSize`. Gửi nhiều lần cho cùng một snapshot
+      là hỏi cùng một cửa sổ, nên scroll listener bắn mỗi frame chỉ tốn một query; cửa sổ không bao giờ co. Không cần cờ "đang load more" riêng.
+- [x] Failure thuộc về watch đã báo nó: đổi query nào cũng xoá. Cửa sổ lớn bị lỗi thì không nới thêm — watch vẫn sống và tự hồi (T3), như list accounts;
+      không có retry bằng cuộn.
+- [x] `FilterChanged` trước `Started` bị bỏ chứ không thành filter ban đầu. Khi W26 cần mở list với filter sẵn thì thêm filter vào `Started`.
+
+**Để lại cho T3**
+
+- [x] Nhận `TransactionRepository`, subscribe theo `state.query`; mỗi lần query đổi, watch cũ phải bị huỷ **trước khi** kịp giao thêm row — sau
+      `FilterChanged`, một emission trễ của filter cũ là row sai trên màn hình.
+- [x] `onData` → snapshot mới, xoá failure; `onError` → giữ snapshot, đặt failure; lỗi không phải `GPFailure` là bug, ném lại (ADR-0006).
+- [x] `close()` huỷ watch đang chạy.
+
+**Test** — `test/features/transactions/presentation/bloc/transaction_list_bloc_test.dart`, 23 test
+
+- [x] State: cờ suy ra ở từng ca — trước `Started`, lỗi khi chưa có row, cửa sổ đầy / ngắn, load more đang chờ và kết thúc bằng emission đầy, ngắn hoặc
+      lỗi; equality; `toString`.
+- [x] `Started` hai lần. `FilterChanged`: trước `Started`, lọc mới, thay cả bộ, lọc y hệt, khoảng ngược → lỗi không bị nuốt. `LoadMoreRequested`: nới và
+      giữ row, gửi năm lần hỏi một lần, đếm row hỏng, cửa sổ ngắn, chưa có row, bỏ failure, không nới qua cửa sổ đã lỗi.
+
+### W5 T3 — spec nối BLoC vào Drift stream (ADR-0012)
+
+> Handler public vẫn chỉ tính query; một event private duy nhất subscribe. Ba chỗ chốt trong lúc làm, ghi vào ADR-0012 (06/10).
+
+**Transformer** — `core/bloc/restartable.dart`
+
+- [x] `restartable<E>()` → `EventTransformer<E>`, trên `_switchMap` tự viết: huỷ handler đang chạy **trước** khi gọi mapper — với bloc, gọi mapper là
+      khởi động handler mới. `switchMap` của `stream_transform` (nền của `bloc_concurrency`) gọi mapper trước rồi mới huỷ.
+- [x] Không forward pause (bloc không bao giờ pause event stream). Kết thúc khi source xong và inner cuối cùng xong; cancel output huỷ cả source lẫn inner.
+
+**BLoC**
+
+- [x] `TransactionListBloc()` — không nhận dependency nào: tự tạo `WatchTransactionsUseCase` (chỉ chuyển tiếp `watchTransactions`) từ
+      `getIt<TransactionRepository>()` (ADR-0013). Use case không đăng ký DI; route builder (T4) chỉ cần gọi `TransactionListBloc()`.
+- [x] Ba handler public đồng bộ như T2, đi qua `_watch`: emit state mới ngay, rồi `add(_TransactionListWatchRequested(query))`.
+- [x] Chỉ event private subscribe: `emit.forEach(watchTransactions(query))` dưới `restartable()`. `onData` → snapshot mới, xoá failure; `onError` →
+      `GPFailure` giữ row và đặt failure, lỗi khác ném lại (ADR-0006).
+- [x] Emission trễ: state mới emit trước event private một microtask, trong khe đó watch cũ vẫn có thể giao — so `event.query` với `state.query`, lệch thì
+      bỏ.
+- [x] `close()`: bloc huỷ handler đang chạy, kéo theo watch — không thêm code.
+
+**Chốt trong lúc làm** (ADR-0012, ADR-0013)
+
+- [x] BLoC chỉ nói chuyện với use case, kể cả use case chỉ chuyển tiếp (ADR-0013, thay phần "use case chỉ khi có rule" của ADR-0010): giữ repository thì
+      BLoC gọi được write vòng qua rule — `deleteAccount` không qua `DeleteAccountUseCase`. `AccountsPage` (W3, chưa có BLoC) là ngoại lệ còn lại.
+- [x] BLoC tự tạo use case từ repository lấy qua `getIt`; use case không đăng ký DI (ADR-0013). Theo lựa chọn của bạn (06/10): mỗi BLoC phục vụ một
+      module, và tham số UI truyền vào input của use case đổi theo màn hình mà không phải sửa DI. Ba use case W4 đã đăng ký được gỡ khỏi DI. Đổi lại,
+      BLoC chạm được `getIt` nên giới hạn "chỉ gọi use case" là quy ước review, và test BLoC đăng ký fake vào `getIt` toàn cục rồi reset.
+- [x] Tự viết thay `bloc_concurrency` có thêm lý do thứ hai ngoài bớt một dependency: thứ tự huỷ-trước-chạy-sau.
+- [x] Event private + chặn emission trễ, thay vì một handler sống lâu nghe `StreamController` các query — cách đó không có khe, nhưng query đi kênh riêng,
+      ngoài `BlocObserver`, và phải tự đóng controller.
+- [x] Watch lỗi tự hồi ở lần ghi tiếp theo vào bảng: `emit.forEach` có `onError` không huỷ subscription, Drift giữ query stream sau lần chạy lỗi (đã đọc
+      source cả hai).
+
+**Test** — 17 test mới, bỏ 2 (suite: 656)
+
+- [x] `test/core/bloc/restartable_test.dart` (5): huỷ inner cũ trước khi listen inner mới; chuyển lỗi; kết thúc đúng lúc; cancel dây chuyền; trong một bloc
+      thật, handler cũ dừng trước khi handler mới chạy.
+- [x] `transaction_list_bloc_test.dart` (+9), với `FakeTransactionRepository` mới ở `test/helpers/` (log `listen #n` / `cancel #n`): `Started` mở một
+      watch; đổi filter huỷ watch cũ trước; emission trễ của filter cũ không lên màn hình; load more giữ row tới khi cửa sổ lớn trả về; 5 lần load more mở
+      một watch; lỗi giữ row và tự xoá ở emission sau; lỗi không phải `GPFailure` không bị nuốt; `close()` huỷ watch; trên repository thật + Drift
+      in-memory, ghi row là list tự cập nhật mà không cần event.
+- [x] `watch_transactions_use_case_test.dart` (1): chuyển nguyên query và stream, cả lỗi. `injector_test`: bỏ 2 test resolve use case (use case không
+      còn trong DI); thêm nhóm `configureCategoriesDependencies` (2), vì sau khi bỏ, module này không còn test nào gọi tới.
+- [x] Mutation check: bỏ chặn emission trễ → test emission trễ fail; đổi transformer sang gọi-mapper-trước-huỷ-sau → 4 test fail.
+
+### W5 T4 — spec phần không phải UI của list (ADR-0009)
+
+> Chốt 06/10: UI (page, widget, `GPMoneyText`, trạng thái T5, nút debug) dồn vào Flex; T4 làm phần logic mà UI sẽ dùng.
+
+- [x] Chưa hiện tên category/account: tiêu đề dòng là note, không có thì nhãn loại (`titleIn`). Tên đến cùng join của W7 T5; string "Uncategorised"
+      (ADR-0010) đi theo lúc đó.
+- [x] `TransactionTypeLabel.labelIn` + 5 string EN/VI: `typeExpense` / `typeIncome` / `typeTransfer`, `today`, `yesterday`.
+- [x] `amountLabel`: expense `-`, income `+`, transfer không dấu — dấu mang nghĩa, màu chỉ lặp lại (WCAG 1.4.1); dấu đứng trước ký hiệu (`-₫45,000`).
+- [x] `groupByLocalDay`: nhóm theo ngày giờ máy (ADR-0009), giữ thứ tự mới trước; ranh giới là nửa đêm local, không phải UTC.
+- [x] `dayLabel`: "Hôm nay" / "Hôm qua", còn lại `DateFormat` của intl theo ngôn ngữ đang bật, chỉ có năm khi khác năm nay; "hôm qua" tính bằng
+      constructor, không trừ 24 giờ (DST). `bootstrap()` gọi `initializeDateFormatting()` — dữ liệu đi kèm intl, không cần mạng.
+- [x] 13 test (suite: 669): labels 6, days 7. `occurredAt` dựng từ giờ local nên test chạy giống nhau ở mọi múi giờ.
+
+### W5 Flex — UI (dồn từ T4, T5)
+
+> Chốt 11/10: làm theo canvas "Pockit Design" — dock kính 4 tab, có nút thêm, header ngày dính khi cuộn, chuỗi mới cho T5.
+
+- [x] `TransactionsPage`: route builder bọc `BlocProvider(create: (_) => TransactionListBloc()..add(const TransactionListStarted()))`, nhận `GPClock` để
+      tính "Hôm nay" (app không gọi `DateTime.now()`). `CustomScrollView`: mỗi ngày một `SliverMainAxisGroup` = header `SliverPersistentHeader` dính
+      (cao theo cỡ chữ hệ thống, hairline `outlineVariant` khi có dòng chạy dưới) + card các dòng. Còn cách cuối < 600px và `hasMore` →
+      `LoadMoreRequested`; BLoC bỏ request trùng nên bắn mỗi frame cũng không sao.
+- [x] Dòng: `titleIn` (ellipsis 1 dòng) + `GPMoneyText`; transfer có icon `swap_horiz`, không dấu. Cao tối thiểu 56 nhân theo cỡ chữ. Chưa chạm được —
+      chi tiết là W6. `amountLabel` bỏ, thay bằng `moneyTone` + `GPMoneyText.label`.
+- [x] `GPMoneyText` (`core/widgets/`): dấu theo `GPMoneyTone`, màu `income`/`expense`, `tnum`, không bao giờ cắt — trả nợ ADR-0005.
+- [x] T5: skeleton (lần đầu / đổi filter), empty, lỗi chưa có dòng (`GPEmptyState` + "Danh sách sẽ tự hiện lại…", không thử lại), banner lỗi
+      khi đã có dòng, thông báo "N giao dịch không hiển thị được" (EN chia số ít/nhiều). Footer spinner khi `hasMore`.
+- [x] Shell (**ADR-0014**): dock 4 tab + nút thêm tròn, kính mờ `GPGlass` + `GPGlassTokens` (tint là role có sẵn, contrast test không đổi). Settings
+      thành route con `/home/settings` (icon trên app bar Home); nút thêm ở cả 4 tab (ẩn ở trang con như Settings — đổi so với canvas sau khi thử app), mở `/transactions/new` (placeholder tới W6).
+      Dock giữ chỗ qua `MediaQuery.padding.bottom` nên page không cần biết dock.
+- [x] Nút debug trong Settings (`kDebugMode`): `CreateSampleTransactionUseCase` — account cũ nhất, chưa có thì tạo ví tiền mặt; tên ví và note theo
+      ngôn ngữ đang bật. `SampleDataCubit` dựng use case `late` nên Settings vẫn pump được không cần DI.
+- [x] Test (30 mới, suite: 701): page 14 (trạng thái, nhóm ngày, chữ 130%, header dính, load more, **"Done khi" trên repository thật**), `GPMoneyText`
+      6, use case 3, Settings 3, shell 4. Test bấm nút debug dùng fake: write bắt đầu từ một tap chạy trong fake zone, timer của drift không chạy.
+- [x] Bộ dữ liệu mẫu để thử UI bằng tay: `settings/presentation/debug/sample_data.dart` (5 account, 105 giao dịch, ngày tính lùi từ hôm nay). Nạp bằng nút "Nạp bộ dữ liệu mẫu" trong Settings, hoặc `--dart-define=SAMPLE_DATA=true` (chỉ nạp vào DB chưa có giao dịch; cấu hình "Pockit (sample data)" trong `.vscode/launch.json`). `SeedSampleDataUseCase` ghi qua repository thật. 5 test (suite: 706).
+- Soát bằng ảnh render (font thật) và trên simulator iPhone 16 Pro — khớp canvas; simulator bắt được nhãn "Transactions" bị cắt ở dock → nhãn tự thu nhỏ.
+- [x] iOS: deployment target 13 → **15** (Podfile `platform` + `post_install` ép mọi pod, `project.pbxproj`, `AppFrameworkInfo.plist`) — Xcode 27 không build
+      dưới 15, bỏ hỗ trợ iOS 13–14. Còn một nợ: `flutter build ios --simulator` (build cả arm64 + x86_64) vẫn hỏng vì flutter_tools 3.35 gọi
+      `lipo -verify_arch` hai kiến trúc một lần, lipo của Xcode 27 không nhận; `flutter run` vào simulator (chỉ arch đang chạy) thì chạy. Hết khi SDK pin lên.
+- Không thuộc tuần này: polish `AccountsPage` theo artboard "Tài khoản — polish" + chuyển sang use case (W6, ADR-0013); tên category/account +
+  "Uncategorised" (W7 T5).
 
 ## W6 · 12–18/10 🔴 CRUD UI + balances
 
@@ -718,8 +867,8 @@ Cuối mỗi tháng, tự trả lời (viết ra, không nghĩ trong đầu):
 W1  [x]   W8  [ ]   W15 [ ]   W22 [ ]
 W2  [x]   W9  [ ]   W16 [ ]   W23 [ ]
 W3  [x]   W10 [ ]   W17 [ ]   W24 [ ]
-W4  [ ]   W11 [ ]   W18 [ ]   W25 [ ]
-W5  [ ]   W12 [ ]   W19 [ ]   W26 [ ]
+W4  [x]   W11 [ ]   W18 [ ]   W25 [ ]
+W5  [x]   W12 [ ]   W19 [ ]   W26 [ ]
 W6  [ ]   W13 [ ]   W20 [ ]   W27 [ ]
 W7  [ ]   W14 [ ]   W21 [ ]   W28 [ ]
 ```

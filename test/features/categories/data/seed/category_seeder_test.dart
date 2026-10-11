@@ -11,10 +11,6 @@ import 'package:ghpockit/features/categories/domain/entities/category_type.dart'
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 
-/// The default categories, and the one property the whole design rests on: **running the seeder twice changes nothing** (W3 T5).
-///
-/// The real `GPUuidGeneratorImpl` is used for the determinism tests rather than the fake, because determinism is a claim about the *production* generator.
-/// A fake that returned the same string for the same input would make those tests pass while the app shipped random ids.
 void main() {
   late GPAppDatabase db;
   late CategoryDao dao;
@@ -30,6 +26,7 @@ void main() {
     await db.close();
   });
 
+  /// The real generator, not `FakeUuidGenerator`: deterministic ids are a claim about the production one.
   CategorySeeder seeder({String ownerId = localOwnerId, GPUuidGenerator? uuidGenerator}) => CategorySeeder(
     dao: dao,
     clock: clock,
@@ -49,16 +46,12 @@ void main() {
   });
 
   test('stores the translation key and leaves name null', () async {
-    // The decision T5 exists for: what is persisted is `category.food`, not "Ăn uống". A translated string here would freeze the category list into
-    // whatever language the app happened to be in at install time (ADR-0004).
     await seeder().seedDefaults();
 
     final rows = await db.select(db.categoriesTable).get();
     expect(rows.map((r) => r.nameKey).toSet(), DefaultCategory.values.map((c) => c.nameKey).toSet());
-    // Null, not empty: it is what makes "the user has not renamed this" a fact the row states.
     expect(rows.every((r) => r.name == null), isTrue);
     expect(rows.every((r) => r.iconKey != null), isTrue);
-    // Left to the theme's income/expense colours until the user picks one.
     expect(rows.every((r) => r.colorKey == null), isTrue);
   });
 
@@ -79,9 +72,6 @@ void main() {
   });
 
   test('two devices of the same user derive identical ids', () async {
-    // The reason seeded ids are `v5` over `owner_id|name_key` rather than `v7`. Two installs each seed offline, before either has seen the other's data;
-    // with random ids the first sync hands the user two of everything, and by then both copies may have transactions attached. This test is what would
-    // fail if someone "simplified" the seeder back to `v7()`.
     await seeder().seedDefaults();
     final first = (await db.select(db.categoriesTable).get()).map((r) => r.id).toSet();
 
@@ -101,7 +91,6 @@ void main() {
   });
 
   test('gives two owners different ids for the same category', () async {
-    // The owner is part of the derived name, or every user on the server would share one set of category ids.
     await seeder().seedDefaults();
     await seeder(ownerId: 'someone-else').seedDefaults();
 
@@ -111,7 +100,6 @@ void main() {
   });
 
   test('does not bring back a category the user deleted', () async {
-    // Derived ids again, from the other side: the tombstoned row keeps the id, so the next run's insert is ignored rather than creating a fresh copy.
     await seeder().seedDefaults();
     final food = (await db.select(db.categoriesTable).get()).firstWhere((r) => r.nameKey == 'category.food');
     await dao.softDelete(food.id, now: clock.nowEpochMillis());
@@ -121,7 +109,6 @@ void main() {
   });
 
   test('stamps every row with one instant, read once from the clock', () async {
-    // Not `DateTime.now()` per row: eleven rows inserted in one batch must share a `created_at`, or the list's order depends on how fast the loop ran.
     final fake = FakeUuidGenerator();
     await CategorySeeder(dao: dao, clock: clock, uuidGenerator: fake, ownerId: localOwnerId).seedDefaults();
 
@@ -130,7 +117,6 @@ void main() {
   });
 
   test('every default category has a distinct key', () async {
-    // A duplicate key would collide on the unique index and silently seed one row fewer.
     expect(DefaultCategory.values.map((c) => c.nameKey).toSet(), hasLength(DefaultCategory.values.length));
   });
 
@@ -139,7 +125,6 @@ void main() {
       expect(DefaultCategory.fromNameKey(category.nameKey), category);
     }
 
-    // A key from a newer build, reaching an older one after a downgrade.
     expect(DefaultCategory.fromNameKey('category.pets'), isNull);
     expect(DefaultCategory.fromNameKey(''), isNull);
   });

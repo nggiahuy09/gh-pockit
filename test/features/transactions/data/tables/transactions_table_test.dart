@@ -1,4 +1,3 @@
-// `isNull` is both a drift SQL predicate and a matcher; this file wants the matcher.
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,11 +5,6 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
-/// The constraints on `transactions` that are decisions rather than drift defaults (W4 T3, ADR-0009).
-///
-/// The §6 column set is the same as `accounts` and is not re-asserted column by column. What is: every CHECK refuses the row it exists for, every foreign
-/// key refuses a dangling id, what was deliberately *not* constrained stays unconstrained, and the four indexes really serve the order the list reads in.
-/// Each test fails if a later edit quietly relaxes — or quietly tightens — one of them.
 void main() {
   late GPAppDatabase db;
 
@@ -20,7 +14,6 @@ void main() {
   setUp(() async {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
 
-    // The parents every foreign key below points at. Inserted through the generated companions: this file is about `transactions`, not about them.
     for (final id in ['acc-cash', 'acc-bank']) {
       await db
           .into(db.accountsTable)
@@ -113,7 +106,6 @@ void main() {
       expect(row.createdAt, now);
       expect(row.updatedAt, now);
       expect(row.version, 1);
-      // Null, not 0 — a tombstone column that defaulted to an epoch would be a row deleted in 1970.
       expect(row.deletedAt, isNull);
       expect(row.syncStatus, 'pending');
     });
@@ -132,7 +124,7 @@ void main() {
     test('the amount as an integer, never a real', () async {
       await insert(transaction(amountMinor: 1));
 
-      // Raw SQL, so the assertion is about what SQLite holds rather than what the row class casts it to (same reason as `accounts_table_test.dart`).
+      // Raw SQL: a REAL column would still surface as an `int` through drift's row class.
       final raw = await db.customSelect('SELECT typeof(amount_minor) AS t FROM transactions').getSingle();
 
       expect(raw.read<String>('t'), 'integer');
@@ -150,8 +142,7 @@ void main() {
     });
 
     test('a transfer with no destination', () async {
-      // Built from `TransactionType.transfer.storageValue`, not a typed `'transfer'`: the table's CHECK names the literal, and this is what fails if the two
-      // ever drift apart.
+      // Also fails if `TransactionType.transfer.storageValue` and the literal the CHECK names drift apart.
       await expectLater(insert(transfer(destinationAccountId: null)), refusedBy('CHECK constraint failed'));
     });
 
@@ -169,7 +160,6 @@ void main() {
     });
 
     test('the transfer shape on a raw write too, not only through the companion', () async {
-      // The path the pull of W14 may take. A CHECK lives in the `CREATE TABLE`, so bypassing Dart bypasses nothing.
       await expectLater(
         db.customStatement(
           'INSERT INTO transactions (id, owner_id, type, account_id, amount_minor, currency_code, occurred_at, created_at, updated_at, version, sync_status) '
@@ -194,8 +184,6 @@ void main() {
     });
 
     test('but not a soft-deleted parent, which is still a row', () async {
-      // ADR-0010 relies on this: sync can leave a live transaction on a tombstoned account, and deleting a category keeps its transactions pointing at the
-      // tombstone. A foreign key that treated soft-deleted parents as missing would make both states unstorable.
       await (db.update(db.accountsTable)..where((t) => t.id.equals('acc-cash'))).write(const AccountsTableCompanion(deletedAt: Value(now)));
       await (db.update(db.categoriesTable)..where((t) => t.id.equals('cat-food'))).write(const CategoriesTableCompanion(deletedAt: Value(now)));
 
@@ -207,8 +195,6 @@ void main() {
 
   group('deliberately does not constrain', () {
     test('the vocabulary of type and sync_status — the mapper refuses unknown values on read', () async {
-      // No `CHECK (type IN (...))` (ADR-0009): a new type would then be a table rebuild. The row below is storable, and it is the mapper at T6 that turns
-      // it into an unreadable row (ADR-0011) rather than a guess.
       await insert(transaction(type: 'refund', syncStatus: 'something-newer'));
 
       final row = await db.select(db.transactionsTable).getSingle();
@@ -225,8 +211,7 @@ void main() {
   });
 
   test('requires every sync column — no SQL default fills one in', () async {
-    // Raw SQL, because the companion makes this a compile error. A default `sync_status` would be a sync state nobody wrote, and a default `version` a
-    // base version the server never issued.
+    // Raw SQL: the companion's `required` makes this a compile error, but a migration or a raw upsert bypasses Dart.
     await expectLater(
       db.customStatement(
         'INSERT INTO transactions (id, owner_id, type, account_id, amount_minor, currency_code, occurred_at, created_at, updated_at, version) '
@@ -244,9 +229,7 @@ void main() {
   });
 
   group('serves the list order from an index, with no sort step', () {
-    // One query per way the list is narrowed, each in the order ADR-0011 fixes. The assertion is on the plan, not on timing: `USING INDEX <name>` says the
-    // rows come off that index, and the absence of `TEMP B-TREE` says nothing had to be sorted afterwards — which is what keeps `LIMIT 50` cheap at 50k
-    // rows. W8 measures the cost; this pins the shape.
+    // On the plan, not on timing: `USING INDEX` means rows come off that index; no `TEMP B-TREE` means nothing was sorted afterwards.
     const order = 'ORDER BY occurred_at DESC, id DESC LIMIT 50';
 
     final cases = <String, (String, String)>{

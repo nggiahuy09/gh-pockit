@@ -15,21 +15,8 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_query
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
-/// The offline-first half of `TransactionRepository` (W4 T6).
-///
-/// **The policy lives here**, on the shape `AccountRepositoryImpl` set: the id (`GPUuidGenerator.v7`), the instant (one read of `GPClock` per operation),
-/// the owner (never seen by the domain), the mapping, and what a failure means. `TransactionDao` holds none of it. What this repository adds over accounts
-/// is two things, each decided in an ADR before it was written:
-///
-/// - **The rules that need another row run inside the write's own transaction** (ADR-0010): the account — and a transfer's destination — must be live and
-///   the owner's, and the amount must be in the account's currency. Checked in the same `transaction {}` as the insert or update, so the background sync
-///   of P4 cannot delete the account between the check and the write. They run *before* the version guard of an update: nothing is written that should
-///   not be, and a conflict is still reported whenever the accounts are fine.
-/// - **A row that will not map does not fail the list** (ADR-0011). It is counted in the snapshot and logged — once per stream, not once per emission: the
-///   list re-runs after every write to the table, and one bad row would otherwise repeat the same log line for every edit the user makes.
-///
-/// No network, for the reason `AccountRepositoryImpl` gives. From W12 T5 every write below also inserts its outbox mutation in the same transaction
-/// (golden rule 3) — the two writes that already open one only gain a line inside it.
+/// Account rules run inside the write's own transaction, so sync cannot delete the account between check and write (ADR-0010). A row that will not map is
+/// counted in the snapshot rather than failing the list (ADR-0011).
 class TransactionRepositoryImpl implements TransactionRepository {
   const TransactionRepositoryImpl({
     required TransactionDao dao,
@@ -50,14 +37,11 @@ class TransactionRepositoryImpl implements TransactionRepository {
   final GPUuidGenerator _uuidGenerator;
   final GPAppLogger _logger;
   final TransactionMapper _mapper;
-
-  /// `localOwnerId` today; the signed-in uid once auth lands. Stated rather than defaulted, for the reason `AccountRepositoryImpl` gives.
   final String _ownerId;
 
   @override
   Stream<TransactionListSnapshot> watchTransactions(TransactionQuery query) {
-    // One set per stream this call returns. A BLoC re-subscribes when its filter or its window changes, and each new stream logs a refused row once more —
-    // which is the moment someone might be looking.
+    // Per stream, not per emission: the list re-runs after every write, and one bad row would log on every edit.
     final logged = <String>{};
 
     return _dao
@@ -86,7 +70,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
                 }
               }
 
-              // On the raw row count, refused rows included: a full window with one unreadable row in it must still say there may be more (ADR-0011).
+              // Raw row count, refused rows included: a full window with one unreadable row may still have more (ADR-0011).
               sink.add(TransactionListSnapshot(transactions: transactions, unreadableCount: unreadable, hasMore: rows.length >= query.limit));
             },
             handleError: (error, stackTrace, sink) => _reportQueryError('transaction list read failed', error, stackTrace, sink),
@@ -96,7 +80,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Stream<TransactionEntity?> watchTransaction(String id) {
-    // The same once-per-stream logging as the list, although here every emission still carries the error: one row has no partial answer.
     var logged = false;
 
     return _dao
@@ -105,7 +88,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
           StreamTransformer<TransactionRow?, TransactionEntity?>.fromHandlers(
             handleData: (row, sink) {
               if (row == null) {
-                // Not an error: the DAO filters tombstones, so null means "gone" — what an edit screen subscribes in order to learn.
+                // Not an error: the DAO filters tombstones, so null means the row is gone.
                 sink.add(null);
                 return;
               }
@@ -138,7 +121,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }) async {
     final now = _clock.nowUtc();
 
-    // The entity's own rules first, before the database is touched at all — a blank transfer destination needs no query to be refused.
     final created = TransactionEntity.create(
       id: _uuidGenerator.v7(),
       type: type,
@@ -163,7 +145,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
             await _dao.insertTransaction(_mapper.toInsert(value, ownerId: _ownerId));
 
-            // Returned as built, not read back — the caller holds every value that was written, and the stream is what tells the UI.
+            // Returned as built, not read back: the stream is what tells the UI.
             return GPOk<TransactionEntity>(value);
           });
         } on Exception catch (error, stackTrace) {
@@ -175,8 +157,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
   @override
   Future<GPResult<TransactionEntity>> updateTransaction(TransactionEntity transaction) async {
     final now = _clock.nowUtc();
-    // No validation branch for the entity's own rules: a `TransactionEntity` cannot exist unvalidated (`create` and `update` are the only ways to build
-    // one). What is left to decide is *when*, and whether the accounts it names still agree.
+    // No entity validation here: a `TransactionEntity` cannot exist unvalidated.
     final stamped = transaction.stampedAt(now);
 
     try {
@@ -193,8 +174,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
         if (written == 1) return GPOk<TransactionEntity>(stamped);
 
-        // Zero rows is a stale version, a tombstone, or a row that was never there. Asked inside the transaction, so the answer is still true when it
-        // is returned — the reasoning `AccountRepositoryImpl.updateAccount` gives.
+        // 0 rows: a stale version, a tombstone, or no row. Asked inside the transaction, so the answer still holds when it is returned.
         final current = await _dao.findById(stamped.id);
 
         if (current == null || current.deletedAt != null) return const GPErr<TransactionEntity>(GPNotFoundFailure());
@@ -208,7 +188,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Future<GPResult<void>> deleteTransaction(String id) async {
-    // No account rule: a transaction on an account that is already gone must still be deletable — it is the only way to clean one up.
+    // No account rule: a transaction on an account that is already gone must still be deletable.
     try {
       final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
 
@@ -225,16 +205,11 @@ class TransactionRepositoryImpl implements TransactionRepository {
     try {
       return GPOk<bool>(await _dao.hasLiveTransactions(_ownerId, accountId));
     } on Exception catch (error, stackTrace) {
-      // The id in scope is the account's — the one the delete was asked about — so the log names that entity, not a transaction.
       return _databaseFailure<bool>('transaction lookup by account failed', accountId, error, stackTrace, entity: 'account');
     }
   }
 
-  /// The two rules of ADR-0010 that need another row, or null when the write may go ahead. Called only inside the write's own transaction.
-  ///
-  /// The account must be live and the owner's — archived counts, deleted does not — or the answer is [GPNotFoundFailure]. The amount must be in its
-  /// currency, or [GPValidationCode.transactionCurrencyMismatch]. A transfer's destination must pass the same first test and keep the same currency, or
-  /// [GPValidationCode.transactionTransferCurrenciesDiffer]: two different sentences, because the user has two different things to fix.
+  /// Null when the write may go ahead. Call only inside the write's transaction. Two currency codes, because the user has two different things to fix.
   Future<GPFailure?> _refusalFromAccounts(TransactionEntity transaction) async {
     final currency = await _dao.liveAccountCurrency(_ownerId, transaction.accountId);
     if (currency == null) return const GPNotFoundFailure();
@@ -250,21 +225,18 @@ class TransactionRepositoryImpl implements TransactionRepository {
     return null;
   }
 
-  /// Logs a row the mapper refused: an id, an entity type and a reason — the three things golden rule 9 allows. The amount and the note are in scope at
-  /// every call site and neither is logged.
+  /// Id, entity and reason only (golden rule 9): the amount and the note are in scope and must stay out.
   void _logRejectedRow(String id, TransactionMapperReason reason) =>
       _logger.error('transaction row could not be mapped', fields: {'entity': 'transaction', 'id': id, 'reason': reason.name});
 
-  /// Logs a local-storage failure and reports it as one. `on Exception` at every call site, never `on Object`, for the line `AccountRepositoryImpl` draws:
-  /// an `Error` is a bug, and it must reach the crash reporter rather than a sentence the user can do nothing with.
+  /// Call sites catch `on Exception`, never `on Object`: an `Error` is a bug and must reach the crash reporter.
   GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace, {String entity = 'transaction'}) {
     _logger.error(message, fields: {'entity': entity, 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
   }
 
-  /// Puts what a watched query raised back on its stream: a logged [GPDatabaseFailure] for an [Exception], the original object for anything else —
-  /// `AccountRepositoryImpl._reportQueryError`, line for line, so both features keep the one promise their interfaces make about the error channel.
+  /// An [Exception] becomes a logged [GPDatabaseFailure], the only error the interface promises on the channel; anything else is a bug and passes through.
   void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);

@@ -5,10 +5,8 @@ import 'package:ghpockit/core/theme/shadows.dart';
 import 'package:ghpockit/core/theme/typography.dart';
 
 abstract final class GPAppTheme {
-  /// The light theme.
   static ThemeData light() => _build(colors: const GPColors.light(), shadows: const GPShadows.light());
 
-  /// The dark theme.
   static ThemeData dark() => _build(colors: const GPColors.dark(), shadows: const GPShadows.dark());
 
   static ThemeData _build({required GPColors colors, required GPShadows shadows}) {
@@ -35,16 +33,6 @@ abstract final class GPAppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: typography.headlineMedium.copyWith(color: colors.onBackground),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: colors.background,
-        surfaceTintColor: Colors.transparent,
-        indicatorColor: colors.accentContainer,
-        elevation: 0,
-        labelTextStyle: WidgetStatePropertyAll<TextStyle>(typography.labelMedium.copyWith(color: colors.onSurfaceVariant)),
-        iconTheme: WidgetStateProperty.resolveWith(
-          (Set<WidgetState> states) => IconThemeData(size: 24, color: states.contains(WidgetState.selected) ? colors.onAccentContainer : colors.onSurfaceVariant),
-        ),
       ),
       dividerTheme: DividerThemeData(color: colors.outlineVariant, thickness: 1, space: 1),
       cardTheme: CardThemeData(

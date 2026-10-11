@@ -4,7 +4,6 @@ import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 
-/// `CategoryEntity` (W3 T6) — and specifically the two-name invariant, which is the only thing here that `AccountEntity` does not already cover.
 void main() {
   final t0 = DateTime.utc(2026, 9, 22, 10);
   final t1 = DateTime.utc(2026, 9, 22, 11);
@@ -39,16 +38,13 @@ void main() {
     });
 
     test('refuses a category with neither', () {
-      // The same invariant as the table's CHECK, stated where a user can be told about it: for a user-created category this is "you left the name blank".
       expect(build(), const GPErr<CategoryEntity>(GPValidationFailure(GPValidationCode.categoryNameEmpty)));
     });
 
     test('treats a blank typed name as no name at all', () {
-      // Trim, then decide. `'   '` is not a three-character name, and collapsing it to null means "empty" and "absent" are one state rather than two that
-      // render identically and compare differently.
       expect(build(name: '   '), const GPErr<CategoryEntity>(GPValidationFailure(GPValidationCode.categoryNameEmpty)));
       expect(build(name: ''), const GPErr<CategoryEntity>(GPValidationFailure(GPValidationCode.categoryNameEmpty)));
-      // With a key present, a blank name is not an error — it is a seeded category nobody has renamed.
+      // With a key, a blank name is no error: a seeded category nobody has renamed.
       expect(ok(build(nameKey: 'category.food', name: '   ')).name, isNull);
     });
 
@@ -75,18 +71,14 @@ void main() {
 
   group('update', () {
     test('keeps the key when the user renames a seeded category', () {
-      // The rule T5 established, enforced here by the signature rather than by a check: `update` has no `nameKey` parameter, so there is no way to lose it.
       final renamed = ok(ok(build(nameKey: 'category.food', isSystem: true)).update(name: 'Cà phê sáng'));
 
       expect(renamed.nameKey, 'category.food');
       expect(renamed.name, 'Cà phê sáng');
-      // Provenance survives an edit too: renaming a default does not make it user-made.
       expect(renamed.isSystem, isTrue);
     });
 
     test('clears a custom name back to the default, which null alone cannot express', () {
-      // `name: null` means "leave it alone" for every other optional parameter, so resetting needs its own flag. This is the "use the default name again"
-      // edit a settings screen offers.
       final renamed = ok(ok(build(nameKey: 'category.food', name: 'Cà phê sáng', isSystem: true)).update(clearName: true));
 
       expect(renamed.name, isNull);
@@ -94,7 +86,6 @@ void main() {
     });
 
     test('refuses to clear the name of a category that has no key', () {
-      // A user-created category with its name cleared would be a row no screen can render — the same state the table's CHECK refuses.
       expect(ok(build(name: 'Cà phê')).update(clearName: true), const GPErr<CategoryEntity>(GPValidationFailure(GPValidationCode.categoryNameEmpty)));
     });
 
@@ -126,14 +117,11 @@ void main() {
     });
 
     test('separates a seeded category from a user-created one with the same text', () {
-      // Two rows that render identically and are not the same thing. Without `nameKey` in equality, a Drift re-emission could swap one for the other and no
-      // widget would rebuild.
       expect(ok(build(nameKey: 'category.food', isSystem: true)), isNot(ok(build(name: 'Food'))));
     });
   });
 
   test('toString carries the key but never the typed name', () {
-    // Golden rule 9. The key is our own constant and identifies the row; the name is user data the moment they rename it.
     final text = ok(build(nameKey: 'category.food', name: 'Cà phê sáng', isSystem: true)).toString();
 
     expect(text, contains('category.food'));
