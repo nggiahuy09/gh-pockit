@@ -13,7 +13,21 @@ abstract class GPLocaleBaseAccounts {
   String get typeOther;
 
   String get emptyTitle;
-
-  /// No "tap to add" until the account form exists (W6): there is nothing to tap yet.
   String get emptyMessage;
+
+  String get add;
+  String get edit;
+  String get fieldName;
+  String get fieldType;
+  String get fieldCurrency;
+
+  /// Shown under the currency on edit: it is fixed at creation (ADR-0010).
+  String get currencyFixed;
+
+  String get fieldInitialBalance;
+
+  /// The switch that makes the opening balance negative.
+  String get owed;
+
+  String get save;
 }

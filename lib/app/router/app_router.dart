@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ghpockit/app/di/injector.dart';
@@ -5,6 +7,8 @@ import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/accounts/presentation/bloc/account_form_cubit.dart';
+import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
@@ -73,6 +77,23 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
       path: Routes.newTransaction,
       name: RouteNames.newTransaction,
       builder: (BuildContext context, GoRouterState state) => const AddTransactionPage(),
+    ),
+    GoRoute(
+      path: Routes.newAccount,
+      name: RouteNames.newAccount,
+      builder: (BuildContext context, GoRouterState state) => BlocProvider<AccountFormCubit>(create: (_) => AccountFormCubit(), child: const AccountFormPage()),
+    ),
+    GoRoute(
+      path: Routes.editAccount,
+      name: RouteNames.editAccount,
+      builder: (BuildContext context, GoRouterState state) => BlocProvider<AccountFormCubit>(
+        create: (_) {
+          final cubit = AccountFormCubit(accountId: state.pathParameters['accountId']);
+          unawaited(cubit.load());
+          return cubit;
+        },
+        child: const AccountFormPage(),
+      ),
     ),
   ],
 );

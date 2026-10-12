@@ -26,4 +26,31 @@ final class GPLocaleEnAccounts implements GPLocaleBaseAccounts {
 
   @override
   String get emptyMessage => 'Your cash, bank accounts, e-wallets and cards will show up here.';
+
+  @override
+  String get add => 'Add account';
+
+  @override
+  String get edit => 'Edit account';
+
+  @override
+  String get fieldName => 'Name';
+
+  @override
+  String get fieldType => 'Type';
+
+  @override
+  String get fieldCurrency => 'Currency';
+
+  @override
+  String get currencyFixed => 'The currency cannot change once the account exists.';
+
+  @override
+  String get fieldInitialBalance => 'Opening balance';
+
+  @override
+  String get owed => 'I owe this amount (a card or a loan)';
+
+  @override
+  String get save => 'Save';
 }

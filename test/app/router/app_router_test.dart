@@ -4,6 +4,7 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/localization/locale.dart';
+import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
@@ -84,6 +85,18 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(TransactionsPage), findsOneWidget);
+    });
+  });
+
+  group('accounts', () {
+    testWidgets('the app bar opens the account form over the dock', (WidgetTester tester) async {
+      await pumpApp(tester, at: Routes.accounts);
+
+      await tester.tap(find.byTooltip('Add account'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountFormPage), findsOneWidget);
+      expect(find.byKey(AppShell.dockKey), findsNothing);
     });
   });
 

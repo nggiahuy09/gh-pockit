@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
@@ -7,8 +8,9 @@ import 'package:ghpockit/core/widgets/empty_state.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/account_type_label.dart';
+import 'package:go_router/go_router.dart';
 
-/// A bare `StreamBuilder`, no BLoC, until the list grows a filter or a form (W6). Shows the opening balance until W6 adds computed balances.
+/// Still a bare `StreamBuilder` on the repository, and still the opening balance: both change when computed balances arrive (ADR-0013).
 class AccountsPage extends StatefulWidget {
   const AccountsPage({required this.repository, super.key});
 
@@ -27,7 +29,12 @@ class _AccountsPageState extends State<AccountsPage> {
     final l10n = context.l10n;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.accounts.title)),
+      appBar: AppBar(
+        title: Text(l10n.accounts.title),
+        actions: <Widget>[
+          IconButton(icon: const Icon(Icons.add), tooltip: l10n.accounts.add, onPressed: () => context.pushNamed(RouteNames.newAccount)),
+        ],
+      ),
       body: StreamBuilder<List<AccountEntity>>(
         stream: _accounts,
         builder: (BuildContext context, AsyncSnapshot<List<AccountEntity>> snapshot) {
@@ -44,7 +51,14 @@ class _AccountsPageState extends State<AccountsPage> {
           if (accounts == null) return const Center(child: CircularProgressIndicator());
 
           if (accounts.isEmpty) {
-            return GPEmptyState(icon: const Icon(Icons.account_balance_wallet_outlined), title: l10n.accounts.emptyTitle, message: l10n.accounts.emptyMessage);
+            // Its own button rather than "tap +": the dock's + on this tab adds a transaction, not an account.
+            return GPEmptyState(
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              title: l10n.accounts.emptyTitle,
+              message: l10n.accounts.emptyMessage,
+              actionLabel: l10n.accounts.add,
+              onAction: () => context.pushNamed(RouteNames.newAccount),
+            );
           }
 
           // Cheap per emission: `GPMoneyFormatter` caches its `NumberFormat`s statically.
@@ -59,6 +73,7 @@ class _AccountsPageState extends State<AccountsPage> {
                 title: Text(account.name),
                 subtitle: Text(account.type.labelIn(l10n)),
                 trailing: Text(formatter.format(account.initialBalance)),
+                onTap: () => context.pushNamed(RouteNames.editAccount, pathParameters: <String, String>{'accountId': account.id}),
               );
             },
           );
