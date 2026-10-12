@@ -190,11 +190,9 @@ class _GPButtonState extends State<GPButton> {
 
     if (widget.expanded) button = SizedBox(width: double.infinity, child: button);
 
-    final ring = _focusRing(context.colors);
-    if (ring.isEmpty) return button;
-
+    // Always wrapped, ring or not: inserting the box on press would remount the button and cancel the tap still in flight.
     return DecoratedBox(
-      decoration: BoxDecoration(borderRadius: context.radii.borderMd, boxShadow: ring),
+      decoration: BoxDecoration(borderRadius: context.radii.borderMd, boxShadow: _focusRing(context.colors)),
       child: button,
     );
   }
