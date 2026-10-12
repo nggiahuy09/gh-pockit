@@ -164,5 +164,17 @@ void main() {
 
       expect(shown(tester), '1.234,56');
     });
+
+    testWidgets('a tap outside puts the number pad away, since it has no Done key', (WidgetTester tester) async {
+      await pump(tester, currencyCode: 'VND');
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.tapAt(const Offset(10, 500));
+      await tester.pump();
+
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
   });
 }

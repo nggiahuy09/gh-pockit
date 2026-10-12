@@ -46,7 +46,16 @@ class GPMoneyInputFormatter extends TextInputFormatter {
 
 /// A magnitude only: the caller owns the sign (a transaction's type, an account's "owed" switch).
 class GPMoneyField extends StatefulWidget {
-  const GPMoneyField({required this.currencyCode, required this.onChanged, this.initialMinorUnits, this.label, this.errorText, this.autofocus = false, super.key});
+  const GPMoneyField({
+    required this.currencyCode,
+    required this.onChanged,
+    this.initialMinorUnits,
+    this.label,
+    this.errorText,
+    this.autofocus = false,
+    this.focusNode,
+    super.key,
+  });
 
   final String currencyCode;
 
@@ -57,6 +66,7 @@ class GPMoneyField extends StatefulWidget {
   final String? label;
   final String? errorText;
   final bool autofocus;
+  final FocusNode? focusNode;
 
   @override
   State<GPMoneyField> createState() => _GPMoneyFieldState();
@@ -128,11 +138,14 @@ class _GPMoneyFieldState extends State<GPMoneyField> {
 
     return TextField(
       controller: _controller,
+      focusNode: widget.focusNode,
       autofocus: widget.autofocus,
       keyboardType: TextInputType.number,
       inputFormatters: <TextInputFormatter>[formatter],
       // No tap-to-place caret, no selection handles, no paste menu: there is nowhere but the end to put a digit.
       enableInteractiveSelection: false,
+      // The iOS number pad has no Done key: a tap anywhere else is how it goes away.
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       textAlign: TextAlign.end,
       style: const TextStyle(fontFeatures: <FontFeature>[FontFeature.tabularFigures()]),
       decoration: InputDecoration(

@@ -145,4 +145,20 @@ void main() {
     expect(find.text('Could not read local data.'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
+
+  testWidgets('dragging the form puts the keyboard away', (WidgetTester tester) async {
+    // Short enough that the form scrolls, as it does on a phone with the keyboard up.
+    tester.view
+      ..physicalSize = const Size(400, 420)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await seedAccount('Ví tiền mặt');
+    await pumpApp(tester, at: Routes.newTransaction);
+    expect(tester.testTextInput.isVisible, isTrue, reason: 'the amount field takes focus on open');
+
+    await tester.drag(find.byType(ListView), const Offset(0, -150));
+    await tester.pumpAndSettle();
+
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
 }

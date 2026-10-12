@@ -101,6 +101,8 @@ class _TransactionForm extends StatelessWidget {
     final failure = state.failure;
 
     return ListView(
+      // Dragging the form puts the keyboard away: the number pad has no Done key and the note's return key adds a line.
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: EdgeInsets.all(spacing.md),
       children: <Widget>[
         SegmentedButton<TransactionType>(
