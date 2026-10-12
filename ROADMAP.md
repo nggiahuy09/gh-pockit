@@ -543,7 +543,7 @@ khi đã có row, nên các trạng thái chồng lên nhau
 | Ngày | Task                                                                                                                                                                                                                                                                                                            |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới |
-| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI                                                                                                                                                                                                                                              |
+| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới |
 | T4   | Edit + soft delete + undo (snackbar)                                                                                                                                                                                                                                                                            |
 | T5   | Transfer flow: 1 transaction, 2 account, không double-count                                                                                                                                                                                                                                                     |
 | T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật |
@@ -606,6 +606,26 @@ khi đã có row, nên các trạng thái chồng lên nhau
 - Đã soát trên máy: luồng chính, banner từ chối, sửa account giữ currency, tiếng Việt đủ dấu, date picker Việt hoá (tuần bắt đầu T2).
   Ghi nhận, chưa sửa: autocorrect của iOS sửa tên không dấu ("tien mat" → "turn ma") — người dùng Việt dùng bàn phím tiếng Việt; xét lại ở Flex.
 - Test: 777 (+27 so với lúc xong T2).
+
+### W6 T3 — lỗi validate về đúng ô (12/10)
+
+> Chốt 12/10: lỗi hiện **khi bấm Lưu**, sửa đúng ô đó thì tắt; **mỗi lần một lỗi**, ô trên cùng trước — giữ nguyên API domain (**ADR-0016**).
+
+- Đã có từ trước, không phải viết lại: mọi rule chạy ở domain (entity / repository / use case, ADR-0010), mỗi `GPValidationCode` có câu ở cả `en`
+  và `vi` qua switch không wildcard. Thiếu là **chỗ hiện**: một banner cuối form, xa ô số tiền, thường bị bàn phím che, trình đọc màn hình không biết ô nào.
+- [x] **Map lỗi → ô** ở presentation: `TransactionFormField` + `transactionFormFieldOf`, `AccountFormField` + `accountFormFieldOf`. Switch trong không
+      wildcard như switch message — thêm code mới phải chọn chỗ hiện mới compile. Code không có ô trong form này (của form khác, của transfer khi form
+      chưa có ô đích, từ chối xoá) → null → banner.
+- [x] **Hiện**: lỗi có ô → `errorText` của ô đó + **focus nhảy về ô** (ô text tự cuộn vào tầm nhìn, dropdown cuộn bằng `Scrollable.ensureVisible`);
+      lỗi không có ô (conflict, row đã mất, lỗi đọc) → `GPFormFailureBanner`. Không bao giờ cả hai. `GPMoneyField` nhận `focusNode`.
+- [x] **Xoá**: một lần sửa chỉ xoá lỗi nó sửa được — lỗi của chính ô đó, hoặc lỗi không có ô. Lỗi số tiền còn nguyên khi gõ ghi chú; banner conflict
+      tắt ở lần sửa đầu (lần lưu sau sẽ báo lại nếu còn).
+- Thực tế hôm nay mỗi form có đúng một ô người dùng gõ sai được (số tiền; tên tài khoản) — các code khác bị chặn trước bởi picker, formatter hay currency
+  đã khoá. T5 thêm ô tài khoản đích: ba code transfer chuyển từ null sang ô đó.
+- [x] **Bàn phím** (thấy trên simulator khi soát T3): bàn phím số của iOS **không có phím Done**, ô ghi chú nhiều dòng thì return là xuống dòng →
+      bàn phím che nút Lưu mà không cụp được. List của hai form `keyboardDismissBehavior: onDrag`, `GPMoneyField` chạm ra ngoài thì mất focus.
+- [x] Test (+13, suite: 792): map từng code; cubit — lỗi ô sống qua sửa ô khác, lỗi không ô tắt ở lần sửa đầu; widget — lỗi dưới ô số tiền, không banner,
+      focus về từ ô ghi chú (mutation: bỏ lệnh focus thì đỏ); tên trống dưới ô tên; conflict khi sửa account → banner; kéo form / chạm ra ngoài thì bàn phím cụp (mutation: gỡ từng fix thì đỏ).
 
 **🏁 Milestone P1:** app dùng được hoàn toàn offline, không có dòng network nào. **Tag `v0.1-local`.**
 
