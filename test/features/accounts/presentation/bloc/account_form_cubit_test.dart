@@ -178,4 +178,34 @@ void main() {
       expect((await stored()).single.name, 'Ví');
     });
   });
+
+  group('a refused save', () {
+    test('a name refusal survives edits elsewhere and clears once the name changes', () async {
+      final form = cubit()..nameChanged('  ');
+      await form.submit();
+      const refused = GPValidationFailure(GPValidationCode.accountNameEmpty);
+
+      form
+        ..typeChanged(AccountType.bank)
+        ..initialBalanceChanged(1000)
+        ..owedChanged(isOwed: true);
+      expect(form.state.failure, refused, reason: 'none of those edits can fix the name');
+
+      form.nameChanged('Ví');
+      expect(form.state.failure, isNull);
+    });
+
+    test('a conflict, which no field owns, clears on any edit', () async {
+      final wallet = await seed();
+      final form = cubit(accountId: wallet.id);
+      await form.load();
+      await repositories.db.customStatement('UPDATE accounts SET version = version + 1');
+      await form.submit();
+      expect(form.state.failure, isA<GPConflictFailure>());
+
+      form.typeChanged(AccountType.bank);
+
+      expect(form.state.failure, isNull);
+    });
+  });
 }

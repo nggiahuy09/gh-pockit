@@ -10,6 +10,7 @@ import 'package:ghpockit/features/accounts/domain/repositories/account_repositor
 import 'package:ghpockit/features/accounts/domain/usecases/create_account_use_case.dart';
 import 'package:ghpockit/features/accounts/domain/usecases/update_account_use_case.dart';
 import 'package:ghpockit/features/accounts/domain/usecases/watch_account_use_case.dart';
+import 'package:ghpockit/features/accounts/presentation/account_form_field.dart';
 import 'package:meta/meta.dart';
 
 part 'account_form_state.dart';
@@ -56,18 +57,27 @@ class AccountFormCubit extends Cubit<AccountFormState> {
     }
   }
 
-  void nameChanged(String name) => emit(state.copyWith(name: name, clearFailure: true));
+  void nameChanged(String name) => emit(state.copyWith(name: name, clearFailure: _fixes(AccountFormField.name)));
 
-  void typeChanged(AccountType type) => emit(state.copyWith(type: type, clearFailure: true));
+  void typeChanged(AccountType type) => emit(state.copyWith(type: type, clearFailure: _fixes(null)));
 
   void currencyChanged(CurrencyCode currency) {
     if (isEditing) return;
-    emit(state.copyWith(currencyCode: currency.code, clearFailure: true));
+    emit(state.copyWith(currencyCode: currency.code, clearFailure: _fixes(null)));
   }
 
-  void initialBalanceChanged(int? minorUnits) => emit(state.copyWith(initialMinorUnits: minorUnits, clearInitialMinorUnits: minorUnits == null, clearFailure: true));
+  void initialBalanceChanged(int? minorUnits) => emit(state.copyWith(initialMinorUnits: minorUnits, clearInitialMinorUnits: minorUnits == null, clearFailure: _fixes(null)));
 
-  void owedChanged({required bool isOwed}) => emit(state.copyWith(isOwed: isOwed, clearFailure: true));
+  void owedChanged({required bool isOwed}) => emit(state.copyWith(isOwed: isOwed, clearFailure: _fixes(null)));
+
+  /// An edit clears the failure it can fix: one about the edited field, or one about no field (ADR-0016).
+  bool _fixes(AccountFormField? edited) {
+    final failure = state.failure;
+    if (failure == null) return false;
+
+    final about = accountFormFieldOf(failure);
+    return about == null || about == edited;
+  }
 
   Future<void> submit() async {
     if (state.isSaving || state.isLoading || state.isSaved) return;

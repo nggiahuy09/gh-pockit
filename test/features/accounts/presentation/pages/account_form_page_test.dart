@@ -6,6 +6,7 @@ import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
@@ -86,5 +87,35 @@ void main() {
     expect(find.text('Ví USD'), findsOneWidget);
     final stored = await tester.runAsync(() => repositories.accounts.watchAccounts().first);
     expect(stored!.single.initialBalance, Money(1000, 'USD'));
+  });
+
+  testWidgets('a blank name is refused under the name field, which takes the focus back', (WidgetTester tester) async {
+    await pumpApp(tester, at: Routes.newAccount);
+    await tester.tap(field('Opening balance'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+
+    final name = tester.widget<TextField>(field('Name'));
+    expect(name.decoration!.errorText, "Account name can't be empty.");
+    expect(name.focusNode!.hasFocus, isTrue);
+    expect(find.byType(GPFormFailureBanner), findsNothing);
+    expect(find.byType(AccountFormPage), findsOneWidget);
+  });
+
+  testWidgets('a conflict on edit owns no field, so it is the banner', (WidgetTester tester) async {
+    await seedAccount('Ví', Money(0, 'VND'));
+    await pumpApp(tester, at: Routes.accounts);
+    await tester.tap(find.text('Ví'));
+    await settleRead(tester);
+    await tester.runAsync(() => repositories.db.customStatement('UPDATE accounts SET version = version + 1'));
+
+    await tester.enterText(field('Name'), 'Ví mới');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await settleRead(tester);
+
+    expect(find.widgetWithText(GPFormFailureBanner, 'This item was changed on another device.'), findsOneWidget);
+    expect(tester.widget<TextField>(field('Name')).decoration!.errorText, isNull);
   });
 }
