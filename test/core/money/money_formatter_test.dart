@@ -60,6 +60,19 @@ void main() {
     });
   });
 
+  group('symbolAffixes', () {
+    test('places the symbol where format does, so an input beside it reads like the list', () {
+      expect(en.symbolAffixes('VND'), (prefix: '₫', suffix: ''));
+      expect(vi.symbolAffixes('VND'), (prefix: '', suffix: '\u00a0₫'));
+      expect(en.symbolAffixes('USD'), (prefix: r'$', suffix: ''));
+      expect(vi.symbolAffixes('USD'), (prefix: '', suffix: '\u00a0\$'));
+    });
+
+    test('falls back to the code for an uncatalogued currency, as format does', () {
+      expect(en.symbolAffixes('EUR').prefix, 'EUR');
+    });
+  });
+
   group('format does not route an amount through a double', () {
     // `NumberFormat.currency().format()` takes a `num`, which invites `minorUnits / 100`.
     test('prints every digit at 2^53 + 1, where a double has already lost one', () {

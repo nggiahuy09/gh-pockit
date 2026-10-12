@@ -51,6 +51,13 @@ final class GPMoneyFormatter {
     return '$sign${affixes.prefix}$digits${affixes.suffix}';
   }
 
+  /// What [format] puts either side of the digits, spacing included: `₫` before them in English, a non-breaking space and `₫` after them in Vietnamese.
+  /// For an input that shows the digits alone and the symbol beside them.
+  ({String prefix, String suffix}) symbolAffixes(String currencyCode) {
+    final affixes = _affixesFor(locale, CurrencyCode.fromCode(currencyCode)?.symbol ?? currencyCode);
+    return (prefix: affixes.prefix, suffix: affixes.suffix);
+  }
+
   /// Null when [text] is not an amount, including more fractional digits than the currency has. Throws [ArgumentError] on a malformed [currencyCode].
   /// Grouping separators are stripped, not validated: `1.500.00` is a half-typed `1.500.000`.
   Money? parse(String text, {required String currencyCode}) {
