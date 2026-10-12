@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,6 +8,7 @@ import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
+import 'package:ghpockit/core/theme/tokens/dimensions.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/button.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
@@ -19,6 +22,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_entit
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_form_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
+import 'package:ghpockit/features/transactions/presentation/transaction_form_field.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
 import 'package:go_router/go_router.dart';
 
@@ -66,7 +70,7 @@ class TransactionFormPage extends StatelessWidget {
   }
 }
 
-class _TransactionForm extends StatelessWidget {
+class _TransactionForm extends StatefulWidget {
   const _TransactionForm({required this.state, required this.account, required this.today});
 
   final TransactionFormState state;
@@ -75,13 +79,41 @@ class _TransactionForm extends StatelessWidget {
   /// Local, read at build: the date field shows today until the user picks a day.
   final DateTime today;
 
-  DateTime get _day => state.pickedDay ?? DateTime(today.year, today.month, today.day);
+  @override
+  State<_TransactionForm> createState() => _TransactionFormState();
+}
 
+class _TransactionFormState extends State<_TransactionForm> {
   /// Transfers arrive with their own flow.
   static const List<TransactionType> _types = <TransactionType>[TransactionType.expense, TransactionType.income];
 
-  Future<void> _pickDate(BuildContext context) async {
+  final Map<TransactionFormField, FocusNode> _focusNodes = <TransactionFormField, FocusNode>{
+    for (final field in TransactionFormField.values) field: FocusNode(debugLabel: field.name),
+  };
+
+  @override
+  void dispose() {
+    for (final node in _focusNodes.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  TransactionFormState get _state => widget.state;
+
+  DateTime get _day => _state.pickedDay ?? DateTime(widget.today.year, widget.today.month, widget.today.day);
+
+  /// A refused save moves focus to the field it is about: the keyboard may be hiding it, and a screen reader then reads its error (ADR-0016).
+  void _focus(TransactionFormField field) {
+    final node = _focusNodes[field]!..requestFocus();
+    final fieldContext = node.context;
+    // A text field scrolls itself into view on focus; a dropdown does not.
+    if (fieldContext != null) unawaited(Scrollable.ensureVisible(fieldContext, alignment: 0.3, duration: GPDurationTokens.fast));
+  }
+
+  Future<void> _pickDate() async {
     final cubit = context.read<TransactionFormCubit>();
+    final today = widget.today;
     final picked = await showDatePicker(
       context: context,
       initialDate: _day,
@@ -98,86 +130,103 @@ class _TransactionForm extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final cubit = context.read<TransactionFormCubit>();
-    final failure = state.failure;
+    final account = widget.account;
+    final failure = _state.failure;
+    final failedField = failure == null ? null : transactionFormFieldOf(failure);
 
-    return ListView(
-      // Dragging the form puts the keyboard away: the number pad has no Done key and the note's return key adds a line.
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: EdgeInsets.all(spacing.md),
-      children: <Widget>[
-        SegmentedButton<TransactionType>(
-          segments: <ButtonSegment<TransactionType>>[
-            for (final type in _types) ButtonSegment<TransactionType>(value: type, label: Text(type.labelIn(l10n))),
-          ],
-          selected: <TransactionType>{state.type},
-          showSelectedIcon: false,
-          onSelectionChanged: (Set<TransactionType> selected) => cubit.typeChanged(selected.single),
-        ),
-        SizedBox(height: spacing.md),
-        GPMoneyField(
-          currencyCode: account.initialBalance.currencyCode,
-          initialMinorUnits: state.amountMinorUnits,
-          label: l10n.transactions.fieldAmount,
-          autofocus: true,
-          onChanged: cubit.amountChanged,
-        ),
-        SizedBox(height: spacing.md),
-        DropdownButtonFormField<String>(
-          // Keyed by the selection: `initialValue` is read once, and the cubit may move it (an account archived elsewhere).
-          key: ValueKey<String>('account-${account.id}'),
-          initialValue: account.id,
-          isExpanded: true,
-          decoration: InputDecoration(labelText: l10n.transactions.fieldAccount),
-          items: <DropdownMenuItem<String>>[
-            for (final AccountEntity option in state.accounts!)
-              DropdownMenuItem<String>(
-                value: option.id,
-                child: Text(option.name, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (String? id) => id == null ? null : cubit.accountChanged(id),
-        ),
-        SizedBox(height: spacing.md),
-        DropdownButtonFormField<String?>(
-          key: ValueKey<String>('category-${state.type.name}-${state.categoryId}'),
-          initialValue: state.categoryId,
-          isExpanded: true,
-          decoration: InputDecoration(labelText: l10n.transactions.fieldCategory),
-          items: <DropdownMenuItem<String?>>[
-            DropdownMenuItem<String?>(child: Text(l10n.transactions.uncategorised)),
-            for (final CategoryEntity option in state.categoriesForType)
-              DropdownMenuItem<String?>(
-                value: option.id,
-                child: Text(option.displayNameIn(l10n), overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: cubit.categoryChanged,
-        ),
-        SizedBox(height: spacing.md),
-        InkWell(
-          borderRadius: context.radii.borderMd,
-          onTap: () => _pickDate(context),
-          child: InputDecorator(
-            decoration: InputDecoration(labelText: l10n.transactions.fieldDate, suffixIcon: const Icon(Icons.calendar_today_outlined)),
-            child: Text(dayLabel(_day, today: today, l10n: l10n)),
+    String? errorOn(TransactionFormField field) => failedField == field ? failure!.message(l10n) : null;
+
+    return BlocListener<TransactionFormCubit, TransactionFormState>(
+      listenWhen: (TransactionFormState previous, TransactionFormState current) => current.failure != null && current.failure != previous.failure,
+      listener: (BuildContext context, TransactionFormState state) {
+        final field = transactionFormFieldOf(state.failure!);
+        if (field != null) _focus(field);
+      },
+      child: ListView(
+        // Dragging the form puts the keyboard away: the number pad has no Done key and the note's return key adds a line.
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.all(spacing.md),
+        children: <Widget>[
+          SegmentedButton<TransactionType>(
+            segments: <ButtonSegment<TransactionType>>[
+              for (final type in _types) ButtonSegment<TransactionType>(value: type, label: Text(type.labelIn(l10n))),
+            ],
+            selected: <TransactionType>{_state.type},
+            showSelectedIcon: false,
+            onSelectionChanged: (Set<TransactionType> selected) => cubit.typeChanged(selected.single),
           ),
-        ),
-        SizedBox(height: spacing.md),
-        TextFormField(
-          initialValue: state.note,
-          inputFormatters: const <TextInputFormatter>[GPUtf16LengthLimitingFormatter(TransactionEntity.noteMaxLength)],
-          maxLines: null,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(labelText: l10n.transactions.fieldNote),
-          onChanged: cubit.noteChanged,
-        ),
-        if (failure != null) ...<Widget>[
-          SizedBox(height: spacing.sm),
-          GPFormFailureBanner(message: failure.message(l10n)),
+          SizedBox(height: spacing.md),
+          GPMoneyField(
+            currencyCode: account.initialBalance.currencyCode,
+            initialMinorUnits: _state.amountMinorUnits,
+            label: l10n.transactions.fieldAmount,
+            errorText: errorOn(TransactionFormField.amount),
+            focusNode: _focusNodes[TransactionFormField.amount],
+            autofocus: true,
+            onChanged: cubit.amountChanged,
+          ),
+          SizedBox(height: spacing.md),
+          DropdownButtonFormField<String>(
+            // Keyed by the selection: `initialValue` is read once, and the cubit may move it (an account archived elsewhere).
+            key: ValueKey<String>('account-${account.id}'),
+            initialValue: account.id,
+            focusNode: _focusNodes[TransactionFormField.account],
+            isExpanded: true,
+            decoration: InputDecoration(labelText: l10n.transactions.fieldAccount, errorText: errorOn(TransactionFormField.account)),
+            items: <DropdownMenuItem<String>>[
+              for (final AccountEntity option in _state.accounts!)
+                DropdownMenuItem<String>(
+                  value: option.id,
+                  child: Text(option.name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (String? id) => id == null ? null : cubit.accountChanged(id),
+          ),
+          SizedBox(height: spacing.md),
+          DropdownButtonFormField<String?>(
+            key: ValueKey<String>('category-${_state.type.name}-${_state.categoryId}'),
+            initialValue: _state.categoryId,
+            focusNode: _focusNodes[TransactionFormField.category],
+            isExpanded: true,
+            decoration: InputDecoration(labelText: l10n.transactions.fieldCategory, errorText: errorOn(TransactionFormField.category)),
+            items: <DropdownMenuItem<String?>>[
+              DropdownMenuItem<String?>(child: Text(l10n.transactions.uncategorised)),
+              for (final CategoryEntity option in _state.categoriesForType)
+                DropdownMenuItem<String?>(
+                  value: option.id,
+                  child: Text(option.displayNameIn(l10n), overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: cubit.categoryChanged,
+          ),
+          SizedBox(height: spacing.md),
+          InkWell(
+            borderRadius: context.radii.borderMd,
+            onTap: _pickDate,
+            child: InputDecorator(
+              decoration: InputDecoration(labelText: l10n.transactions.fieldDate, suffixIcon: const Icon(Icons.calendar_today_outlined)),
+              child: Text(dayLabel(_day, today: widget.today, l10n: l10n)),
+            ),
+          ),
+          SizedBox(height: spacing.md),
+          TextFormField(
+            initialValue: _state.note,
+            focusNode: _focusNodes[TransactionFormField.note],
+            inputFormatters: const <TextInputFormatter>[GPUtf16LengthLimitingFormatter(TransactionEntity.noteMaxLength)],
+            maxLines: null,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(labelText: l10n.transactions.fieldNote, errorText: errorOn(TransactionFormField.note)),
+            onChanged: cubit.noteChanged,
+          ),
+          // Only a failure no field owns: a conflict, a read failure, a row gone meanwhile.
+          if (failure != null && failedField == null) ...<Widget>[
+            SizedBox(height: spacing.sm),
+            GPFormFailureBanner(message: failure.message(l10n)),
+          ],
+          SizedBox(height: spacing.lg),
+          GPButton(label: l10n.transactions.save, variant: GPButtonVariant.accent, expanded: true, isLoading: _state.isSaving, onPressed: cubit.submit),
         ],
-        SizedBox(height: spacing.lg),
-        GPButton(label: l10n.transactions.save, variant: GPButtonVariant.accent, expanded: true, isLoading: state.isSaving, onPressed: cubit.submit),
-      ],
+      ),
     );
   }
 }

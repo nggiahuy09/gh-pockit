@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
@@ -275,6 +277,47 @@ void main() {
       await form.submit();
 
       expect(await stored(), hasLength(1));
+    });
+  });
+
+  group('a refused save', () {
+    test('an amount refusal survives edits elsewhere and clears once the amount changes', () async {
+      await account('Tiền mặt');
+      final food = await category('Ăn uống', CategoryType.expense);
+      final form = await started();
+      await form.submit();
+      const refused = GPValidationFailure(GPValidationCode.transactionAmountNotPositive);
+      expect(form.state.failure, refused);
+
+      form
+        ..noteChanged('Phở')
+        ..categoryChanged(food.id)
+        ..dateChanged(DateTime(2026, 10, 11));
+      expect(form.state.failure, refused, reason: 'none of those edits can fix the amount');
+
+      form.amountChanged(45000);
+      expect(form.state.failure, isNull);
+    });
+
+    test('a failure no field owns clears on any edit', () async {
+      final accounts = StreamController<List<AccountEntity>>();
+      addTearDown(accounts.close);
+      getIt
+        ..unregister<AccountRepository>()
+        ..registerSingleton<AccountRepository>(FakeAccountRepository(accounts: accounts.stream));
+      final cash =
+          (AccountEntity.create(id: 'acc-cash', name: 'Tiền mặt', type: AccountType.cash, initialBalance: Money(0, 'VND'), createdAt: now, updatedAt: now) as GPOk<AccountEntity>)
+              .value;
+      final form = await started();
+      accounts.add(<AccountEntity>[cash]);
+      await pumpEventQueue();
+
+      accounts.addError(const GPDatabaseFailure());
+      await pumpEventQueue();
+      expect(form.state.failure, const GPDatabaseFailure());
+
+      form.noteChanged('Phở');
+      expect(form.state.failure, isNull);
     });
   });
 }

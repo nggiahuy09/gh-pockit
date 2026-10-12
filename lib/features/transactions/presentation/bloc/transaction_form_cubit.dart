@@ -17,6 +17,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_entit
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
+import 'package:ghpockit/features/transactions/presentation/transaction_form_field.dart';
 import 'package:meta/meta.dart';
 
 part 'transaction_form_state.dart';
@@ -71,28 +72,37 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     final category = state.selectedCategory;
     final keepsCategory = category != null && category.type == type.categoryType;
 
-    emit(state.copyWith(type: type, clearCategoryId: !keepsCategory, clearFailure: true));
+    emit(state.copyWith(type: type, clearCategoryId: !keepsCategory, clearFailure: _fixes(TransactionFormField.category)));
   }
 
   /// An id no longer in the list is ignored: an open dropdown menu still offers what the stream has since dropped.
   void accountChanged(String accountId) {
     if (state.accounts?.any((AccountEntity account) => account.id == accountId) != true) return;
 
-    emit(state.copyWith(accountId: accountId, clearFailure: true));
+    emit(state.copyWith(accountId: accountId, clearFailure: _fixes(TransactionFormField.account)));
   }
 
   /// Null is "uncategorised". An id the current type cannot use is ignored, as in [accountChanged].
   void categoryChanged(String? categoryId) {
     if (categoryId != null && !state.categoriesForType.any((CategoryEntity category) => category.id == categoryId)) return;
 
-    emit(state.copyWith(categoryId: categoryId, clearCategoryId: categoryId == null, clearFailure: true));
+    emit(state.copyWith(categoryId: categoryId, clearCategoryId: categoryId == null, clearFailure: _fixes(TransactionFormField.category)));
   }
 
-  void amountChanged(int? minorUnits) => emit(state.copyWith(amountMinorUnits: minorUnits, clearAmount: minorUnits == null, clearFailure: true));
+  void amountChanged(int? minorUnits) => emit(state.copyWith(amountMinorUnits: minorUnits, clearAmount: minorUnits == null, clearFailure: _fixes(TransactionFormField.amount)));
 
-  void dateChanged(DateTime day) => emit(state.copyWith(pickedDay: DateTime(day.year, day.month, day.day), clearFailure: true));
+  void dateChanged(DateTime day) => emit(state.copyWith(pickedDay: DateTime(day.year, day.month, day.day), clearFailure: _fixes(null)));
 
-  void noteChanged(String note) => emit(state.copyWith(note: note, clearFailure: true));
+  void noteChanged(String note) => emit(state.copyWith(note: note, clearFailure: _fixes(TransactionFormField.note)));
+
+  /// An edit clears the failure it can fix: one about the edited field, or one about no field (ADR-0016). An amount error stays while the note is typed.
+  bool _fixes(TransactionFormField? edited) {
+    final failure = state.failure;
+    if (failure == null) return false;
+
+    final about = transactionFormFieldOf(failure);
+    return about == null || about == edited;
+  }
 
   Future<void> submit() async {
     final account = state.selectedAccount;

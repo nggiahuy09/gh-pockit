@@ -8,6 +8,7 @@ import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/core/utils/clock.dart';
+import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
@@ -93,16 +94,26 @@ void main() {
     expect(find.text('-₫45,000'), findsOneWidget);
   });
 
-  testWidgets('a refused save stays on the form and says why', (WidgetTester tester) async {
+  testWidgets('a refused save stays on the form and says why under the field it is about, with focus moved there', (WidgetTester tester) async {
     await seedAccount('Ví tiền mặt');
     await pumpApp(tester);
     await openForm(tester);
+    // Somewhere else first, so the focus has to move.
+    await tester.tap(field('Note'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TransactionFormPage), findsOneWidget);
-    expect(find.text('Amount must be greater than zero.'), findsOneWidget);
+    final amount = tester.widget<TextField>(field('Amount'));
+    expect(amount.decoration!.errorText, 'Amount must be greater than zero.');
+    expect(amount.focusNode!.hasFocus, isTrue);
+    expect(find.byType(GPFormFailureBanner), findsNothing, reason: 'a failure a field owns is shown once, on that field');
+
+    await tester.enterText(field('Amount'), '45000');
+    await tester.pump();
+    expect(tester.widget<TextField>(field('Amount')).decoration!.errorText, isNull);
     // Outside the fake zone: a drift stream's first read waits on a real timer.
     final stored = await tester.runAsync(() => repositories.transactions.watchTransactions(TransactionQuery(limit: 1)).first);
     expect(stored!.transactions, isEmpty);
