@@ -9,7 +9,7 @@ import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
-import 'package:ghpockit/features/transactions/presentation/pages/add_transaction_page.dart';
+import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 
 import '../../helpers/localization_harness.dart';
@@ -78,13 +78,27 @@ void main() {
       await tester.tap(find.byKey(AppShell.addButtonKey));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AddTransactionPage), findsOneWidget);
+      expect(find.byType(TransactionFormPage), findsOneWidget);
       expect(find.byKey(AppShell.dockKey), findsNothing);
 
       await tester.pageBack();
       await tester.pumpAndSettle();
 
       expect(find.byType(TransactionsPage), findsOneWidget);
+    });
+
+    testWidgets('with no account yet, leads on to the account form', (WidgetTester tester) async {
+      await pumpApp(tester, at: Routes.newTransaction);
+
+      await tester.tap(find.text('Add account'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AccountFormPage), findsOneWidget);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TransactionFormPage), findsOneWidget);
     });
   });
 

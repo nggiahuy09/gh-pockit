@@ -13,8 +13,9 @@ import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
+import 'package:ghpockit/features/transactions/presentation/bloc/transaction_form_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
-import 'package:ghpockit/features/transactions/presentation/pages/add_transaction_page.dart';
+import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -76,7 +77,10 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
     GoRoute(
       path: Routes.newTransaction,
       name: RouteNames.newTransaction,
-      builder: (BuildContext context, GoRouterState state) => const AddTransactionPage(),
+      builder: (BuildContext context, GoRouterState state) => BlocProvider<TransactionFormCubit>(
+        create: (_) => TransactionFormCubit()..start(),
+        child: TransactionFormPage(clock: getIt<GPClock>()),
+      ),
     ),
     GoRoute(
       path: Routes.newAccount,

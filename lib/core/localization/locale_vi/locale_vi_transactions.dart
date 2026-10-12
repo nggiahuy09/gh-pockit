@@ -25,9 +25,6 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get add => 'Thêm giao dịch';
 
   @override
-  String get addComingSoon => 'Màn thêm giao dịch đang được làm.';
-
-  @override
   String get emptyTitle => 'Chưa có giao dịch nào';
 
   @override
@@ -44,4 +41,34 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
 
   @override
   String get loadingMore => 'Đang tải thêm';
+
+  @override
+  String get fieldType => 'Loại';
+
+  @override
+  String get fieldAmount => 'Số tiền';
+
+  @override
+  String get fieldAccount => 'Tài khoản';
+
+  @override
+  String get fieldCategory => 'Danh mục';
+
+  @override
+  String get fieldDate => 'Ngày';
+
+  @override
+  String get fieldNote => 'Ghi chú';
+
+  @override
+  String get uncategorised => 'Chưa phân loại';
+
+  @override
+  String get save => 'Lưu';
+
+  @override
+  String get noAccountsTitle => 'Hãy thêm một tài khoản trước';
+
+  @override
+  String get noAccountsMessage => 'Giao dịch cần một tài khoản để chi ra hoặc nhận vào.';
 }

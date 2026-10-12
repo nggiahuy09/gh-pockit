@@ -3,9 +3,11 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 import 'fake_account_repository.dart';
+import 'fake_category_repository.dart';
 import 'fake_clock.dart';
 import 'fake_transaction_repository.dart';
 
@@ -27,6 +29,7 @@ Future<void> openSettings(WidgetTester tester) async {
 void registerShellFakes() {
   getIt
     ..registerSingleton<AccountRepository>(FakeAccountRepository())
+    ..registerSingleton<CategoryRepository>(FakeCategoryRepository())
     ..registerSingleton<TransactionRepository>(FakeTransactionRepository())
     ..registerSingleton<GPClock>(FakeClock());
 }
