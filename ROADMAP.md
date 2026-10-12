@@ -542,7 +542,7 @@ khi đã có row, nên các trạng thái chồng lên nhau
 
 | Ngày | Task                                                                                                                                                                                                                                                                                                            |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10)                                        |
+| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới |
 | T3   | Validate form ở domain layer, map `ValidationFailure` → message UI                                                                                                                                                                                                                                              |
 | T4   | Edit + soft delete + undo (snackbar)                                                                                                                                                                                                                                                                            |
 | T5   | Transfer flow: 1 transaction, 2 account, không double-count                                                                                                                                                                                                                                                     |
@@ -557,6 +557,55 @@ khi đã có row, nên các trạng thái chồng lên nhau
 | `AccountsPage` gọi repository thẳng (vi phạm ADR-0013) + polish artboard                         | Ghép vào T6 + Flex: T6 đằng nào cũng viết lại trang để hiện balance thật — làm một lần                                                                                              | Hẹn T6 / Flex                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Form account không có trong bảng W6 (`locale_base_accounts.dart` hẹn "account form exists (W6)") | Form account tối thiểu vào T2; **category để sau** — bộ seed mặc định đủ cho P1                                                                                                     | Đã ghi vào T2                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Nút đổi theme (`GPThemeModeStore`, ADR-0005 _Owed_)                                              | Đăng issue `later`                                                                                                                                                                  | Xem bảng nợ W4 T2                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+### W6 T2 — form tạo transaction + form account (12/10)
+
+> Chốt 12/10: ô tiền kiểu máy tính tiền (**ADR-0015**); form chạy được bằng component sẵn có, thiết kế artboard ở Flex.
+
+- [x] **Use case** (ADR-0013, forwarding): `WatchAccountsUseCase`, `WatchAccountUseCase`, `CreateAccountUseCase`, `UpdateAccountUseCase`,
+      `WatchCategoriesUseCase`. Form transaction ghi qua `CreateTransactionUseCase` có sẵn (rule 3 của ADR-0010).
+- [x] **`GPMoneyField` + `GPMoneyInputFormatter`** (`core/widgets/money_field.dart`): chữ số gõ vào = minor units, render lại bằng
+      `GPMoneyFormatter` mỗi phím, trần 15 chữ số, rỗng = null chứ không phải 0. Chỉ là độ lớn — dấu do caller (loại giao dịch, công tắc "đang nợ").
+      Đổi account khác currency giữ nguyên chữ số, đọc lại theo exponent mới.
+- [x] **`TransactionFormCubit`**: theo dõi account + category (cả hai loại, lọc theo type trong state). Mặc định account cũ nhất; account đang chọn bị
+      archive/xoá ở chỗ khác → về account cũ nhất còn lại; đổi type bỏ category khác loại. `occurredAt` = ngày chọn + giờ hiện tại (nhập lùi ngày vẫn giữ
+      thứ tự gõ). Không gõ số tiền → gửi 0, để entity trả `transactionAmountNotPositive` thay vì nút bị khoá không lý do. Chỉ chi/thu; transfer ở T5.
+- [x] **`AccountFormCubit`**: tạo + sửa chung một form. Currency chỉ chọn khi tạo (ADR-0010 bổ sung 12/10); sửa thì đọc account một lần, đổi chỗ khác
+      giữa chừng → `GPConflictFailure`, không ghi đè.
+- [x] **UI**: `TransactionFormPage` thay placeholder `/transactions/new` — loại (segmented), số tiền, account, category ("Chưa phân loại" là một lựa chọn),
+      ngày (`dayLabel`, date picker tới +1 năm), ghi chú. Chưa có account → empty state có nút "Thêm tài khoản". `AccountFormPage` ở `/accounts/new` và
+      `/accounts/:accountId/edit`, ngoài shell như form transaction; `AccountsPage` có nút + trên app bar và chạm dòng để sửa. Lỗi lưu hiện bằng
+      `GPFormFailureBanner` (`core/widgets/`, live region). Chuỗi mới ở cả `en` và `vi`; `addComingSoon` bỏ.
+- [x] **Test** (+44, suite: 750): formatter + field; use case trên repository thật; hai cubit trên in-memory Drift; widget test cả app — thêm account từ
+      empty state của form rồi quay lại, lưu chi tiêu → list hiện ngay, lưu bị từ chối → banner, thu nhập chỉ thấy category thu, sửa account giữ currency.
+      `InMemoryRepositories` thêm `categories`; `FakeCategoryRepository` cho shell test.
+- Phát hiện khi test: một `.first` trên stream drift trong `testWidgets` chỉ hoàn thành bằng thời gian thật (DB mở ngoài fake zone) — `settleRead` trong
+      test page chạy `runAsync` một nhịp. Stream sống (`StreamBuilder`, `listen`) không bị.
+- Chưa làm (đúng lịch): map lỗi về từng field (T3), sửa/xoá transaction (T4), transfer (T5), `AccountsPage` qua use case + balance (T6).
+
+**Soát lại (12/10): chạy trên iOS simulator (iPhone 17) + một agent review độc lập.** Widget test xanh không đủ — 4 lỗi chỉ lộ trên máy:
+
+- [x] **`GPButton` nuốt tap trên máy thật** (lỗi có từ trước, không phải của T2, nhưng chặn mọi nút Lưu): nhấn giữ qua một frame thì ring focus
+      bọc nút vào `DecoratedBox` → cây đổi cấu trúc → `FilledButton` bị remount giữa cú chạm → tap bị huỷ + assertion "widget tree was locked".
+      `tester.tap` gửi down/up trong cùng frame nên test cũ không bao giờ thấy. Giờ luôn bọc `DecoratedBox` (shadow rỗng khi không có ring);
+      test mới giữ tay qua `kPressTimeout` rồi mới nhả.
+- [x] **Caret của ô tiền đặt được giữa số**: chạm bên trái số đặt caret ở đầu, gõ 5 thì 45.000 thành 545.000 (agent dựng thêm ca 12.500 → lưu
+      12.008). Selection đổi không qua formatter → `GPMoneyField` tắt interactive selection + listener ghim caret về cuối. ADR-0015 sửa theo;
+      hệ quả mới: không paste/chọn được trong ô tiền. Test mutation: gỡ fix thì test đỏ đúng chỗ (caret = 0).
+- [x] **Thứ tự category trông như ngẫu nhiên**: seed cùng `created_at`, repository tie-break theo id (v5 hash). `inDisplayOrder`
+      (`categories/presentation/`): seed theo thứ tự `DefaultCategory` ("Khác" cuối), của người dùng xếp sau theo thứ tự tạo.
+- [x] **Ký hiệu tiền sai phía**: ô tiền luôn để ₫/$ ở sau, list thì `₫45,000` (en). `GPMoneyFormatter.symbolAffixes` → prefix/suffix theo ngôn ngữ.
+- [x] Từ review: **pop khi không còn trang dưới** (cold deep link `/transactions/new` → `GoError`, `/accounts/new` → màn trắng ở release) →
+      `context.popOrGoNamed(tab)` (`app/router/pop_or_go.dart`), test mutation xác nhận; **mở form trước nửa đêm, lưu sau nửa đêm bị lùi một ngày**
+      → không chọn ngày = lấy `now` lúc lưu (`pickedDay` null), chọn ngày mới ghép giờ hiện tại; **ghi chú: field đếm ký tự, entity đếm UTF-16**
+      (300 emoji qua được field rồi bị từ chối) → `GPUtf16LengthLimitingFormatter` cho note (500) và tên account (100), không cắt đôi surrogate,
+      không cắt khi IME đang soạn; **edit lỗi load mà submit lại tạo account mới** → chặn trong cubit; **id cũ từ dropdown đang mở** → cubit bỏ qua
+      id không còn trong list, page bỏ `!`; **mapping TransactionType → CategoryType lặp ở presentation** → `TransactionType.categoryType` ở domain,
+      `refusalFromCategory` dùng chung.
+- [x] Empty state của Accounts bỏ câu "Bấm +" (tab này có **hai** dấu +: app bar thêm account, dock thêm giao dịch) → nút "Thêm tài khoản" riêng.
+- Đã soát trên máy: luồng chính, banner từ chối, sửa account giữ currency, tiếng Việt đủ dấu, date picker Việt hoá (tuần bắt đầu T2).
+  Ghi nhận, chưa sửa: autocorrect của iOS sửa tên không dấu ("tien mat" → "turn ma") — người dùng Việt dùng bàn phím tiếng Việt; xét lại ở Flex.
+- Test: 777 (+27 so với lúc xong T2).
 
 **🏁 Milestone P1:** app dùng được hoàn toàn offline, không có dòng network nào. **Tag `v0.1-local`.**
 
