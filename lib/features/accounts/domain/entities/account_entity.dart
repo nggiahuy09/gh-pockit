@@ -55,9 +55,7 @@ final class AccountEntity {
   }) {
     final trimmedName = name.trim();
 
-    if (trimmedName.isEmpty) {
-      return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty));
-    }
+    if (trimmedName.isEmpty) return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty));
 
     if (trimmedName.length > nameMaxLength) {
       return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameTooLong));
@@ -78,11 +76,12 @@ final class AccountEntity {
   }
 
   /// Keeps the old [updatedAt]: the repository restamps it with [stampedAt]. Pass [version] only with a number the server returned.
-  GPResult<AccountEntity> update({String? name, AccountType? type, Money? initialBalance, bool? isArchived, int? version}) => create(
+  /// Takes minor units, not a [Money]: the currency is fixed at creation (ADR-0010).
+  GPResult<AccountEntity> update({String? name, AccountType? type, int? initialBalanceMinorUnits, bool? isArchived, int? version}) => create(
     id: id,
     name: name ?? this.name,
     type: type ?? this.type,
-    initialBalance: initialBalance ?? this.initialBalance,
+    initialBalance: initialBalanceMinorUnits == null ? initialBalance : Money(initialBalanceMinorUnits, initialBalance.currencyCode),
     createdAt: createdAt,
     updatedAt: updatedAt,
     isArchived: isArchived ?? this.isArchived,

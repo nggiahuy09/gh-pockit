@@ -155,14 +155,14 @@ void main() {
 
       expect(patch.name, const Value('Ví mới'));
       expect(patch.type, const Value('cash'));
-      expect(patch.currencyCode, const Value('VND'));
       expect(patch.initialBalance, const Value(1500000));
       expect(patch.isArchived, const Value(true));
     });
 
-    test('leaves identity, ownership, version and updated_at absent', () {
+    test('leaves identity, ownership, currency, version and updated_at absent', () {
       final patch = mapper.toPatch(entity(version: 9));
 
+      expect(patch.currencyCode, const Value<String>.absent());
       expect(patch.id, const Value<String>.absent());
       expect(patch.ownerId, const Value<String>.absent());
       expect(patch.createdAt, const Value<int>.absent());

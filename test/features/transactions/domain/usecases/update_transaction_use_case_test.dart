@@ -8,8 +8,6 @@ import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
@@ -141,14 +139,6 @@ void main() {
 
       expect(result, isA<GPOk<TransactionEntity>>());
       expect((await stored(transaction.id)).categoryId, 'cat-food');
-    });
-
-    test('keeps a category whose type was flipped since — the edit did not put it there', () async {
-      final transaction = await filedUnderFood();
-      final food = (await categories.watchCategory('cat-food').first)!;
-      ok(await categories.updateCategory(ok<CategoryEntity>(food.update(type: CategoryType.income))));
-
-      expect(await updateTransaction(ok(transaction.update(note: 'Phở bò'))), isA<GPOk<TransactionEntity>>());
     });
 
     test('switches to a transfer without judging the category it drops', () async {

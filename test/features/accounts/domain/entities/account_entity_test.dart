@@ -99,6 +99,12 @@ void main() {
       expect(ok(build()).update(name: ''), const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty)));
     });
 
+    test('moves the opening balance in the currency the account was created with', () {
+      final account = ok(ok(build()).update(initialBalanceMinorUnits: -250000));
+
+      expect(account.initialBalance, Money(-250000, 'VND'));
+    });
+
     test('toggles isArchived without touching anything else', () {
       final archived = ok(ok(build()).update(isArchived: true));
 

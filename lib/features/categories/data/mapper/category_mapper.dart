@@ -75,11 +75,11 @@ class CategoryMapper {
     version: entity.version,
   );
 
-  /// Only what an edit may change: `name_key` and `is_system` are provenance, `version` is the server's, `updated_at` is stamped by the DAO.
+  /// Only what an edit may change: `name_key` and `is_system` are provenance, `type` is fixed at insert (ADR-0010), `version` is the server's,
+  /// `updated_at` is stamped by the DAO.
   /// A null name writes NULL, the "use the default name again" edit.
   CategoriesTableCompanion toPatch(CategoryEntity entity) => CategoriesTableCompanion(
     name: Value(entity.name),
-    type: Value(entity.type.storageValue),
     iconKey: Value(entity.iconKey),
     colorKey: Value(entity.colorKey),
   );

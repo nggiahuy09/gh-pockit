@@ -7,7 +7,9 @@ Accepted — 2026-09-27, before W4. Closes the question that
 (W3 T6) both left for W4 — "cascade, block, or orphan". Implemented at W4 T6
 (the repository rules) and W4 flex (the use cases). "A use case exists only when
 it owns a rule" is superseded by ADR-0013 (2026-10-06): a BLoC now reaches the
-domain only through use cases, forwarding ones included.
+domain only through use cases, forwarding ones included. Amended 2026-10-12
+(before W6): an account's currency and a category's type are fixed at creation —
+see the amendment at the end.
 
 ## Context
 
@@ -74,8 +76,8 @@ category, or a new type with the category kept. A transaction already under a
 category deleted since stays editable: deleting such a category is allowed
 (below), so that state is ordinary rather than a race, and refusing every later
 save would leave those transactions read-only behind a "no longer exists" about
-a field that reads "Uncategorised". A category whose type was flipped since is
-left alone for the same reason (see _Still open_). Knowing what the edit changed
+a field that reads "Uncategorised". (A category whose type was flipped since was
+tolerated too, until the amendment below made the flip impossible.) Knowing what the edit changed
 costs one read of the stored row, by id; an edit whose version is no longer the
 stored one skips the rule and meets the version guard, so it is reported as the
 conflict it is. Accounts get no such tolerance, deliberately: an account with
@@ -172,16 +174,38 @@ Negative:
 - "Uncategorised" needs a string in both languages when W5 or W6 first renders
   one.
 
-## Still open
+## Amended 2026-10-12 — currency and category type are fixed at creation
 
-- **An account's currency and a category's type are both editable today.**
-  `AccountEntity.update(initialBalance:)` accepts a `Money` in another currency,
-  and `CategoryEntity.update(type:)` flips expense and income. Either edit
-  strands every transaction already under the row — rule 2 or rule 3 broken
-  after the fact, with no write left to refuse. Decide before W6 exposes either
-  edit: freeze them once the row has transactions, or freeze them outright.
-  Since W4 flex a flipped category no longer blocks editing the transactions
-  under it — `UpdateTransactionUseCase` judges only what an edit changes — so
-  for rule 3 what is left is the reports: W7's breakdown would count those
-  transactions under the wrong kind. A changed account currency still refuses
-  every later edit of its transactions, in the repository.
+Closes what this ADR left open: an account's currency and a category's type were
+both editable, and either edit strands every transaction already under the row —
+rule 2 or rule 3 broken after the fact, with no write left to refuse. A changed
+currency made every later edit of those transactions fail in the repository; a
+flipped category would have made W7's breakdown count them under the wrong kind.
+
+**Both are frozen outright, not only once the row has transactions.** The
+conditional freeze needs a "has live transactions" question per parent kind,
+asked outside the write, so sync can still slip a transaction in between check
+and edit — the same race the use-case checks above already concede, only here
+the cost is a broken history rather than an orphan. Freezing outright has no
+window, needs no query, and costs the user little: a currency or a kind chosen
+wrongly on an empty row is fixed by deleting it and creating another, which an
+empty row allows.
+
+Two layers, neither a runtime check:
+
+- **The entity offers no way to ask.** `CategoryEntity.update` has no `type`
+  parameter, as it already had none for `nameKey` and `isSystem`.
+  `AccountEntity.update` takes `initialBalanceMinorUnits` and keeps the currency
+  it was created with, so the opening amount stays editable. No validation code
+  and no message: an edit that cannot be expressed needs no refusal.
+- **The patch never writes the column.** `AccountMapper.toPatch` leaves out
+  `currency_code` and `CategoryMapper.toPatch` leaves out `type`, so an entity
+  built with `create` under an existing id cannot move them through
+  `updateAccount` / `updateCategory` either.
+
+Consequences: the edit forms W6 adds show currency and type on create only.
+`UpdateTransactionUseCase` keeps reading the stored row — a category deleted
+since still needs the tolerance — but the flipped-category case it also covered
+is gone, and its test with it. When sync arrives (P4), the server must refuse
+the same two changes, or a second client could still make them; that belongs in
+the W10 schema.

@@ -79,11 +79,10 @@ class AccountMapper {
     version: entity.version,
   );
 
-  /// User-editable columns only: `version` is the server's, and `AccountDao.updateAccount` stamps `updated_at`.
+  /// User-editable columns only: `currency_code` is fixed at insert (ADR-0010), `version` is the server's, and `AccountDao.updateAccount` stamps `updated_at`.
   AccountsTableCompanion toPatch(AccountEntity entity) => AccountsTableCompanion(
     name: Value(entity.name),
     type: Value(entity.type.storageValue),
-    currencyCode: Value(entity.initialBalance.currencyCode),
     initialBalance: Value(entity.initialBalance.minorUnits),
     isArchived: Value(entity.isArchived),
   );

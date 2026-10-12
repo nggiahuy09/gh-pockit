@@ -91,15 +91,15 @@ void main() {
       final patch = mapper.toPatch(mapped(row(name: 'Cà phê sáng')));
 
       expect(patch.name.value, 'Cà phê sáng');
-      expect(patch.type.value, 'expense');
       expect(patch.iconKey.value, 'food');
     });
 
-    test('leaves out name_key and is_system, so provenance cannot be edited away', () {
+    test('leaves out name_key, is_system and type, so neither provenance nor the filing of past transactions can be edited away', () {
       final patch = mapper.toPatch(mapped(row(name: 'Cà phê sáng')));
 
       expect(patch.nameKey.present, isFalse);
       expect(patch.isSystem.present, isFalse);
+      expect(patch.type.present, isFalse);
       expect(patch.id.present, isFalse);
       expect(patch.ownerId.present, isFalse);
       expect(patch.createdAt.present, isFalse);

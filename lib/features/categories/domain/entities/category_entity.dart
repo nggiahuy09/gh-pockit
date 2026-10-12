@@ -88,10 +88,9 @@ final class CategoryEntity {
   }
 
   /// Null keeps a field, so [clearName] is how a renamed seed falls back to its default name. No parameter for [nameKey] or [isSystem], on purpose:
-  /// an edit never changes provenance. [updatedAt] is the repository's to restamp ([stampedAt]).
+  /// an edit never changes provenance; none for [type] either, which is fixed at creation (ADR-0010). [updatedAt] is the repository's to restamp ([stampedAt]).
   GPResult<CategoryEntity> update({
     String? name,
-    CategoryType? type,
     String? iconKey,
     String? colorKey,
     int? version,
@@ -100,7 +99,7 @@ final class CategoryEntity {
     id: id,
     nameKey: nameKey,
     name: clearName ? null : (name ?? this.name),
-    type: type ?? this.type,
+    type: type,
     iconKey: iconKey ?? this.iconKey,
     colorKey: colorKey ?? this.colorKey,
     isSystem: isSystem,
