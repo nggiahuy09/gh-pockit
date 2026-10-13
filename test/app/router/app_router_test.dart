@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
@@ -44,6 +45,17 @@ void main() {
       expect(shellTabs, hasLength(labels.length));
       final xs = <double>[for (final label in labels) tester.getCenter(dockLabel(label)).dx];
       expect(xs, orderedEquals(<double>[...xs]..sort()));
+    });
+
+    testWidgets('a snackbar shown in the shell sits above the dock, not under it', (WidgetTester tester) async {
+      await pumpApp(tester);
+
+      ScaffoldMessenger.of(tester.element(find.byType(HomePage))).showSnackBar(const SnackBar(content: Text('Saved')));
+      await tester.pumpAndSettle();
+
+      // The Material, not the SnackBar: the widget's own box includes the inset that lifts it.
+      final snackBar = tester.getRect(find.descendant(of: find.byType(SnackBar), matching: find.byType(Material)).first);
+      expect(snackBar.bottom, lessThanOrEqualTo(tester.getRect(find.byKey(AppShell.dockKey)).top));
     });
 
     testWidgets('each tab opens its page and marks itself selected', (WidgetTester tester) async {

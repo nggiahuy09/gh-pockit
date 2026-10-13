@@ -60,29 +60,35 @@ class AppShell extends StatelessWidget {
     final media = MediaQuery.of(context);
     final spacing = context.spacing;
     final dockBottom = math.max(media.padding.bottom, 20).toDouble();
+    final theme = Theme.of(context);
+    // A floating snackbar sits on the safe area's edge, where the dock is: the inset lifts every snackbar shown in the shell clear of it.
+    final snackBarInset = EdgeInsets.fromLTRB(spacing.smd, 0, spacing.smd, dockBottom + dockHeight + spacing.sm - media.padding.bottom);
 
-    return Scaffold(
-      body: Stack(
-        children: <Widget>[
-          // The dock floats over the pages, so they see it as part of the bottom inset and keep their last row scrollable past it.
-          MediaQuery(
-            data: media.copyWith(padding: media.padding.copyWith(bottom: dockBottom + dockHeight + spacing.md)),
-            child: navigationShell,
-          ),
-          Positioned(
-            left: spacing.smd,
-            right: spacing.smd,
-            bottom: dockBottom,
-            child: MediaQuery.withClampedTextScaling(
-              maxScaleFactor: 1.3,
-              child: _Dock(
-                currentIndex: navigationShell.currentIndex,
-                onTabSelected: _onTabSelected,
-                showAddButton: _addButtonPaths.contains(location),
+    return Theme(
+      data: theme.copyWith(snackBarTheme: theme.snackBarTheme.copyWith(insetPadding: snackBarInset)),
+      child: Scaffold(
+        body: Stack(
+          children: <Widget>[
+            // The dock floats over the pages, so they see it as part of the bottom inset and keep their last row scrollable past it.
+            MediaQuery(
+              data: media.copyWith(padding: media.padding.copyWith(bottom: dockBottom + dockHeight + spacing.md)),
+              child: navigationShell,
+            ),
+            Positioned(
+              left: spacing.smd,
+              right: spacing.smd,
+              bottom: dockBottom,
+              child: MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.3,
+                child: _Dock(
+                  currentIndex: navigationShell.currentIndex,
+                  onTabSelected: _onTabSelected,
+                  showAddButton: _addButtonPaths.contains(location),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
