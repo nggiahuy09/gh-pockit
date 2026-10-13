@@ -296,6 +296,62 @@ void main() {
     });
   });
 
+  group('restoreTransaction', () {
+    test('brings a deleted transaction back into the list, stamped', () async {
+      final created = ok(await create());
+      await repository.deleteTransaction(created.id);
+      clock.advance(const Duration(seconds: 3));
+
+      expect(await repository.restoreTransaction(created.id), const GPOk<void>(null));
+
+      final stored = (await storedRows()).single;
+      expect(stored.deletedAt, isNull);
+      expect(stored.updatedAt, clock.nowEpochMillis());
+      expect((await repository.watchTransactions(TransactionQuery(limit: 50)).first).transactions.single.id, created.id);
+    });
+
+    test('reports not found for a live transaction, an unknown id, and one of another owner', () async {
+      final created = ok(await create());
+      final theirs = TransactionRepositoryImpl(
+        dao: dao,
+        clock: clock,
+        uuidGenerator: FakeUuidGenerator(prefix: 'theirs'),
+        logger: logger,
+        ownerId: otherOwner,
+      );
+      final their = ok(await theirs.createTransaction(type: TransactionType.expense, accountId: 'acc-theirs', amount: Money(1000, 'VND'), occurredAt: occurredAt));
+      await theirs.deleteTransaction(their.id);
+
+      expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
+      expect(await repository.restoreTransaction('tx-missing'), const GPErr<void>(GPNotFoundFailure()));
+      expect(await repository.restoreTransaction(their.id), const GPErr<void>(GPNotFoundFailure()));
+    });
+
+    test('is refused once its account is deleted, and the transaction stays deleted', () async {
+      final created = ok(await create());
+      await repository.deleteTransaction(created.id);
+      await softDeleteAccount('acc-cash');
+
+      expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
+      expect((await storedRows()).single.deletedAt, isNotNull);
+    });
+
+    test("is refused once a transfer's destination is deleted", () async {
+      final created = ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
+      await repository.deleteTransaction(created.id);
+      await softDeleteAccount('acc-bank');
+
+      expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
+    });
+
+    test('an archived account still takes it back: archived counts as live', () async {
+      final created = ok(await create(accountId: 'acc-archived'));
+      await repository.deleteTransaction(created.id);
+
+      expect(await repository.restoreTransaction(created.id), const GPOk<void>(null));
+    });
+  });
+
   group('hasLiveTransactions', () {
     test('answers yes for either side of a transfer, and no for an account nothing touches', () async {
       ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
@@ -460,6 +516,15 @@ void main() {
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'tx-1'});
     });
 
+    test('restoreTransaction reports it too, and the transaction stays deleted', () async {
+      final created = ok(await create());
+      await repository.deleteTransaction(created.id);
+
+      expect(await repositoryFailingWith(Exception('io error')).restoreTransaction(created.id), const GPErr<void>(GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'transaction', 'id': created.id});
+      expect((await storedRows()).single.deletedAt, isNotNull);
+    });
+
     test('an Error is not swallowed — it is a bug and must reach the crash reporter', () async {
       await expectLater(
         repositoryFailingWith(StateError('broken invariant')).createTransaction(
@@ -532,6 +597,9 @@ class ThrowingTransactionDao extends TransactionDao {
 
   @override
   Future<int> softDelete(String id, {required int now}) => Future<int>.error(thrown);
+
+  @override
+  Future<int> restore(String id, {required int now}) => Future<int>.error(thrown);
 
   @override
   Future<bool> hasLiveTransactions(String ownerId, String accountId) => Future<bool>.error(thrown);

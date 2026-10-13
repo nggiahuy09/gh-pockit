@@ -31,8 +31,12 @@ abstract class TransactionRepository {
   /// Guarded on [TransactionEntity.version], so a stale one is a [GPConflictFailure]. Returns the entity with a fresh `updatedAt`.
   Future<GPResult<TransactionEntity>> updateTransaction(TransactionEntity transaction);
 
-  /// Not guarded by version. No use case wraps it: deleting owns no rule (ADR-0010).
+  /// Not guarded by version, and no account rule: a transaction on an account already gone must stay deletable.
   Future<GPResult<void>> deleteTransaction(String id);
+
+  /// Undoes [deleteTransaction] (ADR-0017). [GPNotFoundFailure] when [id] is no deleted transaction, or when an account it names is no longer live: a row
+  /// coming back holds the account rules a new one does. Not guarded by version.
+  Future<GPResult<void>> restoreTransaction(String id);
 
   /// Either side of a transfer counts; deleted transactions do not.
   Future<GPResult<bool>> hasLiveTransactions(String accountId);

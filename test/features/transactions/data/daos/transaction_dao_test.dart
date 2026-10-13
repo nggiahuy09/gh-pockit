@@ -418,6 +418,31 @@ void main() {
     });
   });
 
+  group('restore', () {
+    test("clears deleted_at, stamps updated_at and 'pending', leaving version alone", () async {
+      await dao.insertTransaction(row());
+      await dao.softDelete('tx-1', now: t1);
+      await db.update(db.transactionsTable).write(const TransactionsTableCompanion(syncStatus: Value('synced')));
+
+      final written = await dao.restore('tx-1', now: t1 + 1);
+      final stored = await db.select(db.transactionsTable).getSingle();
+
+      expect(written, 1);
+      expect(stored.deletedAt, isNull);
+      expect(stored.updatedAt, t1 + 1);
+      expect(stored.syncStatus, 'pending');
+      expect(stored.version, 1);
+    });
+
+    test('writes nothing for a live row or an unknown id', () async {
+      await dao.insertTransaction(row());
+
+      expect(await dao.restore('tx-1', now: t1), 0);
+      expect(await dao.restore('tx-missing', now: t1), 0);
+      expect((await dao.findById('tx-1'))!.updatedAt, isNot(t1));
+    });
+  });
+
   group('query plan, on the SQL the DAO really sends', () {
     // `selectTransactions` is the statement `watchTransactions` watches, so these plans cannot drift from the query.
     Future<String> planOf(SimpleSelectStatement<$TransactionsTableTable, TransactionRow> statement) async {

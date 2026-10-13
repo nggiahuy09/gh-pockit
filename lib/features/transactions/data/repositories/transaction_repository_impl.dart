@@ -140,7 +140,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
       case GPOk<TransactionEntity>(:final value):
         try {
           return await _dao.transaction(() async {
-            final refused = await _refusalFromAccounts(value);
+            final refused = await _refusalFromAccounts(accountId: value.accountId, destinationAccountId: value.destinationAccountId, currencyCode: value.amount.currencyCode);
             if (refused != null) return GPErr<TransactionEntity>(refused);
 
             await _dao.insertTransaction(_mapper.toInsert(value, ownerId: _ownerId));
@@ -162,7 +162,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
     try {
       return await _dao.transaction(() async {
-        final refused = await _refusalFromAccounts(stamped);
+        final refused = await _refusalFromAccounts(accountId: stamped.accountId, destinationAccountId: stamped.destinationAccountId, currencyCode: stamped.amount.currencyCode);
         if (refused != null) return GPErr<TransactionEntity>(refused);
 
         final written = await _dao.updateTransaction(
@@ -201,6 +201,25 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   @override
+  Future<GPResult<void>> restoreTransaction(String id) async {
+    try {
+      return await _dao.transaction(() async {
+        final row = await _dao.findById(id);
+        if (row == null || row.ownerId != _ownerId || row.deletedAt == null) return const GPErr<void>(GPNotFoundFailure());
+
+        // Read from the row, not a mapped entity: the account rule needs three columns, and coming back must hold it as a new row does.
+        final refused = await _refusalFromAccounts(accountId: row.accountId, destinationAccountId: row.destinationAccountId, currencyCode: row.currencyCode);
+        if (refused != null) return GPErr<void>(refused);
+
+        await _dao.restore(id, now: _clock.nowEpochMillis());
+        return const GPOk<void>(null);
+      });
+    } on Exception catch (error, stackTrace) {
+      return _databaseFailure<void>('transaction restore failed', id, error, stackTrace);
+    }
+  }
+
+  @override
   Future<GPResult<bool>> hasLiveTransactions(String accountId) async {
     try {
       return GPOk<bool>(await _dao.hasLiveTransactions(_ownerId, accountId));
@@ -210,12 +229,12 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   /// Null when the write may go ahead. Call only inside the write's transaction. Two currency codes, because the user has two different things to fix.
-  Future<GPFailure?> _refusalFromAccounts(TransactionEntity transaction) async {
-    final currency = await _dao.liveAccountCurrency(_ownerId, transaction.accountId);
+  Future<GPFailure?> _refusalFromAccounts({required String accountId, required String? destinationAccountId, required String currencyCode}) async {
+    final currency = await _dao.liveAccountCurrency(_ownerId, accountId);
     if (currency == null) return const GPNotFoundFailure();
-    if (currency != transaction.amount.currencyCode) return const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch);
+    if (currency != currencyCode) return const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch);
 
-    final destinationId = transaction.destinationAccountId;
+    final destinationId = destinationAccountId;
     if (destinationId == null) return null;
 
     final destinationCurrency = await _dao.liveAccountCurrency(_ownerId, destinationId);

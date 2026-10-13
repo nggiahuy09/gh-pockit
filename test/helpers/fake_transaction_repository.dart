@@ -46,6 +46,9 @@ class FakeTransactionRepository implements TransactionRepository {
   Future<GPResult<void>> deleteTransaction(String id) => throw UnimplementedError();
 
   @override
+  Future<GPResult<void>> restoreTransaction(String id) => throw UnimplementedError();
+
+  @override
   Future<GPResult<bool>> hasLiveTransactions(String accountId) => throw UnimplementedError();
 }
 

@@ -112,4 +112,11 @@ class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionD
       TransactionsTableCompanion(deletedAt: Value(now), updatedAt: Value(now), syncStatus: const Value(pendingSyncStatus)),
     );
   }
+
+  /// The inverse of [softDelete] (ADR-0017): touches only a tombstone, and moves `updated_at` so the pull sees the row come back.
+  Future<int> restore(String id, {required int now}) {
+    return (update(transactionsTable)..where((t) => t.id.equals(id) & t.deletedAt.isNotNull())).write(
+      TransactionsTableCompanion(deletedAt: const Value(null), updatedAt: Value(now), syncStatus: const Value(pendingSyncStatus)),
+    );
+  }
 }
