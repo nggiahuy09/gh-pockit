@@ -5,7 +5,10 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/failure.dart';
+import 'package:ghpockit/core/error/failure_message.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
+import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
@@ -15,7 +18,9 @@ import 'package:ghpockit/features/accounts/domain/repositories/account_repositor
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
@@ -51,12 +56,42 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// For a one-shot read (`.first`), as the edit form's load is: the database was opened outside the fake zone, so its future completes only in real time.
+  Future<void> settleRead(WidgetTester tester) async {
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pumpAndSettle();
+  }
+
+  /// Cold on the edit form, whose load would keep a plain settle spinning.
+  Future<void> pumpEditForm(WidgetTester tester, String transactionId) async {
+    await tester.pumpWidget(GPApp(initialLocation: '/transactions/$transactionId/edit', localization: await localizationFor(GPLocale.en)));
+    await settleRead(tester);
+  }
+
+  Future<void> openRow(WidgetTester tester, String text) async {
+    await tester.tap(find.text(text));
+    await settleRead(tester);
+  }
+
   Future<void> openForm(WidgetTester tester) async {
     await tester.tap(find.byKey(AppShell.addButtonKey));
     await tester.pumpAndSettle();
   }
 
-  Future<void> seedAccount(String name) => repositories.accounts.createAccount(name: name, type: AccountType.cash, initialBalance: Money(0, 'VND'));
+  Future<AccountEntity> seedAccount(String name) async =>
+      (await repositories.accounts.createAccount(name: name, type: AccountType.cash, initialBalance: Money(0, 'VND')) as GPOk<AccountEntity>).value;
+
+  Future<TransactionEntity> seedExpense(AccountEntity on, {String note = 'Phở bò', DateTime? at}) async =>
+      (await repositories.transactions.createTransaction(
+                type: TransactionType.expense,
+                accountId: on.id,
+                amount: Money(45000, 'VND'),
+                occurredAt: at ?? repositories.clock.nowUtc(),
+                note: note,
+              )
+              as GPOk<TransactionEntity>)
+          .value;
 
   Finder field(String label) => find.widgetWithText(TextField, label);
 
@@ -171,5 +206,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.testTextInput.isVisible, isFalse);
+  });
+
+  group('edit', () {
+    testWidgets('a row opens in the form, filled in and with no keyboard; a save pops back with the change', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpApp(tester);
+
+      await openRow(tester, 'Phở bò');
+
+      expect(find.byType(TransactionFormPage), findsOneWidget);
+      expect(find.text('Edit transaction'), findsOneWidget);
+      expect(find.text('45,000'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse, reason: 'an edit opens on what is there');
+
+      await tester.enterText(field('Note'), 'Bún chả');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TransactionsPage), findsOneWidget);
+      expect(find.text('Bún chả'), findsOneWidget);
+      expect(find.text('Phở bò'), findsNothing);
+    });
+
+    testWidgets('the date field shows the day the transaction has, not today', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'), at: repositories.clock.nowUtc().subtract(const Duration(days: 1)));
+      await pumpApp(tester);
+
+      await openRow(tester, 'Phở bò');
+
+      expect(find.widgetWithText(InputDecorator, 'Yesterday'), findsOneWidget);
+    });
+
+    testWidgets('a transfer row does not open: the form has no destination field yet', (WidgetTester tester) async {
+      final cash = await seedAccount('Ví tiền mặt');
+      final bank = await seedAccount('Ngân hàng');
+      await repositories.transactions.createTransaction(
+        type: TransactionType.transfer,
+        accountId: cash.id,
+        destinationAccountId: bank.id,
+        amount: Money(100000, 'VND'),
+        occurredAt: repositories.clock.nowUtc(),
+        note: 'Chuyển',
+      );
+      await pumpApp(tester);
+
+      await tester.tap(find.text('Chuyển'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TransactionFormPage), findsNothing);
+    });
+
+    testWidgets('opened cold on a transaction that is gone, says so', (WidgetTester tester) async {
+      await seedAccount('Ví tiền mặt');
+      await pumpEditForm(tester, 'tx-missing');
+
+      expect(find.text(const GPNotFoundFailure().message(const GPLocaleEn())), findsOneWidget);
+    });
   });
 }

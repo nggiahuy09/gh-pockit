@@ -25,6 +25,9 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get add => 'Add transaction';
 
   @override
+  String get edit => 'Edit transaction';
+
+  @override
   String get emptyTitle => 'No transactions yet';
 
   @override

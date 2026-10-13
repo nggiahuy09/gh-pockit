@@ -83,6 +83,18 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
       ),
     ),
     GoRoute(
+      path: Routes.editTransaction,
+      name: RouteNames.editTransaction,
+      builder: (BuildContext context, GoRouterState state) => BlocProvider<TransactionFormCubit>(
+        create: (_) {
+          final cubit = TransactionFormCubit(transactionId: state.pathParameters['transactionId'])..start();
+          unawaited(cubit.load());
+          return cubit;
+        },
+        child: TransactionFormPage(clock: getIt<GPClock>()),
+      ),
+    ),
+    GoRoute(
       path: Routes.newAccount,
       name: RouteNames.newAccount,
       builder: (BuildContext context, GoRouterState state) => BlocProvider<AccountFormCubit>(create: (_) => AccountFormCubit(), child: const AccountFormPage()),

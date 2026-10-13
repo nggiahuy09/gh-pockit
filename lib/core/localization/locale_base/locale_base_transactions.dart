@@ -10,6 +10,7 @@ abstract class GPLocaleBaseTransactions {
   String get today;
   String get yesterday;
   String get add;
+  String get edit;
   String get emptyTitle;
   String get emptyMessage;
   String get errorMessage;

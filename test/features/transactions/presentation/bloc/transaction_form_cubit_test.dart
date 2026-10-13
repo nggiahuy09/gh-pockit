@@ -58,6 +58,28 @@ void main() {
 
   Future<List<TransactionEntity>> stored() async => (await repositories.transactions.watchTransactions(TransactionQuery(limit: 10)).first).transactions;
 
+  // Saturday 10 October, 19:45 local: two days before the clock, so "keeps its date" and "now" cannot be confused.
+  final eatenAt = DateTime(2026, 10, 10, 19, 45);
+
+  Future<TransactionEntity> expense(AccountEntity on, {CategoryEntity? filedUnder, String? note = 'Phở'}) async => ok(
+    await repositories.transactions.createTransaction(
+      type: TransactionType.expense,
+      accountId: on.id,
+      categoryId: filedUnder?.id,
+      amount: Money(45000, on.initialBalance.currencyCode),
+      occurredAt: eatenAt.toUtc(),
+      note: note,
+    ),
+  );
+
+  Future<TransactionFormCubit> editing(String id) async {
+    final form = TransactionFormCubit(transactionId: id)..start();
+    addTearDown(form.close);
+    await form.load();
+    await pumpEventQueue();
+    return form;
+  }
+
   group('loading', () {
     test('is loading until both lists arrive, then defaults to the oldest account', () async {
       final cash = await account('Tiền mặt');
@@ -277,6 +299,156 @@ void main() {
       await form.submit();
 
       expect(await stored(), hasLength(1));
+    });
+  });
+
+  group('edit', () {
+    test('is loading until the transaction is read, then holds what it was saved with', () async {
+      final cash = await account('Tiền mặt');
+      final food = await category('Ăn uống', CategoryType.expense);
+      final transaction = await expense(cash, filedUnder: food);
+
+      final form = TransactionFormCubit(transactionId: transaction.id)..start();
+      addTearDown(form.close);
+      await pumpEventQueue();
+      expect(form.state.isLoading, isTrue, reason: 'the lists are in, the transaction is not');
+
+      await form.load();
+
+      expect(form.isEditing, isTrue);
+      expect(form.state.isLoading, isFalse);
+      expect(form.state.original, transaction);
+      expect(form.state.type, TransactionType.expense);
+      expect(form.state.accountId, cash.id);
+      expect(form.state.categoryId, food.id);
+      expect(form.state.amountMinorUnits, 45000);
+      expect(form.state.note, 'Phở');
+      expect(form.state.pickedDay, isNull);
+    });
+
+    test('saves in place: the same id and date, with the fields changed', () async {
+      final cash = await account('Tiền mặt');
+      final transaction = await expense(cash);
+      final form = await editing(transaction.id);
+
+      form
+        ..amountChanged(52000)
+        ..noteChanged('Bún chả');
+      await form.submit();
+
+      expect(form.state.isSaved, isTrue);
+      final saved = (await stored()).single;
+      expect(saved.id, transaction.id);
+      expect(saved.amount, Money(52000, 'VND'));
+      expect(saved.note, 'Bún chả');
+      expect(saved.occurredAt, eatenAt.toUtc(), reason: 'no day picked keeps the date, where a new one would take now');
+    });
+
+    test('a day picked keeps the time of day the transaction had', () async {
+      final transaction = await expense(await account('Tiền mặt'));
+      final form = await editing(transaction.id);
+
+      form.dateChanged(DateTime(2026, 10, 8));
+      await form.submit();
+
+      expect((await stored()).single.occurredAt, DateTime(2026, 10, 8, 19, 45).toUtc());
+    });
+
+    test('the category and the note clear when the user clears them', () async {
+      final cash = await account('Tiền mặt');
+      final transaction = await expense(cash, filedUnder: await category('Ăn uống', CategoryType.expense));
+      final form = await editing(transaction.id);
+
+      form
+        ..categoryChanged(null)
+        ..noteChanged('');
+      await form.submit();
+
+      final saved = (await stored()).single;
+      expect(saved.categoryId, isNull);
+      expect(saved.note, isNull);
+    });
+
+    test('a category deleted since stays the filing, so fixing the note does not re-file it', () async {
+      final cash = await account('Tiền mặt');
+      final food = await category('Ăn uống', CategoryType.expense);
+      final transaction = await expense(cash, filedUnder: food);
+      await repositories.categories.deleteCategory(food.id);
+      final form = await editing(transaction.id);
+      // The list again, after the load: whichever arrives first, the filing must hold.
+      await category('Cà phê', CategoryType.expense);
+      await pumpEventQueue();
+
+      expect(form.state.categoryId, food.id);
+      expect(form.state.selectedCategory, isNull, reason: 'not on offer: the page shows it as uncategorised');
+
+      form.noteChanged('Bún chả');
+      await form.submit();
+
+      expect(form.state.isSaved, isTrue);
+      expect((await stored()).single.categoryId, food.id);
+    });
+
+    test('an account archived since stays the account, rather than the transaction moving to the oldest', () async {
+      await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      final transaction = await expense(bank);
+      await repositories.accounts.archiveAccount(bank.id);
+      final form = await editing(transaction.id);
+      await account('Ví mới');
+      await pumpEventQueue();
+
+      expect(form.state.accountId, bank.id);
+      expect(form.state.selectedAccount, isNull);
+      expect(form.state.currencyCode, 'VND', reason: "the transaction's own, while its account is not on offer");
+
+      form.noteChanged('Bún chả');
+      await form.submit();
+
+      expect((await stored()).single.accountId, bank.id);
+    });
+
+    test('a transaction that is gone loads as not found, and a submit then writes nothing', () async {
+      await account('Tiền mặt');
+      final form = await editing('tx-missing');
+
+      expect(form.state.isLoading, isFalse);
+      expect(form.state.original, isNull);
+      expect(form.state.failure, const GPNotFoundFailure());
+
+      form.amountChanged(45000);
+      await form.submit();
+
+      expect(form.state.isSaved, isFalse);
+      expect(await stored(), isEmpty, reason: 'an edit with nothing loaded must not become a create');
+    });
+
+    test('a change made elsewhere after loading is a conflict, not an overwrite', () async {
+      final transaction = await expense(await account('Tiền mặt'));
+      final form = await editing(transaction.id);
+      await repositories.db.customStatement('UPDATE transactions SET version = version + 1');
+
+      form.noteChanged('Bún chả');
+      await form.submit();
+
+      expect(form.state.failure, isA<GPConflictFailure>());
+      expect((await stored()).single.note, 'Phở');
+    });
+  });
+
+  group('state', () {
+    test('an edit that changes nothing emits nothing', () async {
+      await account('Tiền mặt');
+      final form = await started();
+      form.noteChanged('Phở');
+      final emitted = <TransactionFormState>[];
+      final subscription = form.stream.listen(emitted.add);
+      addTearDown(subscription.cancel);
+
+      form.noteChanged('Phở');
+      await pumpEventQueue();
+
+      expect(emitted, isEmpty);
     });
   });
 

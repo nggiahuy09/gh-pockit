@@ -8,6 +8,7 @@ abstract final class Routes {
   static const String transactions = '/transactions';
   static const String budgets = '/budgets';
   static const String newTransaction = '/transactions/new';
+  static const String editTransaction = '/transactions/:transactionId/edit';
   static const String newAccount = '/accounts/new';
   static const String editAccount = '/accounts/:accountId/edit';
 
@@ -21,6 +22,7 @@ abstract final class RouteNames {
   static const String transactions = 'transactions';
   static const String budgets = 'budgets';
   static const String newTransaction = 'newTransaction';
+  static const String editTransaction = 'editTransaction';
   static const String newAccount = 'newAccount';
   static const String editAccount = 'editAccount';
   static const String settings = 'settings';

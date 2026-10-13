@@ -25,6 +25,9 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get add => 'Thêm giao dịch';
 
   @override
+  String get edit => 'Sửa giao dịch';
+
+  @override
   String get emptyTitle => 'Chưa có giao dịch nào';
 
   @override

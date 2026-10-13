@@ -68,14 +68,18 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
 
 /// One day's rows on a single card.
 class TransactionDayCard extends StatelessWidget {
-  const TransactionDayCard({required this.transactions, super.key});
+  const TransactionDayCard({required this.transactions, this.onOpen, super.key});
 
   final List<TransactionEntity> transactions;
+
+  /// Not offered for a transfer, which the form cannot show until it has a destination field.
+  final ValueChanged<TransactionEntity>? onOpen;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final radius = context.radii.borderLg;
+    final onOpen = this.onOpen;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.spacing.md),
@@ -83,16 +87,23 @@ class TransactionDayCard extends StatelessWidget {
         decoration: BoxDecoration(color: colors.surface, borderRadius: radius, boxShadow: context.shadows.small),
         child: ClipRRect(
           borderRadius: radius,
-          child: Column(
-            children: <Widget>[
-              for (var i = 0; i < transactions.length; i++)
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
+          // Transparent, so the ripple draws above the card's colour rather than under it on the page's Material.
+          child: Material(
+            type: MaterialType.transparency,
+            child: Column(
+              children: <Widget>[
+                for (var i = 0; i < transactions.length; i++)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
+                    ),
+                    child: TransactionRow(
+                      transaction: transactions[i],
+                      onTap: onOpen == null || transactions[i].type == TransactionType.transfer ? null : () => onOpen(transactions[i]),
+                    ),
                   ),
-                  child: TransactionRow(transaction: transactions[i]),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -102,11 +113,12 @@ class TransactionDayCard extends StatelessWidget {
 
 /// Only the title is ever cut short; the amount always shows in full.
 class TransactionRow extends StatelessWidget {
-  const TransactionRow({required this.transaction, super.key});
+  const TransactionRow({required this.transaction, this.onTap, super.key});
 
   static const double minHeight = 56;
 
   final TransactionEntity transaction;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +126,7 @@ class TransactionRow extends StatelessWidget {
     final spacing = context.spacing;
     final textStyle = context.text.bodyLarge;
 
-    return ConstrainedBox(
+    final row = ConstrainedBox(
       // Scales with the system text size, as the design's rows do, so a larger text setting keeps the same breathing room.
       constraints: BoxConstraints(minHeight: MediaQuery.textScalerOf(context).scale(minHeight)),
       child: Padding(
@@ -143,6 +155,8 @@ class TransactionRow extends StatelessWidget {
         ),
       ),
     );
+
+    return onTap == null ? row : InkWell(onTap: onTap, child: row);
   }
 }
 

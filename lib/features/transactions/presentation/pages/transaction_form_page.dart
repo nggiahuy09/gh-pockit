@@ -26,7 +26,7 @@ import 'package:ghpockit/features/transactions/presentation/transaction_form_fie
 import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
 import 'package:go_router/go_router.dart';
 
-/// Expense or income for now; the type picker grows a transfer with the transfer flow.
+/// Create and edit share one page. Expense or income for now; the type picker grows a transfer with the transfer flow.
 class TransactionFormPage extends StatelessWidget {
   const TransactionFormPage({required this.clock, super.key});
 
@@ -36,20 +36,24 @@ class TransactionFormPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final cubit = context.read<TransactionFormCubit>();
 
     return BlocConsumer<TransactionFormCubit, TransactionFormState>(
       listenWhen: (TransactionFormState previous, TransactionFormState current) => !previous.isSaved && current.isSaved,
       listener: (BuildContext context, TransactionFormState state) => context.popOrGoNamed(RouteNames.transactions),
       builder: (BuildContext context, TransactionFormState state) {
         final failure = state.failure;
-        final account = state.selectedAccount;
+        final currencyCode = state.currencyCode;
         final Widget body;
 
         if (state.isLoading && failure != null) {
           body = GPEmptyState(icon: const Icon(Icons.error_outline), title: failure.message(l10n));
         } else if (state.isLoading) {
           body = const Center(child: CircularProgressIndicator());
-        } else if (account == null) {
+        } else if (cubit.isEditing && state.original == null) {
+          // Nothing loaded: the transaction is gone, or could not be read. The failure says which.
+          body = GPEmptyState(icon: const Icon(Icons.error_outline), title: failure?.message(l10n) ?? '');
+        } else if (currencyCode == null) {
           body = GPEmptyState(
             icon: const Icon(Icons.account_balance_wallet_outlined),
             title: l10n.transactions.noAccountsTitle,
@@ -58,11 +62,11 @@ class TransactionFormPage extends StatelessWidget {
             onAction: () => context.pushNamed(RouteNames.newAccount),
           );
         } else {
-          body = _TransactionForm(state: state, account: account, today: clock.nowUtc().toLocal());
+          body = _TransactionForm(state: state, currencyCode: currencyCode, isEditing: cubit.isEditing, today: clock.nowUtc().toLocal());
         }
 
         return Scaffold(
-          appBar: AppBar(title: Text(l10n.transactions.add)),
+          appBar: AppBar(title: Text(cubit.isEditing ? l10n.transactions.edit : l10n.transactions.add)),
           body: body,
         );
       },
@@ -71,10 +75,14 @@ class TransactionFormPage extends StatelessWidget {
 }
 
 class _TransactionForm extends StatefulWidget {
-  const _TransactionForm({required this.state, required this.account, required this.today});
+  const _TransactionForm({required this.state, required this.currencyCode, required this.isEditing, required this.today});
 
   final TransactionFormState state;
-  final AccountEntity account;
+
+  /// The selected account's, or the edited transaction's while its account is not on offer.
+  final String currencyCode;
+
+  final bool isEditing;
 
   /// Local, read at build: the date field shows today until the user picks a day.
   final DateTime today;
@@ -101,7 +109,10 @@ class _TransactionFormState extends State<_TransactionForm> {
 
   TransactionFormState get _state => widget.state;
 
-  DateTime get _day => _state.pickedDay ?? DateTime(widget.today.year, widget.today.month, widget.today.day);
+  DateTime get _day {
+    final shown = _state.pickedDay ?? _state.original?.occurredAt.toLocal() ?? widget.today;
+    return DateTime(shown.year, shown.month, shown.day);
+  }
 
   /// A refused save moves focus to the field it is about: the keyboard may be hiding it, and a screen reader then reads its error (ADR-0016).
   void _focus(TransactionFormField field) {
@@ -114,12 +125,15 @@ class _TransactionFormState extends State<_TransactionForm> {
   Future<void> _pickDate() async {
     final cubit = context.read<TransactionFormCubit>();
     final today = widget.today;
+    final day = _day;
+    // A planned expense may be dated ahead; a year covers rent and insurance. Widened to the day shown, which an edit may have outside it.
+    final firstDate = DateTime(2000);
+    final lastDate = DateTime(today.year + 1, today.month, today.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _day,
-      firstDate: DateTime(2000),
-      // A planned expense may be dated ahead; a year covers rent and insurance.
-      lastDate: DateTime(today.year + 1, today.month, today.day),
+      initialDate: day,
+      firstDate: day.isBefore(firstDate) ? day : firstDate,
+      lastDate: day.isAfter(lastDate) ? day : lastDate,
     );
 
     if (picked != null) cubit.dateChanged(picked);
@@ -130,7 +144,9 @@ class _TransactionFormState extends State<_TransactionForm> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final cubit = context.read<TransactionFormCubit>();
-    final account = widget.account;
+    final accountId = _state.selectedAccount?.id;
+    // A category deleted since the transaction was filed shows as uncategorised, as the list shows it (ADR-0010), and stays filed until another is picked.
+    final categoryId = _state.categoriesForType.any((CategoryEntity category) => category.id == _state.categoryId) ? _state.categoryId : null;
     final failure = _state.failure;
     final failedField = failure == null ? null : transactionFormFieldOf(failure);
 
@@ -157,19 +173,21 @@ class _TransactionFormState extends State<_TransactionForm> {
           ),
           SizedBox(height: spacing.md),
           GPMoneyField(
-            currencyCode: account.initialBalance.currencyCode,
+            currencyCode: widget.currencyCode,
             initialMinorUnits: _state.amountMinorUnits,
             label: l10n.transactions.fieldAmount,
             errorText: errorOn(TransactionFormField.amount),
             focusNode: _focusNodes[TransactionFormField.amount],
-            autofocus: true,
+            // An edit opens on what is there: the keyboard would cover it before the user picked what to change.
+            autofocus: !widget.isEditing,
             onChanged: cubit.amountChanged,
           ),
           SizedBox(height: spacing.md),
           DropdownButtonFormField<String>(
-            // Keyed by the selection: `initialValue` is read once, and the cubit may move it (an account archived elsewhere).
-            key: ValueKey<String>('account-${account.id}'),
-            initialValue: account.id,
+            // Keyed by the selection: `initialValue` is read once, and the cubit may move it (an account archived elsewhere). Empty when an edit's
+            // account is no longer on offer.
+            key: ValueKey<String>('account-$accountId'),
+            initialValue: accountId,
             focusNode: _focusNodes[TransactionFormField.account],
             isExpanded: true,
             decoration: InputDecoration(labelText: l10n.transactions.fieldAccount, errorText: errorOn(TransactionFormField.account)),
@@ -184,8 +202,8 @@ class _TransactionFormState extends State<_TransactionForm> {
           ),
           SizedBox(height: spacing.md),
           DropdownButtonFormField<String?>(
-            key: ValueKey<String>('category-${_state.type.name}-${_state.categoryId}'),
-            initialValue: _state.categoryId,
+            key: ValueKey<String>('category-${_state.type.name}-$categoryId'),
+            initialValue: categoryId,
             focusNode: _focusNodes[TransactionFormField.category],
             isExpanded: true,
             decoration: InputDecoration(labelText: l10n.transactions.fieldCategory, errorText: errorOn(TransactionFormField.category)),

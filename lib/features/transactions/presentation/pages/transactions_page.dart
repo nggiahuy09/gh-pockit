@@ -1,15 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
 import 'package:ghpockit/features/transactions/presentation/widgets/transaction_list_parts.dart';
+import 'package:go_router/go_router.dart';
 
 /// Reads a [TransactionListBloc] from the tree; the route builder provides it.
 class TransactionsPage extends StatelessWidget {
@@ -79,6 +84,9 @@ class _TransactionList extends StatelessWidget {
     return false;
   }
 
+  Future<void> _open(BuildContext context, TransactionEntity transaction) =>
+      context.pushNamed<void>(RouteNames.editTransaction, pathParameters: <String, String>{'transactionId': transaction.id});
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -98,7 +106,12 @@ class _TransactionList extends StatelessWidget {
                 TransactionDayHeader(
                   label: dayLabel(day.date, today: today, l10n: l10n),
                 ),
-                SliverToBoxAdapter(child: TransactionDayCard(transactions: day.transactions)),
+                SliverToBoxAdapter(
+                  child: TransactionDayCard(
+                    transactions: day.transactions,
+                    onOpen: (TransactionEntity transaction) => unawaited(_open(context, transaction)),
+                  ),
+                ),
               ],
             ),
           SliverSafeArea(
