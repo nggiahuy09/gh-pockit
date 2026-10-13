@@ -70,6 +70,15 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get save => 'Lưu';
 
   @override
+  String get delete => 'Xóa';
+
+  @override
+  String get deleted => 'Đã xóa giao dịch';
+
+  @override
+  String get undo => 'Hoàn tác';
+
+  @override
   String get noAccountsTitle => 'Hãy thêm một tài khoản trước';
 
   @override

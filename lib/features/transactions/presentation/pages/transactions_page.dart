@@ -5,18 +5,22 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/failure_message.dart';
+import 'package:ghpockit/core/error/result.dart';
+import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
+import 'package:ghpockit/features/transactions/presentation/bloc/transaction_deletion_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
+import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
 import 'package:ghpockit/features/transactions/presentation/widgets/transaction_list_parts.dart';
 import 'package:go_router/go_router.dart';
 
-/// Reads a [TransactionListBloc] from the tree; the route builder provides it.
+/// Reads a [TransactionListBloc] and a [TransactionDeletionCubit] from the tree; the route builder provides both.
 class TransactionsPage extends StatelessWidget {
   const TransactionsPage({required this.clock, super.key});
 
@@ -84,8 +88,25 @@ class _TransactionList extends StatelessWidget {
     return false;
   }
 
-  Future<void> _open(BuildContext context, TransactionEntity transaction) =>
-      context.pushNamed<void>(RouteNames.editTransaction, pathParameters: <String, String>{'transactionId': transaction.id});
+  Future<void> _open(BuildContext context, TransactionEntity transaction) async {
+    final undo = _UndoOffer.of(context);
+    final outcome = await context.pushNamed<TransactionFormOutcome>(RouteNames.editTransaction, pathParameters: <String, String>{'transactionId': transaction.id});
+
+    if (outcome == TransactionFormOutcome.deleted) undo.show(transaction.id);
+  }
+
+  Future<bool> _delete(BuildContext context, TransactionEntity transaction) async {
+    final undo = _UndoOffer.of(context);
+
+    switch (await undo.deletion.delete(transaction.id)) {
+      case GPOk<void>():
+        undo.show(transaction.id);
+        return true;
+      case GPErr<void>(:final failure):
+        undo.report(failure);
+        return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -110,6 +131,7 @@ class _TransactionList extends StatelessWidget {
                   child: TransactionDayCard(
                     transactions: day.transactions,
                     onOpen: (TransactionEntity transaction) => unawaited(_open(context, transaction)),
+                    onDelete: (TransactionEntity transaction) => _delete(context, transaction),
                   ),
                 ),
               ],
@@ -123,5 +145,39 @@ class _TransactionList extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// The snackbar after a delete, from a swipe or from the form (ADR-0017). Captured before any await: the messenger outlives the gesture, and the
+/// cubit outlives the form that was pushed over the list.
+class _UndoOffer {
+  _UndoOffer.of(BuildContext context) : messenger = ScaffoldMessenger.of(context), deletion = context.read<TransactionDeletionCubit>(), l10n = context.l10n;
+
+  final ScaffoldMessengerState messenger;
+  final TransactionDeletionCubit deletion;
+  final GPLocaleBase l10n;
+
+  /// Replaces whatever snackbar is up: only the latest delete can be taken back.
+  void show(String id) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.transactions.deleted),
+          action: SnackBarAction(label: l10n.transactions.undo, onPressed: () => unawaited(_restore(id))),
+        ),
+      );
+  }
+
+  void report(GPFailure failure) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(failure.message(l10n))));
+  }
+
+  Future<void> _restore(String id) async {
+    if (deletion.isClosed) return;
+
+    if (await deletion.restore(id) case GPErr<void>(:final failure)) report(failure);
   }
 }

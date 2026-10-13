@@ -26,6 +26,14 @@ import 'package:ghpockit/features/transactions/presentation/transaction_form_fie
 import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
 import 'package:go_router/go_router.dart';
 
+/// What the form hands back to the page that pushed it.
+enum TransactionFormOutcome {
+  saved,
+
+  /// The list offers the undo (ADR-0017).
+  deleted,
+}
+
 /// Create and edit share one page. Expense or income for now; the type picker grows a transfer with the transfer flow.
 class TransactionFormPage extends StatelessWidget {
   const TransactionFormPage({required this.clock, super.key});
@@ -39,8 +47,9 @@ class TransactionFormPage extends StatelessWidget {
     final cubit = context.read<TransactionFormCubit>();
 
     return BlocConsumer<TransactionFormCubit, TransactionFormState>(
-      listenWhen: (TransactionFormState previous, TransactionFormState current) => !previous.isSaved && current.isSaved,
-      listener: (BuildContext context, TransactionFormState state) => context.popOrGoNamed(RouteNames.transactions),
+      listenWhen: (TransactionFormState previous, TransactionFormState current) => (!previous.isSaved && current.isSaved) || (!previous.isDeleted && current.isDeleted),
+      listener: (BuildContext context, TransactionFormState state) =>
+          context.popOrGoNamed(RouteNames.transactions, state.isDeleted ? TransactionFormOutcome.deleted : TransactionFormOutcome.saved),
       builder: (BuildContext context, TransactionFormState state) {
         final failure = state.failure;
         final currencyCode = state.currencyCode;
@@ -65,8 +74,15 @@ class TransactionFormPage extends StatelessWidget {
           body = _TransactionForm(state: state, currencyCode: currencyCode, isEditing: cubit.isEditing, today: clock.nowUtc().toLocal());
         }
 
+        final canDelete = state.original != null && !state.isSaving && !state.isDeleting;
+
         return Scaffold(
-          appBar: AppBar(title: Text(cubit.isEditing ? l10n.transactions.edit : l10n.transactions.add)),
+          appBar: AppBar(
+            title: Text(cubit.isEditing ? l10n.transactions.edit : l10n.transactions.add),
+            actions: <Widget>[
+              if (cubit.isEditing) IconButton(icon: const Icon(Icons.delete_outline), tooltip: l10n.transactions.delete, onPressed: canDelete ? cubit.delete : null),
+            ],
+          ),
           body: body,
         );
       },
@@ -242,7 +258,13 @@ class _TransactionFormState extends State<_TransactionForm> {
             GPFormFailureBanner(message: failure.message(l10n)),
           ],
           SizedBox(height: spacing.lg),
-          GPButton(label: l10n.transactions.save, variant: GPButtonVariant.accent, expanded: true, isLoading: _state.isSaving, onPressed: cubit.submit),
+          GPButton(
+            label: l10n.transactions.save,
+            variant: GPButtonVariant.accent,
+            expanded: true,
+            isLoading: _state.isSaving,
+            onPressed: _state.isDeleting ? null : cubit.submit,
+          ),
         ],
       ),
     );

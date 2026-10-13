@@ -13,6 +13,7 @@ import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
+import 'package:ghpockit/features/transactions/presentation/bloc/transaction_deletion_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_form_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
@@ -59,8 +60,11 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
             GoRoute(
               path: Routes.transactions,
               name: RouteNames.transactions,
-              builder: (BuildContext context, GoRouterState state) => BlocProvider<TransactionListBloc>(
-                create: (_) => TransactionListBloc()..add(const TransactionListStarted()),
+              builder: (BuildContext context, GoRouterState state) => MultiBlocProvider(
+                providers: <BlocProvider<dynamic>>[
+                  BlocProvider<TransactionListBloc>(create: (_) => TransactionListBloc()..add(const TransactionListStarted())),
+                  BlocProvider<TransactionDeletionCubit>(create: (_) => TransactionDeletionCubit()),
+                ],
                 child: TransactionsPage(clock: getIt<GPClock>()),
               ),
             ),

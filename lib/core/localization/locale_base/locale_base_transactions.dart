@@ -28,6 +28,11 @@ abstract class GPLocaleBaseTransactions {
   String get uncategorised;
 
   String get save;
+  String get delete;
+
+  /// The snackbar after a delete; [undo] is its action (ADR-0017).
+  String get deleted;
+  String get undo;
 
   /// The form's empty state: nothing to write to until an account exists.
   String get noAccountsTitle;

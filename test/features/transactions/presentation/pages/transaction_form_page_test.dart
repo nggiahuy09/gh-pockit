@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
@@ -257,11 +258,123 @@ void main() {
       expect(find.byType(TransactionFormPage), findsNothing);
     });
 
-    testWidgets('opened cold on a transaction that is gone, says so', (WidgetTester tester) async {
+    testWidgets('opened cold on a transaction that is gone, says so and offers no delete', (WidgetTester tester) async {
       await seedAccount('Ví tiền mặt');
       await pumpEditForm(tester, 'tx-missing');
 
       expect(find.text(const GPNotFoundFailure().message(const GPLocaleEn())), findsOneWidget);
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.delete_outline)).onPressed, isNull);
+    });
+  });
+
+  group('delete and undo', () {
+    Future<void> settleSnackBar(WidgetTester tester) async {
+      // The write runs between frames, so settle once for the row and once more for the snackbar it sets off.
+      await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> swipeAway(WidgetTester tester, String row) async {
+      await tester.drag(find.text(row), const Offset(-500, 0));
+      await settleSnackBar(tester);
+    }
+
+    testWidgets('deleting from the form pops to the list, which offers the undo; undo brings it back', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpApp(tester);
+      await openRow(tester, 'Phở bò');
+
+      await tester.tap(find.byTooltip('Delete'));
+      await settleSnackBar(tester);
+
+      expect(find.byType(TransactionsPage), findsOneWidget);
+      expect(find.text('Phở bò'), findsNothing);
+      expect(find.text('Transaction deleted'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await settleSnackBar(tester);
+
+      expect(find.text('Phở bò'), findsOneWidget);
+    });
+
+    testWidgets('swiping a row away deletes it and offers the undo above the dock', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpApp(tester);
+
+      await swipeAway(tester, 'Phở bò');
+
+      expect(find.text('Phở bò'), findsNothing);
+      expect(find.text('Transaction deleted'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'the row leaves the tree before the dismissed row would be rebuilt');
+      // The Material, not the SnackBar: the widget's own box includes the inset that lifts it.
+      final snackBar = tester.getRect(find.descendant(of: find.byType(SnackBar), matching: find.byType(Material)).first);
+      expect(snackBar.bottom, lessThanOrEqualTo(tester.getRect(find.byKey(AppShell.dockKey)).top));
+
+      await tester.tap(find.text('Undo'));
+      await settleSnackBar(tester);
+
+      expect(find.text('Phở bò'), findsOneWidget);
+    });
+
+    testWidgets("a second delete replaces the first one's snackbar, so Undo takes back the latest", (WidgetTester tester) async {
+      final cash = await seedAccount('Ví tiền mặt');
+      await seedExpense(cash);
+      await seedExpense(cash, note: 'Bún chả');
+      await pumpApp(tester);
+
+      await swipeAway(tester, 'Phở bò');
+      await swipeAway(tester, 'Bún chả');
+      await tester.tap(find.text('Undo'));
+      await settleSnackBar(tester);
+
+      expect(find.text('Bún chả'), findsOneWidget);
+      expect(find.text('Phở bò'), findsNothing);
+    });
+
+    testWidgets("a screen reader deletes through the row's own action", (WidgetTester tester) async {
+      final semantics = tester.ensureSemantics();
+      final cash = await seedAccount('Ví tiền mặt');
+      await seedExpense(cash);
+      await seedExpense(cash, note: 'Bún chả');
+      await pumpApp(tester);
+      const delete = CustomSemanticsAction(label: 'Delete');
+
+      final row = tester.getSemantics(find.text('Phở bò'));
+      expect(row.id, isNot(tester.getSemantics(find.text('Bún chả')).id), reason: 'each row is a node of its own, so the action names one row');
+      expect(row.getSemanticsData().customSemanticsActionIds, contains(CustomSemanticsAction.getIdentifier(delete)));
+      row.owner!.performAction(row.id, SemanticsAction.customAction, CustomSemanticsAction.getIdentifier(delete));
+      await settleSnackBar(tester);
+
+      expect(find.text('Phở bò'), findsNothing);
+      expect(find.text('Bún chả'), findsOneWidget, reason: 'the action names its own row, not the card');
+      expect(find.text('Transaction deleted'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('an undo refused because the account went meanwhile says why, and the row stays gone', (WidgetTester tester) async {
+      final cash = await seedAccount('Ví tiền mặt');
+      await seedExpense(cash);
+      await pumpApp(tester);
+      await swipeAway(tester, 'Phở bò');
+
+      await repositories.accounts.deleteAccount(cash.id);
+      await tester.tap(find.text('Undo'));
+      await settleSnackBar(tester);
+
+      expect(find.text(const GPNotFoundFailure().message(const GPLocaleEn())), findsOneWidget);
+      expect(find.text('Phở bò'), findsNothing);
+    });
+
+    testWidgets('opened cold, a delete lands on the list instead of throwing on the pop', (WidgetTester tester) async {
+      final transaction = await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpEditForm(tester, transaction.id);
+
+      await tester.tap(find.byTooltip('Delete'));
+      await settleSnackBar(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(TransactionsPage), findsOneWidget);
+      expect(find.text('Phở bò'), findsNothing);
     });
   });
 }

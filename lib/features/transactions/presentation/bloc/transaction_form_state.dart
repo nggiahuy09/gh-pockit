@@ -15,6 +15,8 @@ final class TransactionFormState {
     this.isLoadingOriginal = false,
     this.isSaving = false,
     this.isSaved = false,
+    this.isDeleting = false,
+    this.isDeleted = false,
     this.failure,
   });
 
@@ -48,6 +50,11 @@ final class TransactionFormState {
 
   /// Terminal: the page pops on it.
   final bool isSaved;
+
+  final bool isDeleting;
+
+  /// Terminal: the page pops on it, handing the list the id to offer the undo for.
+  final bool isDeleted;
 
   final GPFailure? failure;
 
@@ -97,6 +104,8 @@ final class TransactionFormState {
     bool? isLoadingOriginal,
     bool? isSaving,
     bool? isSaved,
+    bool? isDeleting,
+    bool? isDeleted,
     GPFailure? failure,
     bool clearFailure = false,
   }) => TransactionFormState(
@@ -112,6 +121,8 @@ final class TransactionFormState {
     isLoadingOriginal: isLoadingOriginal ?? this.isLoadingOriginal,
     isSaving: isSaving ?? this.isSaving,
     isSaved: isSaved ?? this.isSaved,
+    isDeleting: isDeleting ?? this.isDeleting,
+    isDeleted: isDeleted ?? this.isDeleted,
     failure: clearFailure ? null : (failure ?? this.failure),
   );
 
@@ -131,6 +142,8 @@ final class TransactionFormState {
           other.isLoadingOriginal == isLoadingOriginal &&
           other.isSaving == isSaving &&
           other.isSaved == isSaved &&
+          other.isDeleting == isDeleting &&
+          other.isDeleted == isDeleted &&
           other.failure == failure;
 
   @override
@@ -147,6 +160,8 @@ final class TransactionFormState {
     isLoadingOriginal,
     isSaving,
     isSaved,
+    isDeleting,
+    isDeleted,
     failure,
   );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/widgets/money_text.dart';
@@ -68,18 +69,22 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
 
 /// One day's rows on a single card.
 class TransactionDayCard extends StatelessWidget {
-  const TransactionDayCard({required this.transactions, this.onOpen, super.key});
+  const TransactionDayCard({required this.transactions, this.onOpen, this.onDelete, super.key});
 
   final List<TransactionEntity> transactions;
 
   /// Not offered for a transfer, which the form cannot show until it has a destination field.
   final ValueChanged<TransactionEntity>? onOpen;
 
+  /// Swiping a row away, or the screen reader's delete action. Completes true once the row is deleted; false puts a swiped row back.
+  final Future<bool> Function(TransactionEntity transaction)? onDelete;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final radius = context.radii.borderLg;
     final onOpen = this.onOpen;
+    final onDelete = this.onDelete;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.spacing.md),
@@ -93,19 +98,63 @@ class TransactionDayCard extends StatelessWidget {
             child: Column(
               children: <Widget>[
                 for (var i = 0; i < transactions.length; i++)
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
-                    ),
-                    child: TransactionRow(
-                      transaction: transactions[i],
-                      onTap: onOpen == null || transactions[i].type == TransactionType.transfer ? null : () => onOpen(transactions[i]),
+                  _DeletableRow(
+                    key: ValueKey<String>(transactions[i].id),
+                    transaction: transactions[i],
+                    onDelete: onDelete,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
+                      ),
+                      child: TransactionRow(
+                        transaction: transactions[i],
+                        onTap: onOpen == null || transactions[i].type == TransactionType.transfer ? null : () => onOpen(transactions[i]),
+                      ),
                     ),
                   ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Swipe towards the start to delete. The delete is written before the row goes, so the list's next snapshot is what removes it (ADR-0017).
+class _DeletableRow extends StatelessWidget {
+  const _DeletableRow({required this.transaction, required this.onDelete, required this.child, super.key});
+
+  final TransactionEntity transaction;
+  final Future<bool> Function(TransactionEntity transaction)? onDelete;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final onDelete = this.onDelete;
+    if (onDelete == null) return child;
+
+    final colors = context.colors;
+    final label = context.l10n.transactions.delete;
+
+    return Semantics(
+      // Swiping is out of reach of a screen reader.
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{CustomSemanticsAction(label: label): () => onDelete(transaction)},
+      child: Dismissible(
+        key: ValueKey<String>('dismiss-${transaction.id}'),
+        direction: DismissDirection.endToStart,
+        confirmDismiss: (_) => onDelete(transaction),
+        background: ColoredBox(
+          color: colors.danger,
+          child: Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Padding(
+              padding: EdgeInsetsDirectional.only(end: context.spacing.lg),
+              child: Icon(Icons.delete_outline, color: colors.onDanger, semanticLabel: label),
+            ),
+          ),
+        ),
+        child: child,
       ),
     );
   }

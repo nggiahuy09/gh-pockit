@@ -70,6 +70,15 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get save => 'Save';
 
   @override
+  String get delete => 'Delete';
+
+  @override
+  String get deleted => 'Transaction deleted';
+
+  @override
+  String get undo => 'Undo';
+
+  @override
   String get noAccountsTitle => 'Add an account first';
 
   @override

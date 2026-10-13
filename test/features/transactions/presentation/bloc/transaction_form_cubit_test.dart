@@ -436,6 +436,50 @@ void main() {
     });
   });
 
+  group('delete', () {
+    test('writes at once and ends deleted', () async {
+      final form = await editing((await expense(await account('Tiền mặt'))).id);
+
+      await form.delete();
+
+      expect(form.state.isDeleted, isTrue);
+      expect(await stored(), isEmpty);
+    });
+
+    test('a transaction deleted elsewhere meanwhile is not found, and the form stays', () async {
+      final transaction = await expense(await account('Tiền mặt'));
+      final form = await editing(transaction.id);
+      await repositories.transactions.deleteTransaction(transaction.id);
+
+      await form.delete();
+
+      expect(form.state.isDeleted, isFalse);
+      expect(form.state.failure, const GPNotFoundFailure());
+    });
+
+    test('does nothing on a new transaction', () async {
+      await account('Tiền mặt');
+      final form = await started();
+      final before = form.state;
+
+      await form.delete();
+
+      expect(form.state, before);
+    });
+
+    test('a save and a delete fired together do one thing: the first marks the form busy before it awaits', () async {
+      final transaction = await expense(await account('Tiền mặt'));
+      final form = await editing(transaction.id);
+      form.noteChanged('Bún chả');
+
+      await Future.wait(<Future<void>>[form.submit(), form.delete()]);
+
+      expect(form.state.isSaved, isTrue);
+      expect(form.state.isDeleted, isFalse);
+      expect((await stored()).single.note, 'Bún chả');
+    });
+  });
+
   group('state', () {
     test('an edit that changes nothing emits nothing', () async {
       await account('Tiền mặt');

@@ -18,6 +18,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_entit
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/create_transaction_use_case.dart';
+import 'package:ghpockit/features/transactions/domain/usecases/delete_transaction_use_case.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/update_transaction_use_case.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/watch_transaction_use_case.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_form_field.dart';
@@ -44,6 +45,7 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     transactionRepository: getIt<TransactionRepository>(),
     categoryRepository: getIt<CategoryRepository>(),
   );
+  final DeleteTransactionUseCase _deleteTransaction = DeleteTransactionUseCase(transactionRepository: getIt<TransactionRepository>());
 
   StreamSubscription<List<AccountEntity>>? _accountsSubscription;
   StreamSubscription<List<CategoryEntity>>? _categoriesSubscription;
@@ -149,7 +151,7 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     return about == null || about == edited;
   }
 
-  bool get _isFinishedOrBusy => state.isLoading || state.isSaving || state.isSaved;
+  bool get _isFinishedOrBusy => state.isLoading || state.isSaving || state.isSaved || state.isDeleting || state.isDeleted;
 
   Future<void> submit() async {
     if (_isFinishedOrBusy) return;
@@ -191,6 +193,22 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     emit(switch (result) {
       GPOk<TransactionEntity>() => state.copyWith(isSaving: false, isSaved: true),
       GPErr<TransactionEntity>(:final failure) => state.copyWith(isSaving: false, failure: failure),
+    });
+  }
+
+  /// No confirmation: the list offers the undo once the page pops (ADR-0017).
+  Future<void> delete() async {
+    final original = state.original;
+    if (original == null || _isFinishedOrBusy) return;
+
+    emit(state.copyWith(isDeleting: true, clearFailure: true));
+
+    final result = await _deleteTransaction(original.id);
+    if (isClosed) return;
+
+    emit(switch (result) {
+      GPOk<void>() => state.copyWith(isDeleting: false, isDeleted: true),
+      GPErr<void>(:final failure) => state.copyWith(isDeleting: false, failure: failure),
     });
   }
 
