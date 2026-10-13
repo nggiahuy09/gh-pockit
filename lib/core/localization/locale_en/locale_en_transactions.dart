@@ -73,6 +73,9 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get delete => 'Delete';
 
   @override
+  String get deleteConfirmTitle => 'Delete this transaction?';
+
+  @override
   String get deleted => 'Transaction deleted';
 
   @override

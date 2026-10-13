@@ -11,6 +11,9 @@ final class GPLocaleViRoot implements GPLocaleBaseRoot {
 
   @override
   String get backToHome => 'Về trang chủ';
+
+  @override
+  String get cancel => 'Hủy';
 }
 
 final class GPLocaleViRootBottomNav implements GPLocaleBaseRootBottomNav {

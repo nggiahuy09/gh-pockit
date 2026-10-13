@@ -73,6 +73,9 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get delete => 'Xóa';
 
   @override
+  String get deleteConfirmTitle => 'Xóa giao dịch này?';
+
+  @override
   String get deleted => 'Đã xóa giao dịch';
 
   @override

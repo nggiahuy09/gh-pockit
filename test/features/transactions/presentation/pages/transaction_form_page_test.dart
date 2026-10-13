@@ -274,8 +274,13 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    Finder dialogButton(String label) => find.descendant(of: find.byType(AlertDialog), matching: find.text(label));
+
+    /// Swipes the row and confirms in the dialog the swipe opens.
     Future<void> swipeAway(WidgetTester tester, String row) async {
       await tester.drag(find.text(row), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(dialogButton('Delete'));
       await settleSnackBar(tester);
     }
 
@@ -316,6 +321,42 @@ void main() {
       expect(find.text('Phở bò'), findsOneWidget);
     });
 
+    testWidgets('a swipe asks first, naming the row; Cancel puts the row back and writes nothing', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpApp(tester);
+
+      await tester.drag(find.text('Phở bò'), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete this transaction?'), findsOneWidget);
+      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Phở bò')), findsOneWidget);
+      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('-₫45,000')), findsOneWidget);
+
+      await tester.tap(dialogButton('Cancel'));
+      await settleSnackBar(tester);
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Phở bò'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Phở bò')).dx, lessThan(100), reason: 'slid back into place, not left half off the card');
+      expect(find.text('Transaction deleted'), findsNothing);
+      final stored = await tester.runAsync(() => repositories.transactions.watchTransactions(TransactionQuery(limit: 1)).first);
+      expect(stored!.transactions, hasLength(1));
+    });
+
+    testWidgets('tapping outside the dialog keeps the row too', (WidgetTester tester) async {
+      await seedExpense(await seedAccount('Ví tiền mặt'));
+      await pumpApp(tester);
+
+      await tester.drag(find.text('Phở bò'), const Offset(-500, 0));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10, 10));
+      await settleSnackBar(tester);
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Phở bò'), findsOneWidget);
+      expect(find.text('Transaction deleted'), findsNothing);
+    });
+
     testWidgets("a second delete replaces the first one's snackbar, so Undo takes back the latest", (WidgetTester tester) async {
       final cash = await seedAccount('Ví tiền mặt');
       await seedExpense(cash);
@@ -343,6 +384,9 @@ void main() {
       expect(row.id, isNot(tester.getSemantics(find.text('Bún chả')).id), reason: 'each row is a node of its own, so the action names one row');
       expect(row.getSemanticsData().customSemanticsActionIds, contains(CustomSemanticsAction.getIdentifier(delete)));
       row.owner!.performAction(row.id, SemanticsAction.customAction, CustomSemanticsAction.getIdentifier(delete));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget, reason: 'the action is the swipe, so it asks too');
+      await tester.tap(dialogButton('Delete'));
       await settleSnackBar(tester);
 
       expect(find.text('Phở bò'), findsNothing);

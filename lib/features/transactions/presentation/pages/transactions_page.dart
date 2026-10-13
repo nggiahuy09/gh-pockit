@@ -10,13 +10,16 @@ import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/utils/clock.dart';
+import 'package:ghpockit/core/widgets/button.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
+import 'package:ghpockit/core/widgets/money_text.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_deletion_cubit.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_list_bloc.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
+import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
 import 'package:ghpockit/features/transactions/presentation/widgets/transaction_list_parts.dart';
 import 'package:go_router/go_router.dart';
 
@@ -97,6 +100,7 @@ class _TransactionList extends StatelessWidget {
 
   Future<bool> _delete(BuildContext context, TransactionEntity transaction) async {
     final undo = _UndoOffer.of(context);
+    if (!await _confirmDelete(context, transaction)) return false;
 
     switch (await undo.deletion.delete(transaction.id)) {
       case GPOk<void>():
@@ -146,6 +150,32 @@ class _TransactionList extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Asked before a swipe deletes, since a scroll that drifts sideways can swipe a row away. True only on an explicit Delete; dismissing keeps the row.
+/// The undo still follows a confirmed delete (ADR-0017).
+Future<bool> _confirmDelete(BuildContext context, TransactionEntity transaction) async {
+  final l10n = context.l10n;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      title: Text(l10n.transactions.deleteConfirmTitle),
+      // The row itself, so the user confirms the one they meant to swipe.
+      content: Row(
+        children: <Widget>[
+          Expanded(child: Text(transaction.titleIn(l10n), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          SizedBox(width: context.spacing.smd),
+          GPMoneyText(transaction.amount, tone: transaction.moneyTone),
+        ],
+      ),
+      actions: <Widget>[
+        GPButton(label: l10n.root.cancel, variant: GPButtonVariant.text, onPressed: () => Navigator.of(context).pop(false)),
+        GPButton(label: l10n.transactions.delete, variant: GPButtonVariant.danger, onPressed: () => Navigator.of(context).pop(true)),
+      ],
+    ),
+  );
+
+  return confirmed ?? false;
 }
 
 /// The snackbar after a delete, from a swipe or from the form (ADR-0017). Captured before any await: the messenger outlives the gesture, and the

@@ -30,6 +30,9 @@ abstract class GPLocaleBaseTransactions {
   String get save;
   String get delete;
 
+  /// Asked before a swipe deletes; the body names the row (ADR-0017).
+  String get deleteConfirmTitle;
+
   /// The snackbar after a delete; [undo] is its action (ADR-0017).
   String get deleted;
   String get undo;
