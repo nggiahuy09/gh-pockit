@@ -545,7 +545,7 @@ khi đã có row, nên các trạng thái chồng lên nhau
 | T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới |
 | T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới                                                                                                                                                                                                       |
 | T4   | Edit + soft delete + undo (snackbar) ✅ Done (13/10) — chi tiết ở _W6 T4_ dưới                                                                                                                                                                                                                                     |
-| T5   | Transfer flow: 1 transaction, 2 account, không double-count                                                                                                                                                                                                                                                        |
+| T5   | Transfer flow: 1 transaction, 2 account, không double-count ✅ Done (14/10) — chi tiết ở _W6 T5_ dưới                                                                                                                                                                                                              |
 | T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật    |
 | Flex | Dashboard v0: tổng thu/chi tháng này + balance từng account. Polish `AccountsPage` theo artboard "Tài khoản — polish"                                                                                                                                                                                              |
 
@@ -665,6 +665,29 @@ khi đã có row, nên các trạng thái chồng lên nhau
 - Soát trên iOS simulator (iPhone 17): sửa ghi chú giữ đúng ngày/vị trí; vuốt xoá; snackbar nằm trên dock; Hoàn tác từ vuốt và từ form — xác nhận thêm bằng
   `deleted_at`/`updated_at` trong file SQLite của app. Ghi nhận: snackbar 4 giây (mặc định Material) — ba lần bấm Hoàn tác của agent tới sau khi hết
   giờ; với người thì đủ, xét lại ở Flex nếu thấy ngắn.
+
+### W6 T5 — luồng chuyển khoản (14/10)
+
+> Chốt 14/10: ô account đích **lọc sẵn** (cùng loại tiền, khác nguồn); chưa có account nào ghép được thì ô đích **nói lý do + nút thêm tài khoản**
+> thay vì khoá lựa chọn; dòng transfer trên list **giữ nguyên** ("Chuyển khoản" hoặc ghi chú) — "A → B" đợi JOIN account của W7 T5.
+
+- Đã có từ W4, không viết lại: một transfer = một row có `destination_account_id`, CHECK trong schema (ADR-0009); entity từ chối thiếu đích / đích trùng
+  nguồn, repository từ chối đích đã mất / khác loại tiền; list lọc theo account khớp cả hai phía (ADR-0011). "Không double-count" là số dư ở T6: transfer
+  trừ nguồn, cộng đích, không bao giờ là thu hay chi — T5 ghi đúng hình dạng đó.
+- [x] **Form**: segmented thêm "Chuyển khoản"; ô account đổi nhãn "Từ tài khoản", ô category thay bằng "Đến tài khoản". Đích không chọn sẵn — lưu khi
+      chưa chọn → `transactionDestinationMissing` dưới ô đích. Đổi loại bỏ field không còn hợp lệ (category khi thành transfer, đích khi thôi là transfer);
+      đổi nguồn sang chính đích hoặc loại tiền khác → bỏ đích. Đích bị lưu trữ/xoá chỗ khác → bỏ, không thay; sửa transfer thì giữ đích gốc như giữ account.
+- [x] **Lỗi về ô** (ADR-0016): ba mã transfer từ null (banner) chuyển sang `TransactionFormField.destination`.
+- [x] **Domain**: `TransactionEntity.update(clearDestination:)` như `clearCategory` — trước đó `null` là "giữ", nên transfer bị bỏ đích trong form sẽ lưu
+      lại đích cũ thay vì báo thiếu.
+- [x] **List**: dòng transfer mở được để sửa (T4 chặn tạm).
+- [x] **Test** (+13, suite: 845): entity `clearDestination`; map ba mã về ô đích; cubit — đích chỉ là account khác cùng loại tiền, lưu một row có đích
+      không category, thiếu đích ra lỗi ở ô đích, đổi loại bỏ category/đích, đổi nguồn bỏ đích không ghép được, đích không có trong list bị bỏ qua, đích bị
+      lưu trữ thì bỏ, sửa transfer giữ đích gốc kể cả đã lưu trữ, transfer sửa thành chi tiêu lưu không đích; widget — tạo transfer từ form, lưu thiếu đích
+      báo dưới ô, chỉ một account thì ô đích nói lý do + thêm tài khoản rồi quay lại, mở dòng transfer thấy đủ hai account. Mutation: 7 chỗ gỡ → đỏ.
+- Soát trên iOS simulator: chỉ một account → gợi ý + "Thêm tài khoản" → thêm "Bank" quay lại thấy dropdown đích; lưu thiếu đích → lỗi dưới ô; menu đích
+  chỉ có "Bank"; lưu → dòng ⇄ "Chuyển khoản" không dấu, DB một row có `destination_account_id`.
+- Để sau: "A → B" trên dòng list (W7 T5); số dư hai phía (T6).
 
 **🏁 Milestone P1:** app dùng được hoàn toàn offline, không có dòng network nào. **Tag `v0.1-local`.**
 
