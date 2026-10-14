@@ -239,7 +239,7 @@ void main() {
       expect(find.widgetWithText(InputDecorator, 'Yesterday'), findsOneWidget);
     });
 
-    testWidgets('a transfer row does not open: the form has no destination field yet', (WidgetTester tester) async {
+    testWidgets('a transfer row opens with both accounts and no category', (WidgetTester tester) async {
       final cash = await seedAccount('Ví tiền mặt');
       final bank = await seedAccount('Ngân hàng');
       await repositories.transactions.createTransaction(
@@ -252,10 +252,12 @@ void main() {
       );
       await pumpApp(tester);
 
-      await tester.tap(find.text('Chuyển'));
-      await tester.pumpAndSettle();
+      await openRow(tester, 'Chuyển');
 
-      expect(find.byType(TransactionFormPage), findsNothing);
+      expect(find.byType(TransactionFormPage), findsOneWidget);
+      expect(find.widgetWithText(DropdownButtonFormField<String>, 'Ví tiền mặt'), findsOneWidget);
+      expect(find.widgetWithText(DropdownButtonFormField<String>, 'Ngân hàng'), findsOneWidget);
+      expect(find.text('Category'), findsNothing);
     });
 
     testWidgets('opened cold on a transaction that is gone, says so and offers no delete', (WidgetTester tester) async {
@@ -419,6 +421,78 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(TransactionsPage), findsOneWidget);
       expect(find.text('Phở bò'), findsNothing);
+    });
+  });
+
+  group('transfer', () {
+    Future<void> pick(WidgetTester tester, {required String field, required String option}) async {
+      await tester.tap(find.text(field));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(option).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a transfer is one row, saved from the form with both accounts', (WidgetTester tester) async {
+      await seedAccount('Ví tiền mặt');
+      await seedAccount('Ngân hàng');
+      await pumpApp(tester);
+      await openForm(tester);
+
+      await tester.tap(find.text('Transfer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('From account'), findsOneWidget);
+      expect(find.text('Category'), findsNothing, reason: 'a transfer has no category');
+
+      await pick(tester, field: 'To account', option: 'Ngân hàng');
+      await tester.enterText(field('Amount'), '100000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TransactionsPage), findsOneWidget);
+      expect(find.text('Transfer'), findsOneWidget);
+      expect(find.text('₫100,000'), findsOneWidget, reason: 'neither in nor out: no sign');
+      expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+    });
+
+    testWidgets('saving with no destination says so under the destination', (WidgetTester tester) async {
+      await seedAccount('Ví tiền mặt');
+      await seedAccount('Ngân hàng');
+      await pumpApp(tester);
+      await openForm(tester);
+      await tester.tap(find.text('Transfer'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(field('Amount'), '100000');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final destination = tester.widget<InputDecorator>(find.descendant(of: find.byType(DropdownButtonFormField<String>).last, matching: find.byType(InputDecorator)));
+      expect(destination.decoration.errorText, 'Choose an account to transfer to.');
+      expect(find.byType(GPFormFailureBanner), findsNothing);
+    });
+
+    testWidgets('with no second account in the currency, the destination says why and offers to add one', (WidgetTester tester) async {
+      await seedAccount('Ví tiền mặt');
+      await pumpApp(tester);
+      await openForm(tester);
+
+      await tester.tap(find.text('Transfer'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('A transfer needs another account in the same currency.'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Add account'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AccountFormPage), findsOneWidget);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Ngân hàng');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TransactionFormPage), findsOneWidget);
+      expect(find.text('A transfer needs another account in the same currency.'), findsNothing);
+      expect(find.text('To account'), findsOneWidget);
     });
   });
 }

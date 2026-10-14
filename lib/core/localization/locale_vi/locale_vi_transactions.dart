@@ -55,6 +55,15 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get fieldAccount => 'Tài khoản';
 
   @override
+  String get fieldFromAccount => 'Từ tài khoản';
+
+  @override
+  String get fieldToAccount => 'Đến tài khoản';
+
+  @override
+  String get noDestinationMessage => 'Chuyển khoản cần một tài khoản khác cùng loại tiền.';
+
+  @override
   String get fieldCategory => 'Danh mục';
 
   @override

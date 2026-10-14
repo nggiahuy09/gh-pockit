@@ -97,7 +97,7 @@ final class TransactionEntity {
     );
   }
 
-  /// A null argument keeps the field. The category is cleared with [clearCategory], the note by passing `''`.
+  /// A null argument keeps the field. The category and the destination are cleared with [clearCategory] and [clearDestination], the note by passing `''`.
   GPResult<TransactionEntity> update({
     TransactionType? type,
     String? accountId,
@@ -108,11 +108,12 @@ final class TransactionEntity {
     String? note,
     int? version,
     bool clearCategory = false,
+    bool clearDestination = false,
   }) => create(
     id: id,
     type: type ?? this.type,
     accountId: accountId ?? this.accountId,
-    destinationAccountId: destinationAccountId ?? this.destinationAccountId,
+    destinationAccountId: clearDestination ? null : (destinationAccountId ?? this.destinationAccountId),
     categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
     amount: amount ?? this.amount,
     occurredAt: occurredAt ?? this.occurredAt,

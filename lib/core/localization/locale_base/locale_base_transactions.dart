@@ -20,6 +20,11 @@ abstract class GPLocaleBaseTransactions {
   String get fieldType;
   String get fieldAmount;
   String get fieldAccount;
+
+  /// A transfer's two accounts; [noDestinationMessage] when no account can be the second.
+  String get fieldFromAccount;
+  String get fieldToAccount;
+  String get noDestinationMessage;
   String get fieldCategory;
   String get fieldDate;
   String get fieldNote;

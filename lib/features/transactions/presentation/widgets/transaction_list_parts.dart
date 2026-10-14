@@ -73,7 +73,6 @@ class TransactionDayCard extends StatelessWidget {
 
   final List<TransactionEntity> transactions;
 
-  /// Not offered for a transfer, which the form cannot show until it has a destination field.
   final ValueChanged<TransactionEntity>? onOpen;
 
   /// Swiping a row away, or the screen reader's delete action. Completes true once the row is deleted; false puts a swiped row back.
@@ -108,7 +107,7 @@ class TransactionDayCard extends StatelessWidget {
                       ),
                       child: TransactionRow(
                         transaction: transactions[i],
-                        onTap: onOpen == null || transactions[i].type == TransactionType.transfer ? null : () => onOpen(transactions[i]),
+                        onTap: onOpen == null ? null : () => onOpen(transactions[i]),
                       ),
                     ),
                   ),

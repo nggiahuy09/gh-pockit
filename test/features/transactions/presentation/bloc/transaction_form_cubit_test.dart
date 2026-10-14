@@ -17,6 +17,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_query
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_form_cubit.dart';
+import 'package:ghpockit/features/transactions/presentation/transaction_form_field.dart';
 
 import '../../../../helpers/fake_account_repository.dart';
 import '../../../../helpers/fake_clock.dart';
@@ -477,6 +478,162 @@ void main() {
       expect(form.state.isSaved, isTrue);
       expect(form.state.isDeleted, isFalse);
       expect((await stored()).single.note, 'Bún chả');
+    });
+  });
+
+  group('transfer', () {
+    Future<TransactionEntity> transfer(AccountEntity from, AccountEntity to) async => ok(
+      await repositories.transactions.createTransaction(
+        type: TransactionType.transfer,
+        accountId: from.id,
+        destinationAccountId: to.id,
+        amount: Money(100000, from.initialBalance.currencyCode),
+        occurredAt: eatenAt.toUtc(),
+        note: 'Chuyển',
+      ),
+    );
+
+    test('offers as destinations only the other accounts in the same currency', () async {
+      final cash = await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      await account('Ví đô', currency: 'USD');
+      final form = await started();
+
+      form.typeChanged(TransactionType.transfer);
+
+      expect(form.state.accountId, cash.id);
+      expect(form.state.destinationsForSource, <AccountEntity>[bank]);
+      expect(form.state.destinationAccountId, isNull, reason: 'none is picked for the user');
+    });
+
+    test('saves one row with its destination and no category', () async {
+      final cash = await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      final food = await category('Ăn uống', CategoryType.expense);
+      final form = await started();
+
+      form
+        ..categoryChanged(food.id)
+        ..typeChanged(TransactionType.transfer)
+        ..destinationChanged(bank.id)
+        ..amountChanged(100000);
+      await form.submit();
+
+      expect(form.state.isSaved, isTrue);
+      final saved = (await stored()).single;
+      expect(saved.type, TransactionType.transfer);
+      expect(saved.accountId, cash.id);
+      expect(saved.destinationAccountId, bank.id);
+      expect(saved.categoryId, isNull);
+    });
+
+    test("no destination picked is the entity's refusal, which the form puts on the destination", () async {
+      await account('Tiền mặt');
+      await account('Ngân hàng');
+      final form = await started();
+
+      form
+        ..typeChanged(TransactionType.transfer)
+        ..amountChanged(100000);
+      await form.submit();
+
+      expect(form.state.failure, const GPValidationFailure(GPValidationCode.transactionDestinationMissing));
+      expect(transactionFormFieldOf(form.state.failure!), TransactionFormField.destination);
+      expect(await stored(), isEmpty);
+
+      form.noteChanged('Tiền nhà');
+      expect(form.state.failure, isNotNull, reason: 'the note cannot fix the destination');
+    });
+
+    test('switching to a transfer drops the category, and switching away drops the destination', () async {
+      await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      final food = await category('Ăn uống', CategoryType.expense);
+      final form = await started();
+
+      form
+        ..categoryChanged(food.id)
+        ..typeChanged(TransactionType.transfer);
+      expect(form.state.categoryId, isNull);
+
+      form
+        ..destinationChanged(bank.id)
+        ..typeChanged(TransactionType.expense);
+      expect(form.state.destinationAccountId, isNull);
+    });
+
+    test('a source the destination cannot pair with drops it: the destination itself, or another currency', () async {
+      final cash = await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      final dollars = await account('Ví đô', currency: 'USD');
+      final form = (await started())
+        ..typeChanged(TransactionType.transfer)
+        ..destinationChanged(bank.id)
+        ..accountChanged(bank.id);
+      expect(form.state.destinationAccountId, isNull);
+
+      form
+        ..accountChanged(cash.id)
+        ..destinationChanged(bank.id)
+        ..accountChanged(dollars.id);
+      expect(form.state.destinationAccountId, isNull);
+    });
+
+    test('a destination not on offer is ignored: the source itself, or another currency', () async {
+      final cash = await account('Tiền mặt');
+      final dollars = await account('Ví đô', currency: 'USD');
+      final form = (await started())
+        ..typeChanged(TransactionType.transfer)
+        ..destinationChanged(cash.id)
+        ..destinationChanged(dollars.id);
+
+      expect(form.state.destinationAccountId, isNull);
+    });
+
+    test('a destination archived elsewhere is dropped, not replaced', () async {
+      await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      await account('Thẻ');
+      final form = await started();
+      form
+        ..typeChanged(TransactionType.transfer)
+        ..destinationChanged(bank.id);
+
+      await repositories.accounts.archiveAccount(bank.id);
+      await pumpEventQueue();
+
+      expect(form.state.destinationAccountId, isNull);
+    });
+
+    test('an edit loads the destination and keeps it, archived or not, when the note changes', () async {
+      final cash = await account('Tiền mặt');
+      final bank = await account('Ngân hàng');
+      final moved = await transfer(cash, bank);
+      await repositories.accounts.archiveAccount(bank.id);
+      final form = await editing(moved.id);
+      await account('Ví mới');
+      await pumpEventQueue();
+
+      expect(form.state.type, TransactionType.transfer);
+      expect(form.state.destinationAccountId, bank.id);
+
+      form.noteChanged('Tiền nhà');
+      await form.submit();
+
+      expect((await stored()).single.destinationAccountId, bank.id);
+    });
+
+    test('an edited transfer switched to an expense is saved with no destination', () async {
+      final cash = await account('Tiền mặt');
+      final moved = await transfer(cash, await account('Ngân hàng'));
+      final form = await editing(moved.id);
+
+      form.typeChanged(TransactionType.expense);
+      await form.submit();
+
+      final saved = (await stored()).single;
+      expect(saved.type, TransactionType.expense);
+      expect(saved.destinationAccountId, isNull);
     });
   });
 

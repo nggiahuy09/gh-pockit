@@ -34,7 +34,7 @@ enum TransactionFormOutcome {
   deleted,
 }
 
-/// Create and edit share one page. Expense or income for now; the type picker grows a transfer with the transfer flow.
+/// Create and edit share one page, for an expense, an income or a transfer.
 class TransactionFormPage extends StatelessWidget {
   const TransactionFormPage({required this.clock, super.key});
 
@@ -108,8 +108,7 @@ class _TransactionForm extends StatefulWidget {
 }
 
 class _TransactionFormState extends State<_TransactionForm> {
-  /// Transfers arrive with their own flow.
-  static const List<TransactionType> _types = <TransactionType>[TransactionType.expense, TransactionType.income];
+  static const List<TransactionType> _types = <TransactionType>[TransactionType.expense, TransactionType.income, TransactionType.transfer];
 
   final Map<TransactionFormField, FocusNode> _focusNodes = <TransactionFormField, FocusNode>{
     for (final field in TransactionFormField.values) field: FocusNode(debugLabel: field.name),
@@ -163,6 +162,10 @@ class _TransactionFormState extends State<_TransactionForm> {
     final accountId = _state.selectedAccount?.id;
     // A category deleted since the transaction was filed shows as uncategorised, as the list shows it (ADR-0010), and stays filed until another is picked.
     final categoryId = _state.categoriesForType.any((CategoryEntity category) => category.id == _state.categoryId) ? _state.categoryId : null;
+    final isTransfer = _state.type == TransactionType.transfer;
+    final destinations = _state.destinationsForSource;
+    // Empty when nothing is picked yet, or when an edit's destination is no longer on offer.
+    final destinationId = destinations.any((AccountEntity account) => account.id == _state.destinationAccountId) ? _state.destinationAccountId : null;
     final failure = _state.failure;
     final failedField = failure == null ? null : transactionFormFieldOf(failure);
 
@@ -206,7 +209,10 @@ class _TransactionFormState extends State<_TransactionForm> {
             initialValue: accountId,
             focusNode: _focusNodes[TransactionFormField.account],
             isExpanded: true,
-            decoration: InputDecoration(labelText: l10n.transactions.fieldAccount, errorText: errorOn(TransactionFormField.account)),
+            decoration: InputDecoration(
+              labelText: isTransfer ? l10n.transactions.fieldFromAccount : l10n.transactions.fieldAccount,
+              errorText: errorOn(TransactionFormField.account),
+            ),
             items: <DropdownMenuItem<String>>[
               for (final AccountEntity option in _state.accounts!)
                 DropdownMenuItem<String>(
@@ -217,22 +223,61 @@ class _TransactionFormState extends State<_TransactionForm> {
             onChanged: (String? id) => id == null ? null : cubit.accountChanged(id),
           ),
           SizedBox(height: spacing.md),
-          DropdownButtonFormField<String?>(
-            key: ValueKey<String>('category-${_state.type.name}-$categoryId'),
-            initialValue: categoryId,
-            focusNode: _focusNodes[TransactionFormField.category],
-            isExpanded: true,
-            decoration: InputDecoration(labelText: l10n.transactions.fieldCategory, errorText: errorOn(TransactionFormField.category)),
-            items: <DropdownMenuItem<String?>>[
-              DropdownMenuItem<String?>(child: Text(l10n.transactions.uncategorised)),
-              for (final CategoryEntity option in _state.categoriesForType)
-                DropdownMenuItem<String?>(
-                  value: option.id,
-                  child: Text(option.displayNameIn(l10n), overflow: TextOverflow.ellipsis),
+          if (isTransfer && destinations.isEmpty)
+            // Nothing to pick: say why and offer the way out, rather than an empty menu.
+            Focus(
+              focusNode: _focusNodes[TransactionFormField.destination],
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: l10n.transactions.fieldToAccount,
+                  helperText: l10n.transactions.noDestinationMessage,
+                  helperMaxLines: 2,
+                  errorText: errorOn(TransactionFormField.destination),
+                  errorMaxLines: 2,
                 ),
-            ],
-            onChanged: cubit.categoryChanged,
-          ),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton(onPressed: () => context.pushNamed(RouteNames.newAccount), child: Text(l10n.accounts.add)),
+                ),
+              ),
+            )
+          else if (isTransfer)
+            DropdownButtonFormField<String>(
+              key: ValueKey<String>('destination-$accountId-$destinationId'),
+              initialValue: destinationId,
+              focusNode: _focusNodes[TransactionFormField.destination],
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: l10n.transactions.fieldToAccount,
+                errorText: errorOn(TransactionFormField.destination),
+                errorMaxLines: 2,
+              ),
+              items: <DropdownMenuItem<String>>[
+                for (final AccountEntity option in destinations)
+                  DropdownMenuItem<String>(
+                    value: option.id,
+                    child: Text(option.name, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (String? id) => id == null ? null : cubit.destinationChanged(id),
+            )
+          else
+            DropdownButtonFormField<String?>(
+              key: ValueKey<String>('category-${_state.type.name}-$categoryId'),
+              initialValue: categoryId,
+              focusNode: _focusNodes[TransactionFormField.category],
+              isExpanded: true,
+              decoration: InputDecoration(labelText: l10n.transactions.fieldCategory, errorText: errorOn(TransactionFormField.category)),
+              items: <DropdownMenuItem<String?>>[
+                DropdownMenuItem<String?>(child: Text(l10n.transactions.uncategorised)),
+                for (final CategoryEntity option in _state.categoriesForType)
+                  DropdownMenuItem<String?>(
+                    value: option.id,
+                    child: Text(option.displayNameIn(l10n), overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: cubit.categoryChanged,
+            ),
           SizedBox(height: spacing.md),
           InkWell(
             borderRadius: context.radii.borderMd,

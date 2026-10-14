@@ -25,7 +25,7 @@ import 'package:ghpockit/features/transactions/presentation/transaction_form_fie
 
 part 'transaction_form_state.dart';
 
-/// Creates an expense or an income, or edits the transaction [transactionId] names. Validation is the entity's and the use cases': the form only refuses
+/// Creates an expense, an income or a transfer, or edits the transaction [transactionId] names. Validation is the entity's and the use cases': the form only refuses
 /// to submit with no account to write to.
 class TransactionFormCubit extends Cubit<TransactionFormState> {
   TransactionFormCubit({this.transactionId}) : super(TransactionFormState(isLoadingOriginal: transactionId != null));
@@ -80,6 +80,8 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
           isLoadingOriginal: false,
           type: transaction.type,
           accountId: transaction.accountId,
+          destinationAccountId: transaction.destinationAccountId,
+          clearDestinationAccountId: transaction.destinationAccountId == null,
           categoryId: transaction.categoryId,
           clearCategoryId: transaction.categoryId == null,
           amountMinorUnits: transaction.amount.minorUnits,
@@ -92,12 +94,25 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
   }
 
   void _onAccounts(List<AccountEntity> accounts) {
+    bool isListed(String id) => accounts.any((AccountEntity account) => account.id == id);
+
     final selected = state.accountId;
     // An edit keeps its own account once archived or deleted elsewhere: moving the transaction is the user's call, and the save says what is wrong.
-    final keeps = selected != null && (selected == state.original?.accountId || accounts.any((AccountEntity account) => account.id == selected));
+    final keeps = selected != null && (selected == state.original?.accountId || isListed(selected));
+
+    // A destination gone elsewhere is dropped rather than replaced: no destination is ever picked for the user. An edit keeps its own, as above.
+    final destination = state.destinationAccountId;
+    final keepsDestination = destination == null || destination == state.original?.destinationAccountId || isListed(destination);
 
     // The oldest account is the default; a selection archived or deleted elsewhere falls back to it rather than to nothing.
-    emit(state.copyWith(accounts: accounts, accountId: keeps ? selected : accounts.firstOrNull?.id, clearAccountId: !keeps && accounts.isEmpty));
+    emit(
+      state.copyWith(
+        accounts: accounts,
+        accountId: keeps ? selected : accounts.firstOrNull?.id,
+        clearAccountId: !keeps && accounts.isEmpty,
+        clearDestinationAccountId: !keepsDestination,
+      ),
+    );
   }
 
   void _onCategories(List<CategoryEntity> categories) {
@@ -114,19 +129,44 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     if (!isClosed) emit(state.copyWith(failure: error));
   }
 
-  /// A category of the other kind is dropped rather than refused later: it is what switching the type leaves behind.
+  /// A category of the other kind, or a destination once it is no longer a transfer, is dropped rather than refused later: it is what switching the type
+  /// leaves behind.
   void typeChanged(TransactionType type) {
     final category = state.selectedCategory;
     final keepsCategory = category != null && category.type == type.categoryType;
 
-    emit(state.copyWith(type: type, clearCategoryId: !keepsCategory, clearFailure: _fixes(TransactionFormField.category)));
+    emit(
+      state.copyWith(
+        type: type,
+        clearCategoryId: !keepsCategory,
+        clearDestinationAccountId: type != TransactionType.transfer,
+        clearFailure: _fixes(TransactionFormField.category) || _fixes(TransactionFormField.destination),
+      ),
+    );
   }
 
-  /// An id no longer in the list is ignored: an open dropdown menu still offers what the stream has since dropped.
+  /// An id no longer in the list is ignored: an open dropdown menu still offers what the stream has since dropped. A destination the new source cannot
+  /// pair with (itself, or another currency) is dropped.
   void accountChanged(String accountId) {
     if (state.accounts?.any((AccountEntity account) => account.id == accountId) != true) return;
 
-    emit(state.copyWith(accountId: accountId, clearFailure: _fixes(TransactionFormField.account)));
+    final next = state.copyWith(accountId: accountId);
+    final destination = next.destinationAccountId;
+    final keepsDestination = destination == null || next.destinationsForSource.any((AccountEntity account) => account.id == destination);
+
+    emit(
+      next.copyWith(
+        clearDestinationAccountId: !keepsDestination,
+        clearFailure: _fixes(TransactionFormField.account) || _fixes(TransactionFormField.destination),
+      ),
+    );
+  }
+
+  /// Ignored unless the picker offers it, as in [accountChanged].
+  void destinationChanged(String accountId) {
+    if (!state.destinationsForSource.any((AccountEntity account) => account.id == accountId)) return;
+
+    emit(state.copyWith(destinationAccountId: accountId, clearFailure: _fixes(TransactionFormField.destination)));
   }
 
   /// Null is "uncategorised". An id the current type cannot use is ignored, as in [accountChanged].
@@ -171,11 +211,21 @@ class TransactionFormCubit extends Cubit<TransactionFormState> {
     final GPResult<TransactionEntity> result;
 
     if (original == null) {
-      result = await _createTransaction(type: state.type, accountId: accountId, amount: amount, occurredAt: occurredAt, categoryId: state.categoryId, note: state.note);
+      result = await _createTransaction(
+        type: state.type,
+        accountId: accountId,
+        amount: amount,
+        occurredAt: occurredAt,
+        destinationAccountId: state.destinationAccountId,
+        categoryId: state.categoryId,
+        note: state.note,
+      );
     } else {
       final edited = original.update(
         type: state.type,
         accountId: accountId,
+        destinationAccountId: state.destinationAccountId,
+        clearDestination: state.destinationAccountId == null,
         categoryId: state.categoryId,
         clearCategory: state.categoryId == null,
         amount: amount,

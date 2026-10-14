@@ -55,6 +55,15 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get fieldAccount => 'Account';
 
   @override
+  String get fieldFromAccount => 'From account';
+
+  @override
+  String get fieldToAccount => 'To account';
+
+  @override
+  String get noDestinationMessage => 'A transfer needs another account in the same currency.';
+
+  @override
   String get fieldCategory => 'Category';
 
   @override

@@ -6,6 +6,7 @@ final class TransactionFormState {
     this.original,
     this.type = TransactionType.expense,
     this.accountId,
+    this.destinationAccountId,
     this.categoryId,
     this.amountMinorUnits,
     this.pickedDay,
@@ -27,6 +28,10 @@ final class TransactionFormState {
 
   /// On an edit, may name an account no longer in [accounts] (archived or deleted since): the form keeps it rather than move the transaction.
   final String? accountId;
+
+  /// A transfer's, chosen by the user: none is picked for them. Dropped when the type stops being a transfer, or when the source changes to one it
+  /// cannot pair with.
+  final String? destinationAccountId;
 
   /// Null is "uncategorised", a valid choice. On an edit, may name a category deleted since, which the form shows as uncategorised (ADR-0010).
   final String? categoryId;
@@ -76,6 +81,14 @@ final class TransactionFormState {
     return original != null && original.accountId == accountId ? original.amount.currencyCode : null;
   }
 
+  /// What a transfer from the selected account can go to: another account in the same currency (ADR-0009 — no transfer between currencies).
+  List<AccountEntity> get destinationsForSource {
+    final currency = currencyCode;
+    return (accounts ?? const <AccountEntity>[])
+        .where((AccountEntity account) => account.id != accountId && account.initialBalance.currencyCode == currency)
+        .toList(growable: false);
+  }
+
   CategoryEntity? get selectedCategory {
     final id = categoryId;
     if (id == null) return null;
@@ -93,6 +106,8 @@ final class TransactionFormState {
     TransactionType? type,
     String? accountId,
     bool clearAccountId = false,
+    String? destinationAccountId,
+    bool clearDestinationAccountId = false,
     String? categoryId,
     bool clearCategoryId = false,
     int? amountMinorUnits,
@@ -112,6 +127,7 @@ final class TransactionFormState {
     original: original ?? this.original,
     type: type ?? this.type,
     accountId: clearAccountId ? null : (accountId ?? this.accountId),
+    destinationAccountId: clearDestinationAccountId ? null : (destinationAccountId ?? this.destinationAccountId),
     categoryId: clearCategoryId ? null : (categoryId ?? this.categoryId),
     amountMinorUnits: clearAmount ? null : (amountMinorUnits ?? this.amountMinorUnits),
     pickedDay: pickedDay ?? this.pickedDay,
@@ -133,6 +149,7 @@ final class TransactionFormState {
           other.original == original &&
           other.type == type &&
           other.accountId == accountId &&
+          other.destinationAccountId == destinationAccountId &&
           other.categoryId == categoryId &&
           other.amountMinorUnits == amountMinorUnits &&
           other.pickedDay == pickedDay &&
@@ -151,6 +168,7 @@ final class TransactionFormState {
     original,
     type,
     accountId,
+    destinationAccountId,
     categoryId,
     amountMinorUnits,
     pickedDay,

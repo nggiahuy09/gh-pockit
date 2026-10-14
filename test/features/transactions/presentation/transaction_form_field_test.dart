@@ -12,10 +12,10 @@ void main() {
     expect(fieldOf(GPValidationCode.transactionNoteTooLong), TransactionFormField.note);
   });
 
-  test("leaves a transfer's refusals to the banner while the form has no destination field", () {
-    expect(fieldOf(GPValidationCode.transactionDestinationMissing), isNull);
-    expect(fieldOf(GPValidationCode.transactionDestinationSameAsSource), isNull);
-    expect(fieldOf(GPValidationCode.transactionTransferCurrenciesDiffer), isNull);
+  test("puts a transfer's three refusals on the destination", () {
+    expect(fieldOf(GPValidationCode.transactionDestinationMissing), TransactionFormField.destination);
+    expect(fieldOf(GPValidationCode.transactionDestinationSameAsSource), TransactionFormField.destination);
+    expect(fieldOf(GPValidationCode.transactionTransferCurrenciesDiffer), TransactionFormField.destination);
   });
 
   test('another form’s codes and every failure that is not a validation belong to no field', () {
