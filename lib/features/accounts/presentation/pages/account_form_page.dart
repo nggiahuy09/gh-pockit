@@ -9,8 +9,12 @@ import 'package:ghpockit/core/money/currency_code.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/widgets/button.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
+import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/core/widgets/money_field.dart';
+import 'package:ghpockit/core/widgets/select.dart';
+import 'package:ghpockit/core/widgets/switch.dart';
+import 'package:ghpockit/core/widgets/text_field.dart';
 import 'package:ghpockit/core/widgets/utf16_length_limit.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
@@ -88,41 +92,43 @@ class _AccountFormState extends State<_AccountForm> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.all(spacing.md),
         children: <Widget>[
-          TextFormField(
+          GPTextField(
             initialValue: state.name,
             focusNode: _nameFocus,
             inputFormatters: const <TextInputFormatter>[GPUtf16LengthLimitingFormatter(AccountEntity.nameMaxLength)],
             autofocus: !isEditing,
             textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: l10n.accounts.fieldName,
-              errorText: failedField == AccountFormField.name ? failure!.message(l10n) : null,
-            ),
+            label: l10n.accounts.fieldName,
+            errorText: failedField == AccountFormField.name ? failure!.message(l10n) : null,
             onChanged: cubit.nameChanged,
           ),
           SizedBox(height: spacing.md),
-          DropdownButtonFormField<AccountType>(
-            initialValue: state.type,
-            decoration: InputDecoration(labelText: l10n.accounts.fieldType),
-            items: <DropdownMenuItem<AccountType>>[
-              for (final type in AccountType.values) DropdownMenuItem<AccountType>(value: type, child: Text(type.labelIn(l10n))),
+          GPSelect<AccountType>(
+            label: l10n.accounts.fieldType,
+            value: state.type,
+            options: <GPSelectOption<AccountType>>[
+              for (final type in AccountType.values) GPSelectOption<AccountType>(value: type, label: type.labelIn(l10n), icon: type.icon),
             ],
-            onChanged: (AccountType? type) => type == null ? null : cubit.typeChanged(type),
+            onChanged: cubit.typeChanged,
           ),
           SizedBox(height: spacing.md),
           if (isEditing)
-            InputDecorator(
-              decoration: InputDecoration(labelText: l10n.accounts.fieldCurrency, helperText: l10n.accounts.currencyFixed, enabled: false),
-              child: Text(state.currencyCode),
+            GPPickerField(
+              onTap: null,
+              label: l10n.accounts.fieldCurrency,
+              value: state.currencyCode,
+              leading: Icons.payments_outlined,
+              helperText: l10n.accounts.currencyFixed,
             )
           else
-            DropdownButtonFormField<CurrencyCode>(
-              initialValue: CurrencyCode.fromCode(state.currencyCode),
-              decoration: InputDecoration(labelText: l10n.accounts.fieldCurrency),
-              items: <DropdownMenuItem<CurrencyCode>>[
-                for (final currency in CurrencyCode.values) DropdownMenuItem<CurrencyCode>(value: currency, child: Text('${currency.code} (${currency.symbol})')),
+            GPSelect<CurrencyCode>(
+              label: l10n.accounts.fieldCurrency,
+              value: CurrencyCode.fromCode(state.currencyCode),
+              options: <GPSelectOption<CurrencyCode>>[
+                for (final currency in CurrencyCode.values)
+                  GPSelectOption<CurrencyCode>(value: currency, label: '${currency.code} (${currency.symbol})', icon: Icons.payments_outlined),
               ],
-              onChanged: (CurrencyCode? currency) => currency == null ? null : cubit.currencyChanged(currency),
+              onChanged: cubit.currencyChanged,
             ),
           SizedBox(height: spacing.md),
           GPMoneyField(
@@ -131,9 +137,9 @@ class _AccountFormState extends State<_AccountForm> {
             label: l10n.accounts.fieldInitialBalance,
             onChanged: cubit.initialBalanceChanged,
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.accounts.owed),
+          SizedBox(height: spacing.sm),
+          GPSwitchRow(
+            title: l10n.accounts.owed,
             value: state.isOwed,
             onChanged: (bool isOwed) => cubit.owedChanged(isOwed: isOwed),
           ),

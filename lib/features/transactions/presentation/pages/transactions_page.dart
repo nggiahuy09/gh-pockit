@@ -11,6 +11,7 @@ import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/button.dart';
+import 'package:ghpockit/core/widgets/dialog.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
 import 'package:ghpockit/core/widgets/money_text.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
@@ -156,23 +157,23 @@ class _TransactionList extends StatelessWidget {
 /// The undo still follows a confirmed delete (ADR-0017).
 Future<bool> _confirmDelete(BuildContext context, TransactionEntity transaction) async {
   final l10n = context.l10n;
-  final confirmed = await showDialog<bool>(
+  final confirmed = await showGPDialog<bool>(
     context: context,
-    builder: (BuildContext context) => AlertDialog(
-      title: Text(l10n.transactions.deleteConfirmTitle),
-      // The row itself, so the user confirms the one they meant to swipe.
-      content: Row(
-        children: <Widget>[
-          Expanded(child: Text(transaction.titleIn(l10n), maxLines: 2, overflow: TextOverflow.ellipsis)),
-          SizedBox(width: context.spacing.smd),
-          GPMoneyText(transaction.amount, tone: transaction.moneyTone),
-        ],
-      ),
-      actions: <Widget>[
-        GPButton(label: l10n.root.cancel, variant: GPButtonVariant.text, onPressed: () => Navigator.of(context).pop(false)),
-        GPButton(label: l10n.transactions.delete, variant: GPButtonVariant.danger, onPressed: () => Navigator.of(context).pop(true)),
+    title: l10n.transactions.deleteConfirmTitle,
+    icon: Icons.delete_outline,
+    tone: GPDialogTone.danger,
+    // The row itself, so the user confirms the one they meant to swipe.
+    content: Row(
+      children: <Widget>[
+        Expanded(child: Text(transaction.titleIn(l10n), maxLines: 2, overflow: TextOverflow.ellipsis)),
+        SizedBox(width: context.spacing.smd),
+        GPMoneyText(transaction.amount, tone: transaction.moneyTone),
       ],
     ),
+    actions: <GPDialogAction<bool>>[
+      GPDialogAction<bool>.cancel(label: l10n.root.cancel, value: false),
+      GPDialogAction<bool>(label: l10n.transactions.delete, value: true, variant: GPButtonVariant.danger),
+    ],
   );
 
   return confirmed ?? false;

@@ -9,6 +9,7 @@ part 'locale_vi_budgets.dart';
 part 'locale_vi_categories.dart';
 part 'locale_vi_settings.dart';
 part 'locale_vi_error.dart';
+part 'locale_vi_widgets.dart';
 
 final class GPLocaleVi implements GPLocaleBase {
   const GPLocaleVi();
@@ -39,4 +40,7 @@ final class GPLocaleVi implements GPLocaleBase {
 
   @override
   GPLocaleBaseError get error => const GPLocaleViError();
+
+  @override
+  GPLocaleBaseWidgets get widgets => const GPLocaleViWidgets();
 }

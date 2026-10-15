@@ -9,6 +9,7 @@ import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/widgets/button.dart';
+import 'package:ghpockit/core/widgets/radio.dart';
 import 'package:ghpockit/features/settings/presentation/bloc/sample_data_cubit.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 
@@ -25,23 +26,22 @@ class SettingsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings.title)),
-      body: RadioGroup<GPLocale>(
-        groupValue: l10n.locale,
-        onChanged: (GPLocale? selected) {
-          if (selected != null) {
-            // Fire and forget: the notifier drives the repaint, and a local-only write has nothing to roll back (ADR-0004).
-            unawaited(localization.changeLocale(selected));
-          }
-        },
-        child: ListView(
-          children: <Widget>[
-            ListTile(title: Text(l10n.settings.language), subtitle: Text(l10n.locale.displayName)),
-            for (final GPLocale locale in GPLocale.values)
+      body: ListView(
+        padding: EdgeInsets.all(context.spacing.md),
+        children: <Widget>[
+          GPRadioList<GPLocale>(
+            label: l10n.settings.language,
+            title: l10n.settings.language,
+            value: l10n.locale,
+            options: <GPRadioOption<GPLocale>>[
               // Untranslated on purpose: each language names itself.
-              RadioListTile<GPLocale>(title: Text(locale.displayName), value: locale),
-            if (showDebugTools) BlocProvider<SampleDataCubit>(create: (_) => SampleDataCubit(), child: const _DebugTools()),
-          ],
-        ),
+              for (final GPLocale locale in GPLocale.values) GPRadioOption<GPLocale>(value: locale, label: locale.displayName, locale: locale.toPlatformLocale()),
+            ],
+            // Fire and forget: the notifier drives the repaint, and a local-only write has nothing to roll back (ADR-0004).
+            onChanged: (GPLocale selected) => unawaited(localization.changeLocale(selected)),
+          ),
+          if (showDebugTools) BlocProvider<SampleDataCubit>(create: (_) => SampleDataCubit(), child: const _DebugTools()),
+        ],
       ),
     );
   }
@@ -80,7 +80,7 @@ class _DebugTools extends StatelessWidget {
     final spacing = context.spacing;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(spacing.md, spacing.lg, spacing.md, spacing.md),
+      padding: EdgeInsets.only(top: spacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

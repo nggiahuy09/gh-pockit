@@ -12,7 +12,11 @@ import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/core/utils/clock.dart';
+import 'package:ghpockit/core/widgets/date_picker.dart';
+import 'package:ghpockit/core/widgets/dialog.dart';
+import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
+import 'package:ghpockit/core/widgets/select.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
@@ -94,7 +98,19 @@ void main() {
               as GPOk<TransactionEntity>)
           .value;
 
-  Finder field(String label) => find.widgetWithText(TextField, label);
+  /// The label sits above the box, outside the `TextField`.
+  Finder field(String label) => find.descendant(of: find.widgetWithText(GPField, label), matching: find.byType(TextField));
+
+  /// The form outgrows the test screen, and a ListView only builds what is near the viewport.
+  Future<void> tapSave(WidgetTester tester) async {
+    final save = find.widgetWithText(FilledButton, 'Save');
+    // A frame for what was just typed, as a device always has one, before the drag scrolls the form.
+    await tester.pump();
+    await tester.dragUntilVisible(save, find.byType(ListView).last, const Offset(0, -200));
+    await tester.tap(save);
+  }
+
+  String? errorOn(WidgetTester tester, String label) => tester.widget<GPField>(find.widgetWithText(GPField, label)).errorText;
 
   testWidgets('with no account, adds one from the empty state and comes back to the form with it chosen', (WidgetTester tester) async {
     await pumpApp(tester);
@@ -107,7 +123,7 @@ void main() {
     expect(find.byType(AccountFormPage), findsOneWidget);
 
     await tester.enterText(field('Name'), 'Ví tiền mặt');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(find.byType(TransactionFormPage), findsOneWidget);
@@ -122,7 +138,7 @@ void main() {
 
     await tester.enterText(field('Amount'), '45000');
     await tester.enterText(field('Note'), 'Phở bò');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(find.byType(TransactionsPage), findsOneWidget);
@@ -138,18 +154,17 @@ void main() {
     await tester.tap(field('Note'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(find.byType(TransactionFormPage), findsOneWidget);
-    final amount = tester.widget<TextField>(field('Amount'));
-    expect(amount.decoration!.errorText, 'Amount must be greater than zero.');
-    expect(amount.focusNode!.hasFocus, isTrue);
+    expect(errorOn(tester, 'Amount'), 'Amount must be greater than zero.');
+    expect(tester.widget<TextField>(field('Amount')).focusNode!.hasFocus, isTrue);
     expect(find.byType(GPFormFailureBanner), findsNothing, reason: 'a failure a field owns is shown once, on that field');
 
     await tester.enterText(field('Amount'), '45000');
     await tester.pump();
-    expect(tester.widget<TextField>(field('Amount')).decoration!.errorText, isNull);
+    expect(errorOn(tester, 'Amount'), isNull);
     // Outside the fake zone: a drift stream's first read waits on a real timer.
     final stored = await tester.runAsync(() => repositories.transactions.watchTransactions(TransactionQuery(limit: 1)).first);
     expect(stored!.transactions, isEmpty);
@@ -176,7 +191,7 @@ void main() {
     await pumpApp(tester, at: Routes.newTransaction);
 
     await tester.enterText(field('Amount'), '45000');
-    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tapSave(tester);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -222,7 +237,7 @@ void main() {
       expect(tester.testTextInput.isVisible, isFalse, reason: 'an edit opens on what is there');
 
       await tester.enterText(field('Note'), 'Bún chả');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tapSave(tester);
       await tester.pumpAndSettle();
 
       expect(find.byType(TransactionsPage), findsOneWidget);
@@ -236,7 +251,7 @@ void main() {
 
       await openRow(tester, 'Phở bò');
 
-      expect(find.widgetWithText(InputDecorator, 'Yesterday'), findsOneWidget);
+      expect(find.widgetWithText(GPDateField, 'Yesterday'), findsOneWidget);
     });
 
     testWidgets('a transfer row opens with both accounts and no category', (WidgetTester tester) async {
@@ -255,8 +270,8 @@ void main() {
       await openRow(tester, 'Chuyển');
 
       expect(find.byType(TransactionFormPage), findsOneWidget);
-      expect(find.widgetWithText(DropdownButtonFormField<String>, 'Ví tiền mặt'), findsOneWidget);
-      expect(find.widgetWithText(DropdownButtonFormField<String>, 'Ngân hàng'), findsOneWidget);
+      expect(find.widgetWithText(GPSelect<String>, 'Ví tiền mặt'), findsOneWidget);
+      expect(find.widgetWithText(GPSelect<String>, 'Ngân hàng'), findsOneWidget);
       expect(find.text('Category'), findsNothing);
     });
 
@@ -276,7 +291,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Finder dialogButton(String label) => find.descendant(of: find.byType(AlertDialog), matching: find.text(label));
+    Finder dialogButton(String label) => find.descendant(of: find.byType(GPDialog<bool>), matching: find.text(label));
 
     /// Swipes the row and confirms in the dialog the swipe opens.
     Future<void> swipeAway(WidgetTester tester, String row) async {
@@ -331,13 +346,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Delete this transaction?'), findsOneWidget);
-      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('Phở bò')), findsOneWidget);
-      expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('-₫45,000')), findsOneWidget);
+      expect(find.descendant(of: find.byType(GPDialog<bool>), matching: find.text('Phở bò')), findsOneWidget);
+      expect(find.descendant(of: find.byType(GPDialog<bool>), matching: find.text('-₫45,000')), findsOneWidget);
 
       await tester.tap(dialogButton('Cancel'));
       await settleSnackBar(tester);
 
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(GPDialog<bool>), findsNothing);
       expect(find.text('Phở bò'), findsOneWidget);
       expect(tester.getTopLeft(find.text('Phở bò')).dx, lessThan(100), reason: 'slid back into place, not left half off the card');
       expect(find.text('Transaction deleted'), findsNothing);
@@ -354,7 +369,7 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await settleSnackBar(tester);
 
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(GPDialog<bool>), findsNothing);
       expect(find.text('Phở bò'), findsOneWidget);
       expect(find.text('Transaction deleted'), findsNothing);
     });
@@ -387,7 +402,7 @@ void main() {
       expect(row.getSemanticsData().customSemanticsActionIds, contains(CustomSemanticsAction.getIdentifier(delete)));
       row.owner!.performAction(row.id, SemanticsAction.customAction, CustomSemanticsAction.getIdentifier(delete));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsOneWidget, reason: 'the action is the swipe, so it asks too');
+      expect(find.byType(GPDialog<bool>), findsOneWidget, reason: 'the action is the swipe, so it asks too');
       await tester.tap(dialogButton('Delete'));
       await settleSnackBar(tester);
 
@@ -426,7 +441,7 @@ void main() {
 
   group('transfer', () {
     Future<void> pick(WidgetTester tester, {required String field, required String option}) async {
-      await tester.tap(find.text(field));
+      await tester.tap(find.descendant(of: find.widgetWithText(GPField, field), matching: find.byType(GPFieldBox)));
       await tester.pumpAndSettle();
       await tester.tap(find.text(option).last);
       await tester.pumpAndSettle();
@@ -446,7 +461,7 @@ void main() {
 
       await pick(tester, field: 'To account', option: 'Ngân hàng');
       await tester.enterText(field('Amount'), '100000');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tapSave(tester);
       await tester.pumpAndSettle();
 
       expect(find.byType(TransactionsPage), findsOneWidget);
@@ -464,11 +479,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(field('Amount'), '100000');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tapSave(tester);
       await tester.pumpAndSettle();
 
-      final destination = tester.widget<InputDecorator>(find.descendant(of: find.byType(DropdownButtonFormField<String>).last, matching: find.byType(InputDecorator)));
-      expect(destination.decoration.errorText, 'Choose an account to transfer to.');
+      expect(tester.widget<GPSelect<String>>(find.byType(GPSelect<String>).last).errorText, 'Choose an account to transfer to.');
       expect(find.byType(GPFormFailureBanner), findsNothing);
     });
 
@@ -482,12 +496,12 @@ void main() {
 
       expect(find.text('A transfer needs another account in the same currency.'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Add account'));
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Add account'));
       await tester.pumpAndSettle();
       expect(find.byType(AccountFormPage), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'Ngân hàng');
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.enterText(field('Name'), 'Ngân hàng');
+      await tapSave(tester);
       await tester.pumpAndSettle();
 
       expect(find.byType(TransactionFormPage), findsOneWidget);

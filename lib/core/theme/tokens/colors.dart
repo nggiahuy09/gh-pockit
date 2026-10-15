@@ -56,4 +56,8 @@ abstract final class GPColorTokens {
 
   static const Color transparent = Color(0x00000000);
   static const Color shadowWarm = Color(0xFF3D3A32);
+
+  /// Behind a dialog or a sheet: ink at 32% on light, black at 50% on dark.
+  static const Color scrimLight = Color(0x52141413);
+  static const Color scrimDark = Color(0x80000000);
 }

@@ -6,6 +6,7 @@ import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
@@ -38,7 +39,10 @@ void main() {
   Future<AccountEntity> seedAccount(String name, Money balance) async =>
       ((await repositories.accounts.createAccount(name: name, type: AccountType.cash, initialBalance: balance)) as GPOk<AccountEntity>).value;
 
-  Finder field(String label) => find.widgetWithText(TextField, label);
+  /// The label sits above the box, outside the `TextField`.
+  Finder field(String label) => find.descendant(of: find.widgetWithText(GPField, label), matching: find.byType(TextField));
+
+  String? errorOn(WidgetTester tester, String label) => tester.widget<GPField>(find.widgetWithText(GPField, label)).errorText;
 
   /// For a one-shot read (`.first`): the database was opened outside the fake zone, so its future completes only in real time.
   Future<void> settleRead(WidgetTester tester) async {
@@ -97,9 +101,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pumpAndSettle();
 
-    final name = tester.widget<TextField>(field('Name'));
-    expect(name.decoration!.errorText, "Account name can't be empty.");
-    expect(name.focusNode!.hasFocus, isTrue);
+    expect(errorOn(tester, 'Name'), "Account name can't be empty.");
+    expect(tester.widget<TextField>(field('Name')).focusNode!.hasFocus, isTrue);
     expect(find.byType(GPFormFailureBanner), findsNothing);
     expect(find.byType(AccountFormPage), findsOneWidget);
   });
@@ -116,6 +119,6 @@ void main() {
     await settleRead(tester);
 
     expect(find.widgetWithText(GPFormFailureBanner, 'This item was changed on another device.'), findsOneWidget);
-    expect(tester.widget<TextField>(field('Name')).decoration!.errorText, isNull);
+    expect(errorOn(tester, 'Name'), isNull);
   });
 }

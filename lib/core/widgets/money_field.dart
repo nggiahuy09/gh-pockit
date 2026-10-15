@@ -4,6 +4,7 @@ import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/core/money/money_formatter.dart';
+import 'package:ghpockit/core/widgets/text_field.dart';
 
 /// Cash-register entry (ADR-0015): the digits typed are the minor units, so `1250` in USD is `12.50` and nothing is ever parsed from a decimal separator.
 /// Every edit re-renders the whole text; [GPMoneyField] keeps the caret at the end, which is what makes a typed digit an appended one.
@@ -46,16 +47,7 @@ class GPMoneyInputFormatter extends TextInputFormatter {
 
 /// A magnitude only: the caller owns the sign (a transaction's type, an account's "owed" switch).
 class GPMoneyField extends StatefulWidget {
-  const GPMoneyField({
-    required this.currencyCode,
-    required this.onChanged,
-    this.initialMinorUnits,
-    this.label,
-    this.errorText,
-    this.autofocus = false,
-    this.focusNode,
-    super.key,
-  });
+  const GPMoneyField({required this.currencyCode, required this.onChanged, this.initialMinorUnits, this.label, this.errorText, this.autofocus = false, this.focusNode, super.key});
 
   final String currencyCode;
 
@@ -136,25 +128,22 @@ class _GPMoneyFieldState extends State<GPMoneyField> {
     final formatter = _formatter;
     final affixes = GPMoneyFormatter(_locale!).symbolAffixes(widget.currencyCode);
 
-    return TextField(
+    return GPTextField(
       controller: _controller,
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
+      label: widget.label,
+      hintText: formatter.format(0),
+      errorText: widget.errorText,
       keyboardType: TextInputType.number,
       inputFormatters: <TextInputFormatter>[formatter],
       // No tap-to-place caret, no selection handles, no paste menu: there is nowhere but the end to put a digit.
       enableInteractiveSelection: false,
-      // The iOS number pad has no Done key: a tap anywhere else is how it goes away.
-      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
       textAlign: TextAlign.end,
-      style: const TextStyle(fontFeatures: <FontFeature>[FontFeature.tabularFigures()]),
-      decoration: InputDecoration(
-        labelText: widget.label,
-        hintText: formatter.format(0),
-        errorText: widget.errorText,
-        prefixText: affixes.prefix.isEmpty ? null : affixes.prefix,
-        suffixText: affixes.suffix.isEmpty ? null : affixes.suffix,
-      ),
+      tabularFigures: true,
+      // The field spaces the symbol itself; the formatter's no-break space would double the gap.
+      prefixText: affixes.prefix.trim().isEmpty ? null : affixes.prefix.trim(),
+      suffixText: affixes.suffix.trim().isEmpty ? null : affixes.suffix.trim(),
       onChanged: (String text) => widget.onChanged(GPMoneyInputFormatter.minorUnitsOf(text)),
     );
   }

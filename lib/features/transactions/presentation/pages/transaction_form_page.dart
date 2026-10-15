@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:ghpockit/app/router/pop_or_go.dart';
 import 'package:ghpockit/app/router/routes.dart';
@@ -11,17 +10,21 @@ import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/theme/tokens/dimensions.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/button.dart';
+import 'package:ghpockit/core/widgets/chip.dart';
+import 'package:ghpockit/core/widgets/date_picker.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
+import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/core/widgets/money_field.dart';
-import 'package:ghpockit/core/widgets/utf16_length_limit.dart';
+import 'package:ghpockit/core/widgets/select.dart';
+import 'package:ghpockit/core/widgets/text_field.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
+import 'package:ghpockit/features/accounts/presentation/account_type_label.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
 import 'package:ghpockit/features/categories/presentation/default_category_name.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_form_cubit.dart';
-import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_form_field.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
 import 'package:go_router/go_router.dart';
@@ -137,21 +140,13 @@ class _TransactionFormState extends State<_TransactionForm> {
     if (fieldContext != null) unawaited(Scrollable.ensureVisible(fieldContext, alignment: 0.3, duration: GPDurationTokens.fast));
   }
 
-  Future<void> _pickDate() async {
-    final cubit = context.read<TransactionFormCubit>();
+  /// A planned expense may be dated ahead; a year covers rent and insurance. Widened to the day shown, which an edit may have outside it.
+  (DateTime, DateTime) get _dateBounds {
     final today = widget.today;
     final day = _day;
-    // A planned expense may be dated ahead; a year covers rent and insurance. Widened to the day shown, which an edit may have outside it.
     final firstDate = DateTime(2000);
     final lastDate = DateTime(today.year + 1, today.month, today.day);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: day,
-      firstDate: day.isBefore(firstDate) ? day : firstDate,
-      lastDate: day.isAfter(lastDate) ? day : lastDate,
-    );
-
-    if (picked != null) cubit.dateChanged(picked);
+    return (day.isBefore(firstDate) ? day : firstDate, day.isAfter(lastDate) ? day : lastDate);
   }
 
   @override
@@ -182,13 +177,19 @@ class _TransactionFormState extends State<_TransactionForm> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.all(spacing.md),
         children: <Widget>[
-          SegmentedButton<TransactionType>(
-            segments: <ButtonSegment<TransactionType>>[
-              for (final type in _types) ButtonSegment<TransactionType>(value: type, label: Text(type.labelIn(l10n))),
-            ],
-            selected: <TransactionType>{_state.type},
-            showSelectedIcon: false,
-            onSelectionChanged: (Set<TransactionType> selected) => cubit.typeChanged(selected.single),
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: spacing.xs),
+              child: Wrap(
+                spacing: spacing.sm,
+                runSpacing: spacing.sm,
+                children: <Widget>[
+                  for (final type in _types) GPChip(label: type.labelIn(l10n), selected: _state.type == type, onPressed: () => cubit.typeChanged(type)),
+                ],
+              ),
+            ),
           ),
           SizedBox(height: spacing.md),
           GPMoneyField(
@@ -202,99 +203,78 @@ class _TransactionFormState extends State<_TransactionForm> {
             onChanged: cubit.amountChanged,
           ),
           SizedBox(height: spacing.md),
-          DropdownButtonFormField<String>(
-            // Keyed by the selection: `initialValue` is read once, and the cubit may move it (an account archived elsewhere). Empty when an edit's
-            // account is no longer on offer.
-            key: ValueKey<String>('account-$accountId'),
-            initialValue: accountId,
+          // Empty when an edit's account is no longer on offer.
+          GPSelect<String>(
+            label: isTransfer ? l10n.transactions.fieldFromAccount : l10n.transactions.fieldAccount,
+            value: accountId,
             focusNode: _focusNodes[TransactionFormField.account],
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: isTransfer ? l10n.transactions.fieldFromAccount : l10n.transactions.fieldAccount,
-              errorText: errorOn(TransactionFormField.account),
-            ),
-            items: <DropdownMenuItem<String>>[
-              for (final AccountEntity option in _state.accounts!)
-                DropdownMenuItem<String>(
-                  value: option.id,
-                  child: Text(option.name, overflow: TextOverflow.ellipsis),
-                ),
+            errorText: errorOn(TransactionFormField.account),
+            options: <GPSelectOption<String>>[
+              for (final AccountEntity option in _state.accounts!) GPSelectOption<String>(value: option.id, label: option.name, icon: option.type.icon),
             ],
-            onChanged: (String? id) => id == null ? null : cubit.accountChanged(id),
+            onChanged: cubit.accountChanged,
           ),
           SizedBox(height: spacing.md),
           if (isTransfer && destinations.isEmpty)
             // Nothing to pick: say why and offer the way out, rather than an empty menu.
-            Focus(
-              focusNode: _focusNodes[TransactionFormField.destination],
-              child: InputDecorator(
-                decoration: InputDecoration(
-                  labelText: l10n.transactions.fieldToAccount,
-                  helperText: l10n.transactions.noDestinationMessage,
-                  helperMaxLines: 2,
-                  errorText: errorOn(TransactionFormField.destination),
-                  errorMaxLines: 2,
-                ),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: TextButton(onPressed: () => context.pushNamed(RouteNames.newAccount), child: Text(l10n.accounts.add)),
+            GPField(
+              label: l10n.transactions.fieldToAccount,
+              helperText: l10n.transactions.noDestinationMessage,
+              errorText: errorOn(TransactionFormField.destination),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Focus(
+                  focusNode: _focusNodes[TransactionFormField.destination],
+                  child: GPButton(
+                    label: l10n.accounts.add,
+                    variant: GPButtonVariant.outlined,
+                    leading: const Icon(Icons.add),
+                    onPressed: () => context.pushNamed(RouteNames.newAccount),
+                  ),
                 ),
               ),
             )
           else if (isTransfer)
-            DropdownButtonFormField<String>(
-              key: ValueKey<String>('destination-$accountId-$destinationId'),
-              initialValue: destinationId,
+            GPSelect<String>(
+              label: l10n.transactions.fieldToAccount,
+              value: destinationId,
               focusNode: _focusNodes[TransactionFormField.destination],
-              isExpanded: true,
-              decoration: InputDecoration(
-                labelText: l10n.transactions.fieldToAccount,
-                errorText: errorOn(TransactionFormField.destination),
-                errorMaxLines: 2,
-              ),
-              items: <DropdownMenuItem<String>>[
-                for (final AccountEntity option in destinations)
-                  DropdownMenuItem<String>(
-                    value: option.id,
-                    child: Text(option.name, overflow: TextOverflow.ellipsis),
-                  ),
+              errorText: errorOn(TransactionFormField.destination),
+              options: <GPSelectOption<String>>[
+                for (final AccountEntity option in destinations) GPSelectOption<String>(value: option.id, label: option.name, icon: option.type.icon),
               ],
-              onChanged: (String? id) => id == null ? null : cubit.destinationChanged(id),
+              onChanged: cubit.destinationChanged,
             )
           else
-            DropdownButtonFormField<String?>(
-              key: ValueKey<String>('category-${_state.type.name}-$categoryId'),
-              initialValue: categoryId,
+            GPSelect<String?>(
+              label: l10n.transactions.fieldCategory,
+              value: categoryId,
               focusNode: _focusNodes[TransactionFormField.category],
-              isExpanded: true,
-              decoration: InputDecoration(labelText: l10n.transactions.fieldCategory, errorText: errorOn(TransactionFormField.category)),
-              items: <DropdownMenuItem<String?>>[
-                DropdownMenuItem<String?>(child: Text(l10n.transactions.uncategorised)),
-                for (final CategoryEntity option in _state.categoriesForType)
-                  DropdownMenuItem<String?>(
-                    value: option.id,
-                    child: Text(option.displayNameIn(l10n), overflow: TextOverflow.ellipsis),
-                  ),
+              errorText: errorOn(TransactionFormField.category),
+              options: <GPSelectOption<String?>>[
+                GPSelectOption<String?>(value: null, label: l10n.transactions.uncategorised),
+                for (final CategoryEntity option in _state.categoriesForType) GPSelectOption<String?>(value: option.id, label: option.displayNameIn(l10n)),
               ],
               onChanged: cubit.categoryChanged,
             ),
           SizedBox(height: spacing.md),
-          InkWell(
-            borderRadius: context.radii.borderMd,
-            onTap: _pickDate,
-            child: InputDecorator(
-              decoration: InputDecoration(labelText: l10n.transactions.fieldDate, suffixIcon: const Icon(Icons.calendar_today_outlined)),
-              child: Text(dayLabel(_day, today: widget.today, l10n: l10n)),
-            ),
+          GPDateField(
+            label: l10n.transactions.fieldDate,
+            value: _day,
+            today: widget.today,
+            firstDate: _dateBounds.$1,
+            lastDate: _dateBounds.$2,
+            onChanged: cubit.dateChanged,
           ),
           SizedBox(height: spacing.md),
-          TextFormField(
+          GPTextField(
             initialValue: _state.note,
             focusNode: _focusNodes[TransactionFormField.note],
-            inputFormatters: const <TextInputFormatter>[GPUtf16LengthLimitingFormatter(TransactionEntity.noteMaxLength)],
+            maxLength: TransactionEntity.noteMaxLength,
             maxLines: null,
             textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(labelText: l10n.transactions.fieldNote, errorText: errorOn(TransactionFormField.note)),
+            label: l10n.transactions.fieldNote,
+            errorText: errorOn(TransactionFormField.note),
             onChanged: cubit.noteChanged,
           ),
           // Only a failure no field owns: a conflict, a read failure, a row gone meanwhile.

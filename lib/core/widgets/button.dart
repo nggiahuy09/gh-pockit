@@ -36,6 +36,7 @@ class GPButton extends StatefulWidget {
     this.trailing,
     this.isLoading = false,
     this.expanded = false,
+    this.autofocus = false,
     super.key,
   });
 
@@ -54,6 +55,7 @@ class GPButton extends StatefulWidget {
   final bool isLoading;
 
   final bool expanded;
+  final bool autofocus;
 
   @override
   State<GPButton> createState() => _GPButtonState();
@@ -183,9 +185,9 @@ class _GPButtonState extends State<GPButton> {
     final onPressed = _isEnabled ? widget.onPressed : null;
 
     Widget button = switch (widget.variant) {
-      GPButtonVariant.outlined => OutlinedButton(onPressed: onPressed, style: style, statesController: _statesController, child: content),
-      GPButtonVariant.text => TextButton(onPressed: onPressed, style: style, statesController: _statesController, child: content),
-      _ => FilledButton(onPressed: onPressed, style: style, statesController: _statesController, child: content),
+      GPButtonVariant.outlined => OutlinedButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
+      GPButtonVariant.text => TextButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
+      _ => FilledButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
     };
 
     if (widget.expanded) button = SizedBox(width: double.infinity, child: button);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/widgets/money_field.dart';
+import 'package:ghpockit/core/widgets/text_field.dart';
 
 import '../../helpers/localization_harness.dart';
 
@@ -114,12 +115,12 @@ void main() {
 
     testWidgets('puts the symbol on the side the list puts it: before the digits in English, after them in Vietnamese', (WidgetTester tester) async {
       await pump(tester, currencyCode: 'VND', initial: 45000, locale: GPLocale.en);
-      final english = tester.widget<TextField>(find.byType(TextField)).decoration!;
+      final english = tester.widget<GPTextField>(find.byType(GPTextField));
       expect((english.prefixText, english.suffixText), ('₫', null));
 
       await pump(tester, currencyCode: 'VND', initial: 45000);
-      final vietnamese = tester.widget<TextField>(find.byType(TextField)).decoration!;
-      expect((vietnamese.prefixText, vietnamese.suffixText), (null, '\u00a0₫'));
+      final vietnamese = tester.widget<GPTextField>(find.byType(GPTextField));
+      expect((vietnamese.prefixText, vietnamese.suffixText), (null, '₫'));
     });
 
     testWidgets('a tap anywhere leaves the caret at the end, so the next digit is appended rather than inserted', (WidgetTester tester) async {
