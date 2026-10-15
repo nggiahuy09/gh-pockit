@@ -11,6 +11,7 @@ import 'package:ghpockit/features/accounts/presentation/bloc/account_form_cubit.
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
+import 'package:ghpockit/features/dashboard/presentation/bloc/home_accounts_cubit.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 import 'package:ghpockit/features/transactions/presentation/bloc/transaction_deletion_cubit.dart';
@@ -35,7 +36,7 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
             GoRoute(
               path: Routes.home,
               name: RouteNames.home,
-              builder: (BuildContext context, GoRouterState state) => const HomePage(),
+              builder: (BuildContext context, GoRouterState state) => BlocProvider<HomeAccountsCubit>(create: (_) => HomeAccountsCubit()..start(), child: const HomePage()),
               routes: <RouteBase>[
                 GoRoute(
                   path: 'settings',

@@ -5,4 +5,7 @@ final class GPLocaleEnHome implements GPLocaleBaseHome {
 
   @override
   String get title => 'Home';
+
+  @override
+  String get seeAllAccounts => 'See all';
 }
