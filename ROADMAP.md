@@ -546,7 +546,7 @@ khi đã có row, nên các trạng thái chồng lên nhau
 | T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới                                                                                                                                                                                                       |
 | T4   | Edit + soft delete + undo (snackbar) ✅ Done (13/10) — chi tiết ở _W6 T4_ dưới                                                                                                                                                                                                                                     |
 | T5   | Transfer flow: 1 transaction, 2 account, không double-count ✅ Done (14/10) — chi tiết ở _W6 T5_ dưới                                                                                                                                                                                                              |
-| T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật    |
+| T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật ✅ Done (15/10) — chi tiết ở _W6 T6_ dưới |
 | Flex | Dashboard v0: tổng thu/chi tháng này + balance từng account. Polish `AccountsPage` theo artboard "Tài khoản — polish"                                                                                                                                                                                              |
 
 ### W6 — nợ chốt trước khi vào tuần (12/10)
@@ -688,6 +688,29 @@ khi đã có row, nên các trạng thái chồng lên nhau
 - Soát trên iOS simulator: chỉ một account → gợi ý + "Thêm tài khoản" → thêm "Bank" quay lại thấy dropdown đích; lưu thiếu đích → lỗi dưới ô; menu đích
   chỉ có "Bank"; lưu → dòng ⇄ "Chuyển khoản" không dấu, DB một row có `destination_account_id`.
 - Để sau: "A → B" trên dòng list (W7 T5); số dư hai phía (T6).
+
+
+### W6 T6 — số dư thật + `AccountsPage` qua use case (15/10)
+
+> Chốt 15/10: **một câu SQL ở phía transactions** (TransactionDao vốn đã đọc `accounts`), không ghép hai stream (**ADR-0019**); **Home dùng chung**
+> use case nên Home và tab Tài khoản luôn cùng một số dư.
+
+- [x] **DAO** `watchAccountBalances(ownerId)`: chọn account sống, chưa lưu trữ của owner (đúng hàng + thứ tự `watchAccounts`), mỗi vế ADR-0009 là một
+      subquery `SUM` tương quan — vế nguồn qua index `account_id`, vế đích qua index `destination_account_id`. Không join account bên kia → transfer của
+      account đã xoá vẫn tính ở đầu kia (ADR-0010). Type lạ cộng 0 (row không đọc được, list đã đếm — ADR-0011). `readsFrom` cả hai bảng → ghi bảng nào
+      cũng chạy lại. Plan đo được: hai `SEARCH t USING INDEX`, không `SCAN t`; `TEMP B-TREE` chỉ để sort vài account.
+- [x] **Repository** `TransactionRepository.watchAccountBalances()` → `List<AccountBalance>` (value object mới ở accounts domain: account + `Money` theo
+      tiền của account). Row account hỏng → cả list `GPDatabaseFailure` như `watchAccounts`; log `{entity: account, id, reason}`.
+- [x] **Use case** `WatchAccountBalancesUseCase` (forwarding, accounts domain, nhận `TransactionRepository`).
+- [x] **`AccountsPage` qua `AccountsCubit`** (đóng nợ ADR-0013 từ W5): hết `StreamBuilder` trên repository; hiện số dư thật, âm giữ dấu trừ và đỏ.
+      **Home**: `HomeAccountsCubit` đọc cùng use case, dòng account có số dư bên phải.
+- [x] **Test** (suite: 923): DAO — 4 vế, số dư ban đầu, tombstone không tính bên nào, account đã xoá rời list mà transfer vẫn
+      tính ở đầu kia, chỉ account sống/chưa lưu trữ/của owner theo thứ tự tạo, type lạ cộng 0, chạy lại khi ghi, plan dùng hai index; repository — `Money`
+      theo tiền của account, row hỏng fail cả list kèm log, lỗi DB; `AccountsCubit` — loading, failure giữ list cũ, lỗi không phải `GPFailure` bị rethrow;
+      page — số dư sau chi/thu/transfer, theo dõi live, nợ đỏ có dấu trừ, tiếng Việt; Home — số dư và cập nhật live. Test cũ của page đổi sang cubit;
+      test cấp app đăng ký thêm `TransactionRepository`; `FakeTransactionRepository` mặc định phát list rỗng. Mutation: 7 chỗ gỡ → đỏ.
+- Chưa soát trên simulator (máy ảo đã tắt).
+- Để sau: tổng tài sản (nhiều loại tiền không cộng được — Flex/multi-currency); covering index nếu W7 T2 / W8 đo thấy cần.
 
 **🏁 Milestone P1:** app dùng được hoàn toàn offline, không có dòng network nào. **Tag `v0.1-local`.**
 
