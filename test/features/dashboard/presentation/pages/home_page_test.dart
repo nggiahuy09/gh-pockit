@@ -3,16 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
+import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
-import '../../../../helpers/fake_account_repository.dart';
+import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/in_memory_repositories.dart';
 import '../../../../helpers/localization_harness.dart';
 
@@ -22,7 +26,9 @@ void main() {
 
   setUp(() {
     repositories = InMemoryRepositories();
-    getIt.registerSingleton<AccountRepository>(repositories.accounts);
+    getIt
+      ..registerSingleton<AccountRepository>(repositories.accounts)
+      ..registerSingleton<TransactionRepository>(repositories.transactions);
   });
 
   tearDown(() async {
@@ -84,10 +90,20 @@ void main() {
     expect(find.text('Edit account'), findsOneWidget);
   });
 
+  testWidgets('each account shows its balance, the same the Accounts tab shows, and follows a new transaction', (WidgetTester tester) async {
+    final cash = (await repositories.accounts.createAccount(name: 'Cash wallet', type: AccountType.cash, initialBalance: Money(500000, 'VND')) as GPOk<AccountEntity>).value;
+    await pumpApp(tester);
+    expect(find.text('₫500,000'), findsOneWidget);
+
+    await repositories.transactions.createTransaction(type: TransactionType.expense, accountId: cash.id, amount: Money(45000, 'VND'), occurredAt: DateTime.utc(2026, 10, 15));
+    await tester.pumpAndSettle();
+
+    expect(find.text('₫455,000'), findsOneWidget);
+  });
+
   testWidgets('accounts that cannot be read show the failure, not an endless spinner', (WidgetTester tester) async {
-    getIt
-      ..unregister<AccountRepository>()
-      ..registerSingleton<AccountRepository>(FakeAccountRepository(accounts: Stream<List<AccountEntity>>.error(const GPDatabaseFailure())));
+    await getIt.unregister<TransactionRepository>();
+    getIt.registerSingleton<TransactionRepository>(FakeTransactionRepository(balances: Stream<List<AccountBalance>>.error(const GPDatabaseFailure())));
     await pumpApp(tester);
 
     expect(find.text('Could not read local data.'), findsOneWidget);

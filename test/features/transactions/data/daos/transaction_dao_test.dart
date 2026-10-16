@@ -291,6 +291,83 @@ void main() {
     });
   });
 
+  group('watchAccountBalances', () {
+    Future<Map<String, int>> balances() async => {for (final row in await dao.watchAccountBalances(localOwnerId).first) row.account.id: row.balanceMinor};
+
+    Future<void> setAccount(String id, AccountsTableCompanion patch) => (db.update(db.accountsTable)..where((a) => a.id.equals(id))).write(patch);
+
+    test('the four terms: income adds, an expense and a transfer out subtract, a transfer in adds', () async {
+      await dao.insertTransaction(row(id: 'tx-in', type: 'income', categoryId: null, amountMinor: 100000));
+      await dao.insertTransaction(row(id: 'tx-out', amountMinor: 30000));
+      await dao.insertTransaction(transfer(id: 'tx-move', from: 'acc-cash', to: 'acc-bank').copyWith(amountMinor: const Value(20000)));
+
+      final result = await balances();
+
+      expect(result['acc-cash'], 100000 - 30000 - 20000);
+      expect(result['acc-bank'], 20000, reason: 'the arriving side of the transfer, counted once');
+    });
+
+    test('starts from the opening balance', () async {
+      await setAccount('acc-cash', const AccountsTableCompanion(initialBalance: Value(500000)));
+      await dao.insertTransaction(row());
+
+      expect((await balances())['acc-cash'], 375000);
+    });
+
+    test('a deleted transaction counts on neither side', () async {
+      await dao.insertTransaction(transfer(id: 'tx-move', from: 'acc-cash', to: 'acc-bank'));
+      await tombstone('tx-move');
+
+      final result = await balances();
+      expect(result['acc-cash'], 0);
+      expect(result['acc-bank'], 0);
+    });
+
+    test('a deleted account leaves the list, and its transfers still count at the other end (ADR-0010)', () async {
+      await dao.insertTransaction(transfer(id: 'tx-move', from: 'acc-bank', to: 'acc-cash').copyWith(amountMinor: const Value(20000)));
+      await setAccount('acc-bank', const AccountsTableCompanion(deletedAt: Value(t1)));
+
+      final result = await balances();
+      expect(result.containsKey('acc-bank'), isFalse);
+      expect(result['acc-cash'], 20000);
+    });
+
+    test("only the owner's live, unarchived accounts, in creation order", () async {
+      await setAccount('acc-usd', const AccountsTableCompanion(createdAt: Value(t0 - 1)));
+
+      final rows = await dao.watchAccountBalances(localOwnerId).first;
+
+      expect(rows.map((r) => r.account.id), <String>['acc-usd', 'acc-bank', 'acc-cash']);
+    });
+
+    test('a type outside the three adds nothing: the row is unreadable, not guessed', () async {
+      await dao.insertTransaction(row(id: 'tx-odd', type: 'refund', categoryId: null, amountMinor: 999));
+
+      expect((await balances())['acc-cash'], 0);
+    });
+
+    test('re-emits when a transaction is written', () async {
+      final emitted = <int>[];
+      final subscription = dao.watchAccountBalances(localOwnerId).listen((rows) => emitted.add(rows.firstWhere((r) => r.account.id == 'acc-cash').balanceMinor));
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      await dao.insertTransaction(row(amountMinor: 45000));
+      await pumpEventQueue();
+
+      expect(emitted, <int>[0, -45000]);
+    });
+
+    test('each side reads through its own index, never the whole table', () async {
+      final rows = await db.customSelect('EXPLAIN QUERY PLAN ${TransactionDao.accountBalancesSql}', variables: [Variable.withString(localOwnerId)]).get();
+      final plan = rows.map((r) => r.read<String>('detail')).join('\n');
+
+      expect(plan, contains('transactions_account_id_occurred_at_id (account_id=?)'));
+      expect(plan, contains('transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
+      expect(plan, isNot(contains('SCAN t')));
+    });
+  });
+
   group('hasLiveTransactions', () {
     test('is false for an account no transaction touches', () async {
       await dao.insertTransaction(row(accountId: 'acc-bank'));

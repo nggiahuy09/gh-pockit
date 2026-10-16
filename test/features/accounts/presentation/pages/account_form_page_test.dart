@@ -13,6 +13,7 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
+import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 import '../../../../helpers/in_memory_repositories.dart';
 import '../../../../helpers/localization_harness.dart';
@@ -23,7 +24,9 @@ void main() {
 
   setUp(() {
     repositories = InMemoryRepositories();
-    getIt.registerSingleton<AccountRepository>(repositories.accounts);
+    getIt
+      ..registerSingleton<AccountRepository>(repositories.accounts)
+      ..registerSingleton<TransactionRepository>(repositories.transactions);
   });
 
   tearDown(() async {

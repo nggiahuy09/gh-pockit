@@ -352,6 +352,28 @@ void main() {
     });
   });
 
+  group('watchAccountBalances', () {
+    test('pairs each account with its balance, in the currency of that account', () async {
+      ok(await create(amount: Money(45000, 'VND')));
+      ok(await create(accountId: 'acc-usd', categoryId: null, amount: Money(1250, 'USD')));
+
+      final balances = await repository.watchAccountBalances().first;
+      final byId = {for (final balance in balances) balance.account.id: balance.balance};
+
+      expect(byId['acc-cash'], Money(-45000, 'VND'));
+      expect(byId['acc-usd'], Money(-1250, 'USD'));
+      expect(byId.containsKey('acc-archived'), isFalse);
+      expect(byId.containsKey('acc-theirs'), isFalse);
+    });
+
+    test('an account row that will not map fails the list, logged by id and reason only', () async {
+      await (db.update(db.accountsTable)..where((a) => a.id.equals('acc-bank'))).write(const AccountsTableCompanion(type: Value('savings')));
+
+      await expectLater(repository.watchAccountBalances(), emitsError(const GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'account', 'id': 'acc-bank', 'reason': 'unknownType'});
+    });
+  });
+
   group('hasLiveTransactions', () {
     test('answers yes for either side of a transfer, and no for an account nothing touches', () async {
       ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
@@ -566,6 +588,12 @@ void main() {
       expect(logger.last.fields, {'entity': 'transaction'});
     });
 
+    test('watchAccountBalances reports it too, logged against accounts', () async {
+      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchAccountBalances(), emitsError(const GPDatabaseFailure()));
+
+      expect(logger.last.fields, {'entity': 'account'});
+    });
+
     test('watchTransaction reports it too, and logs the id', () async {
       await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchTransaction('tx-1'), emitsError(const GPDatabaseFailure()));
 
@@ -623,4 +651,7 @@ class FailingStreamTransactionDao extends TransactionDao {
 
   @override
   Stream<TransactionRow?> watchTransaction(String ownerId, String id) => Stream<TransactionRow?>.error(error);
+
+  @override
+  Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) => Stream<List<({AccountRow account, int balanceMinor})>>.error(error);
 }

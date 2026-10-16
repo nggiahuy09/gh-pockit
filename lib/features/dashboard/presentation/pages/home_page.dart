@@ -5,13 +5,14 @@ import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
+import 'package:ghpockit/core/widgets/money_text.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/accounts/presentation/account_type_label.dart';
 import 'package:ghpockit/features/dashboard/presentation/bloc/home_accounts_cubit.dart';
 import 'package:go_router/go_router.dart';
 
-/// The canvas's Home, as far as the data exists: the accounts section. The month summary, balances and the greeting wait for their data (balances
-/// W6 T6, monthly totals W7, a user with a name P3).
+/// The canvas's Home, as far as the data exists: the accounts section with their balances. The month summary and the greeting wait for their data
+/// (monthly totals W7, a user with a name P3).
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -61,7 +62,7 @@ class HomePage extends StatelessWidget {
 class _AccountsSection extends StatelessWidget {
   const _AccountsSection({required this.accounts});
 
-  final List<AccountEntity> accounts;
+  final List<AccountBalance> accounts;
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +107,7 @@ class _AccountsSection extends StatelessWidget {
                 children: <Widget>[
                   for (var i = 0; i < accounts.length; i++) ...<Widget>[
                     if (i > 0) Divider(height: 1, thickness: 1, color: colors.outlineVariant),
-                    _AccountRow(account: accounts[i]),
+                    _AccountRow(balance: accounts[i]),
                   ],
                 ],
               ),
@@ -119,12 +120,13 @@ class _AccountsSection extends StatelessWidget {
 }
 
 class _AccountRow extends StatelessWidget {
-  const _AccountRow({required this.account});
+  const _AccountRow({required this.balance});
 
-  final AccountEntity account;
+  final AccountBalance balance;
 
   @override
   Widget build(BuildContext context) {
+    final account = balance.account;
     final l10n = context.l10n;
     final colors = context.colors;
     final spacing = context.spacing;
@@ -158,6 +160,12 @@ class _AccountRow extends StatelessWidget {
                     Text(account.type.labelIn(l10n), style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant)),
                   ],
                 ),
+              ),
+              SizedBox(width: spacing.smd),
+              // Neutral keeps the balance's own sign; red only repeats it for money owed.
+              GPMoneyText(
+                balance.balance,
+                style: context.text.bodyLarge.copyWith(fontWeight: FontWeight.w600, color: balance.balance.isNegative ? colors.expense : colors.onSurface),
               ),
             ],
           ),

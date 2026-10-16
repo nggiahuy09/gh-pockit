@@ -95,6 +95,29 @@ class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionD
   static const String hasLiveTransactionsSql =
       'SELECT EXISTS (SELECT 1 FROM transactions WHERE +owner_id = ?1 AND deleted_at IS NULL AND (account_id = ?2 OR destination_account_id = ?2)) AS has_live';
 
+  /// Each live, unarchived account of [ownerId] with its balance in minor units, in creation order (ADR-0009, ADR-0019). One statement over both tables, so
+  /// the two cannot disagree, and it re-runs on a write to either.
+  Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) {
+    return customSelect(accountBalancesSql, variables: [Variable.withString(ownerId)], readsFrom: {accountsTable, transactionsTable}).watch().map(
+      (rows) => [for (final row in rows) (account: accountsTable.map(row.data), balanceMinor: row.read<int>('balance_minor'))],
+    );
+  }
+
+  /// The four terms of ADR-0009, each a correlated `SUM` over one index: the source side through `account_id`, the arriving side of a transfer through
+  /// `destination_account_id`. The other account is not joined, so a deleted account's transfers still count here (ADR-0010). A type outside the three
+  /// adds nothing: such a row is unreadable, and the list counts it rather than guessing its sign (ADR-0011).
+  @visibleForTesting
+  static const String accountBalancesSql = '''
+SELECT a.*,
+  a.initial_balance
+  + COALESCE((SELECT SUM(CASE t.type WHEN 'income' THEN t.amount_minor WHEN 'expense' THEN -t.amount_minor WHEN 'transfer' THEN -t.amount_minor ELSE 0 END)
+              FROM transactions t WHERE t.account_id = a.id AND t.deleted_at IS NULL), 0)
+  + COALESCE((SELECT SUM(t.amount_minor)
+              FROM transactions t WHERE t.destination_account_id = a.id AND t.type = 'transfer' AND t.deleted_at IS NULL), 0) AS balance_minor
+FROM accounts a
+WHERE a.owner_id = ?1 AND a.deleted_at IS NULL AND a.is_archived = 0
+ORDER BY a.created_at, a.id''';
+
   Future<void> insertTransaction(TransactionsTableCompanion row) => into(transactionsTable).insert(row.copyWith(syncStatus: const Value(pendingSyncStatus)));
 
   /// Returns the rows written: 0 means a stale [baseVersion], a tombstone or no row, which the repository tells apart with [findById]. Never writes

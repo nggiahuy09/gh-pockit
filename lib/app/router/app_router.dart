@@ -6,8 +6,8 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/bloc/account_form_cubit.dart';
+import 'package:ghpockit/features/accounts/presentation/bloc/accounts_cubit.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
@@ -52,7 +52,7 @@ GoRouter createRouter({String initialLocation = Routes.initial}) => GoRouter(
             GoRoute(
               path: Routes.accounts,
               name: RouteNames.accounts,
-              builder: (BuildContext context, GoRouterState state) => AccountsPage(repository: getIt<AccountRepository>()),
+              builder: (BuildContext context, GoRouterState state) => BlocProvider<AccountsCubit>(create: (_) => AccountsCubit()..start(), child: const AccountsPage()),
             ),
           ],
         ),
