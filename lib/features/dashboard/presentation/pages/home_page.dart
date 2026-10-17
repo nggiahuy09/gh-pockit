@@ -5,9 +5,8 @@ import 'package:ghpockit/core/error/failure_message.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/widgets/empty_state.dart';
-import 'package:ghpockit/core/widgets/money_text.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
-import 'package:ghpockit/features/accounts/presentation/account_type_label.dart';
+import 'package:ghpockit/features/accounts/presentation/widgets/account_balance_list.dart';
 import 'package:ghpockit/features/dashboard/presentation/bloc/home_accounts_cubit.dart';
 import 'package:go_router/go_router.dart';
 
@@ -97,80 +96,8 @@ class _AccountsSection extends StatelessWidget {
           ),
         ),
         SizedBox(height: spacing.xs),
-        DecoratedBox(
-          decoration: BoxDecoration(color: colors.surface, borderRadius: context.radii.borderLg, boxShadow: context.shadows.small),
-          child: ClipRRect(
-            borderRadius: context.radii.borderLg,
-            child: Material(
-              type: MaterialType.transparency,
-              child: Column(
-                children: <Widget>[
-                  for (var i = 0; i < accounts.length; i++) ...<Widget>[
-                    if (i > 0) Divider(height: 1, thickness: 1, color: colors.outlineVariant),
-                    _AccountRow(balance: accounts[i]),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
+        AccountBalanceCard(balances: accounts),
       ],
-    );
-  }
-}
-
-class _AccountRow extends StatelessWidget {
-  const _AccountRow({required this.balance});
-
-  final AccountBalance balance;
-
-  @override
-  Widget build(BuildContext context) {
-    final account = balance.account;
-    final l10n = context.l10n;
-    final colors = context.colors;
-    final spacing = context.spacing;
-
-    return InkWell(
-      onTap: () => context.pushNamed(RouteNames.editAccount, pathParameters: <String, String>{'accountId': account.id}),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 64),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: spacing.md, vertical: spacing.sm),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
-                child: Icon(account.type.icon, size: 20, color: colors.onSurfaceVariant),
-              ),
-              SizedBox(width: spacing.smd),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      account.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.text.bodyLarge.copyWith(color: colors.onSurface),
-                    ),
-                    Text(account.type.labelIn(l10n), style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              SizedBox(width: spacing.smd),
-              // Neutral keeps the balance's own sign; red only repeats it for money owed.
-              GPMoneyText(
-                balance.balance,
-                style: context.text.bodyLarge.copyWith(fontWeight: FontWeight.w600, color: balance.balance.isNegative ? colors.expense : colors.onSurface),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

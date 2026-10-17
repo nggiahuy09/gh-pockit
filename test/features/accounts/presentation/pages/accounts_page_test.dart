@@ -15,6 +15,7 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/presentation/bloc/accounts_cubit.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
+import 'package:ghpockit/features/accounts/presentation/widgets/account_balance_list.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
@@ -66,7 +67,7 @@ void main() {
     expect(result, isA<GPOk<Object>>());
   }
 
-  testWidgets('shows a progress indicator until the first list arrives', (WidgetTester tester) async {
+  testWidgets('shows the skeleton until the first list arrives, named for a screen reader', (WidgetTester tester) async {
     final pending = StreamController<List<AccountBalance>>();
     addTearDown(pending.close);
     await useFake(FakeTransactionRepository(balances: pending.stream));
@@ -74,7 +75,8 @@ void main() {
     await pumpPage(tester);
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(AccountListSkeleton), findsOneWidget);
+    expect(find.bySemanticsLabel('Loading accounts'), findsOneWidget);
   });
 
   testWidgets('shows the empty state when there are no accounts', (WidgetTester tester) async {
@@ -98,6 +100,18 @@ void main() {
     expect(find.text('Chase'), findsOneWidget);
     expect(find.text('Bank'), findsOneWidget);
     expect(find.text(r'$12.34'), findsOneWidget);
+  });
+
+  testWidgets('heads the card with how many accounts there are and what the column is', (WidgetTester tester) async {
+    await create('Ví tiền mặt', AccountType.cash, Money(0, 'VND'));
+    await pumpPage(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('1 account'), findsOneWidget);
+    expect(find.text('Balance'), findsOneWidget);
+
+    await create('Vietcombank', AccountType.bank, Money(0, 'VND'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 accounts'), findsOneWidget);
   });
 
   testWidgets('the balance is the opening balance moved by every transaction, a transfer once on each side', (WidgetTester tester) async {
@@ -182,6 +196,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Could not read local data.'), findsOneWidget);
+    expect(find.text('The list comes back by itself the next time data is saved.'), findsOneWidget);
     expect(find.text('Ví hỏng'), findsNothing);
   });
 }

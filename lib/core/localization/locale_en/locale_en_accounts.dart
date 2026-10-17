@@ -7,6 +7,18 @@ final class GPLocaleEnAccounts implements GPLocaleBaseAccounts {
   String get title => 'Accounts';
 
   @override
+  String count(int count) => count == 1 ? '1 account' : '$count accounts';
+
+  @override
+  String get balanceColumn => 'Balance';
+
+  @override
+  String get loading => 'Loading accounts';
+
+  @override
+  String get errorMessage => 'The list comes back by itself the next time data is saved.';
+
+  @override
   String get typeCash => 'Cash';
 
   @override

@@ -4,15 +4,23 @@ import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
+import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/widgets/button.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/budgets/presentation/pages/budgets_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
+import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transaction_form_page.dart';
 import 'package:ghpockit/features/transactions/presentation/pages/transactions_page.dart';
 
+import '../../helpers/fake_transaction_repository.dart';
 import '../../helpers/localization_harness.dart';
 import '../../helpers/shell_harness.dart';
 
@@ -116,6 +124,17 @@ void main() {
 
   group('accounts', () {
     testWidgets('the app bar opens the account form over the dock', (WidgetTester tester) async {
+      // With one account: an empty list hides the app bar's + behind its own add button.
+      final wallet =
+          (AccountEntity.create(id: 'acc-1', name: 'Ví', type: AccountType.cash, initialBalance: Money(0, 'VND'), createdAt: DateTime.utc(2026), updatedAt: DateTime.utc(2026))
+                  as GPOk<AccountEntity>)
+              .value;
+      await getIt.unregister<TransactionRepository>();
+      getIt.registerSingleton<TransactionRepository>(
+        FakeTransactionRepository(
+          balances: Stream<List<AccountBalance>>.value(<AccountBalance>[AccountBalance(account: wallet, balance: Money(0, 'VND'))]),
+        ),
+      );
       await pumpApp(tester, at: Routes.accounts);
 
       await tester.tap(find.byTooltip('Add account'));
@@ -123,6 +142,13 @@ void main() {
 
       expect(find.byType(AccountFormPage), findsOneWidget);
       expect(find.byKey(AppShell.dockKey), findsNothing);
+    });
+
+    testWidgets('with no account the app bar has no +: the empty state carries the one add button', (WidgetTester tester) async {
+      await pumpApp(tester, at: Routes.accounts);
+
+      expect(find.byTooltip('Add account'), findsNothing);
+      expect(find.widgetWithText(GPButton, 'Add account'), findsOneWidget);
     });
   });
 

@@ -7,6 +7,18 @@ final class GPLocaleViAccounts implements GPLocaleBaseAccounts {
   String get title => 'Tài khoản';
 
   @override
+  String count(int count) => '$count tài khoản';
+
+  @override
+  String get balanceColumn => 'Số dư';
+
+  @override
+  String get loading => 'Đang tải tài khoản';
+
+  @override
+  String get errorMessage => 'Danh sách sẽ tự hiện lại ở lần ghi dữ liệu tiếp theo.';
+
+  @override
   String get typeCash => 'Tiền mặt';
 
   @override
