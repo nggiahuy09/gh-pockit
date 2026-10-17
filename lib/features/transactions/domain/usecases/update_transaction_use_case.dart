@@ -5,8 +5,8 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_entit
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:ghpockit/features/transactions/domain/usecases/refusal_from_category.dart';
 
-/// ADR-0010 rule 3, judged only when the edit changes the filing (a new category, or a new type keeping one): a transaction under a category deleted or
-/// flipped since must stay editable.
+/// ADR-0010 rule 3, judged only when the edit changes the filing (a new category, or a new type keeping one): a transaction under a category deleted
+/// since must stay editable.
 class UpdateTransactionUseCase {
   const UpdateTransactionUseCase({required TransactionRepository transactionRepository, required CategoryRepository categoryRepository})
     : _transactions = transactionRepository,

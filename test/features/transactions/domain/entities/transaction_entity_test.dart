@@ -204,6 +204,11 @@ void main() {
       expect(ok(ok(build()).update(note: 'Bún chả')).categoryId, 'cat-food');
     });
 
+    test("clearDestination removes a transfer's destination, which it then refuses as missing; a null one leaves it alone", () {
+      expect(ok(transfer()).update(clearDestination: true), const GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionDestinationMissing)));
+      expect(ok(ok(transfer()).update(note: 'Tiền nhà')).destinationAccountId, isNotNull);
+    });
+
     test('an empty note clears it; a null note leaves it alone', () {
       expect(ok(ok(build()).update(note: '')).note, isNull);
       expect(ok(ok(build()).update(amount: Money(95000, 'VND'))).note, 'Phở bò');

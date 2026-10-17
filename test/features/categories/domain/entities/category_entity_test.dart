@@ -98,7 +98,7 @@ void main() {
     });
 
     test('leaves updatedAt alone, because only the repository owns the clock', () {
-      expect(ok(ok(build(name: 'Cà phê')).update(type: CategoryType.income)).updatedAt, t0);
+      expect(ok(ok(build(name: 'Cà phê')).update(name: 'Trà')).updatedAt, t0);
     });
   });
 

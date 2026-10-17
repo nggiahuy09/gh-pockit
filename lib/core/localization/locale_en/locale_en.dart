@@ -9,6 +9,7 @@ part 'locale_en_budgets.dart';
 part 'locale_en_categories.dart';
 part 'locale_en_settings.dart';
 part 'locale_en_error.dart';
+part 'locale_en_widgets.dart';
 
 final class GPLocaleEn implements GPLocaleBase {
   const GPLocaleEn();
@@ -39,4 +40,7 @@ final class GPLocaleEn implements GPLocaleBase {
 
   @override
   GPLocaleBaseError get error => const GPLocaleEnError();
+
+  @override
+  GPLocaleBaseWidgets get widgets => const GPLocaleEnWidgets();
 }

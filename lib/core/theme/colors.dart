@@ -31,6 +31,7 @@ class GPColors extends ThemeExtension<GPColors> {
     required this.onDanger,
     required this.income,
     required this.expense,
+    required this.scrim,
   });
 
   const GPColors.light()
@@ -59,7 +60,8 @@ class GPColors extends ThemeExtension<GPColors> {
       danger = GPColorTokens.red500,
       onDanger = GPColorTokens.ivory50,
       income = GPColorTokens.green600,
-      expense = GPColorTokens.red500;
+      expense = GPColorTokens.red500,
+      scrim = GPColorTokens.scrimLight;
 
   const GPColors.dark()
     : brightness = Brightness.dark,
@@ -87,7 +89,8 @@ class GPColors extends ThemeExtension<GPColors> {
       danger = GPColorTokens.red400,
       onDanger = GPColorTokens.warmGrey950,
       income = GPColorTokens.green400,
-      expense = GPColorTokens.red400;
+      expense = GPColorTokens.red400,
+      scrim = GPColorTokens.scrimDark;
 
   final Brightness brightness;
 
@@ -116,6 +119,9 @@ class GPColors extends ThemeExtension<GPColors> {
   final Color onDanger;
   final Color income;
   final Color expense;
+
+  /// Behind a dialog or a sheet; carries its own alpha.
+  final Color scrim;
 
   ColorScheme toColorScheme() => ColorScheme(
     brightness: brightness,
@@ -165,6 +171,7 @@ class GPColors extends ThemeExtension<GPColors> {
     Color? onDanger,
     Color? income,
     Color? expense,
+    Color? scrim,
   }) => GPColors(
     brightness: brightness ?? this.brightness,
     primary: primary ?? this.primary,
@@ -192,6 +199,7 @@ class GPColors extends ThemeExtension<GPColors> {
     onDanger: onDanger ?? this.onDanger,
     income: income ?? this.income,
     expense: expense ?? this.expense,
+    scrim: scrim ?? this.scrim,
   );
 
   @override
@@ -225,6 +233,7 @@ class GPColors extends ThemeExtension<GPColors> {
       onDanger: Color.lerp(onDanger, other.onDanger, t)!,
       income: Color.lerp(income, other.income, t)!,
       expense: Color.lerp(expense, other.expense, t)!,
+      scrim: Color.lerp(scrim, other.scrim, t)!,
     );
   }
 }

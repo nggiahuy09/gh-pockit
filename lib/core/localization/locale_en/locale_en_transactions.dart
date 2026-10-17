@@ -25,7 +25,7 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get add => 'Add transaction';
 
   @override
-  String get addComingSoon => 'Adding transactions is on its way.';
+  String get edit => 'Edit transaction';
 
   @override
   String get emptyTitle => 'No transactions yet';
@@ -44,4 +44,55 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
 
   @override
   String get loadingMore => 'Loading more';
+
+  @override
+  String get fieldType => 'Type';
+
+  @override
+  String get fieldAmount => 'Amount';
+
+  @override
+  String get fieldAccount => 'Account';
+
+  @override
+  String get fieldFromAccount => 'From account';
+
+  @override
+  String get fieldToAccount => 'To account';
+
+  @override
+  String get noDestinationMessage => 'A transfer needs another account in the same currency.';
+
+  @override
+  String get fieldCategory => 'Category';
+
+  @override
+  String get fieldDate => 'Date';
+
+  @override
+  String get fieldNote => 'Note';
+
+  @override
+  String get uncategorised => 'Uncategorised';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get delete => 'Delete';
+
+  @override
+  String get deleteConfirmTitle => 'Delete this transaction?';
+
+  @override
+  String get deleted => 'Transaction deleted';
+
+  @override
+  String get undo => 'Undo';
+
+  @override
+  String get noAccountsTitle => 'Add an account first';
+
+  @override
+  String get noAccountsMessage => 'A transaction needs an account to come from or go to.';
 }

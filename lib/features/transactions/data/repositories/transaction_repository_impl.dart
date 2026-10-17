@@ -7,6 +7,8 @@ import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/utils/uuid_generator.dart';
+import 'package:ghpockit/features/accounts/data/mapper/account_mapper.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/mapper/transaction_mapper.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
@@ -25,18 +27,21 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required GPAppLogger logger,
     required String ownerId,
     TransactionMapper mapper = const TransactionMapper(),
+    AccountMapper accountMapper = const AccountMapper(),
   }) : _dao = dao,
        _clock = clock,
        _uuidGenerator = uuidGenerator,
        _logger = logger,
        _ownerId = ownerId,
-       _mapper = mapper;
+       _mapper = mapper,
+       _accountMapper = accountMapper;
 
   final TransactionDao _dao;
   final GPClock _clock;
   final GPUuidGenerator _uuidGenerator;
   final GPAppLogger _logger;
   final TransactionMapper _mapper;
+  final AccountMapper _accountMapper;
   final String _ownerId;
 
   @override
@@ -140,7 +145,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
       case GPOk<TransactionEntity>(:final value):
         try {
           return await _dao.transaction(() async {
-            final refused = await _refusalFromAccounts(value);
+            final refused = await _refusalFromAccounts(accountId: value.accountId, destinationAccountId: value.destinationAccountId, currencyCode: value.amount.currencyCode);
             if (refused != null) return GPErr<TransactionEntity>(refused);
 
             await _dao.insertTransaction(_mapper.toInsert(value, ownerId: _ownerId));
@@ -162,7 +167,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
     try {
       return await _dao.transaction(() async {
-        final refused = await _refusalFromAccounts(stamped);
+        final refused = await _refusalFromAccounts(accountId: stamped.accountId, destinationAccountId: stamped.destinationAccountId, currencyCode: stamped.amount.currencyCode);
         if (refused != null) return GPErr<TransactionEntity>(refused);
 
         final written = await _dao.updateTransaction(
@@ -201,6 +206,53 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   @override
+  Future<GPResult<void>> restoreTransaction(String id) async {
+    try {
+      return await _dao.transaction(() async {
+        final row = await _dao.findById(id);
+        if (row == null || row.ownerId != _ownerId || row.deletedAt == null) return const GPErr<void>(GPNotFoundFailure());
+
+        // Read from the row, not a mapped entity: the account rule needs three columns, and coming back must hold it as a new row does.
+        final refused = await _refusalFromAccounts(accountId: row.accountId, destinationAccountId: row.destinationAccountId, currencyCode: row.currencyCode);
+        if (refused != null) return GPErr<void>(refused);
+
+        await _dao.restore(id, now: _clock.nowEpochMillis());
+        return const GPOk<void>(null);
+      });
+    } on Exception catch (error, stackTrace) {
+      return _databaseFailure<void>('transaction restore failed', id, error, stackTrace);
+    }
+  }
+
+  @override
+  Stream<List<AccountBalance>> watchAccountBalances() {
+    return _dao
+        .watchAccountBalances(_ownerId)
+        .transform(
+          StreamTransformer<List<({AccountRow account, int balanceMinor})>, List<AccountBalance>>.fromHandlers(
+            handleData: (rows, sink) {
+              final balances = <AccountBalance>[];
+
+              for (final row in rows) {
+                switch (_accountMapper.toEntity(row.account)) {
+                  case MappedAccount(:final account):
+                    balances.add(AccountBalance(account: account, balance: Money(row.balanceMinor, account.initialBalance.currencyCode)));
+                  case UnmappableAccountRow(:final reason, :final failure):
+                    // The whole list fails, as `AccountRepository.watchAccounts` does: a total with an account silently missing is worse than an error.
+                    _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': row.account.id, 'reason': reason.name});
+                    sink.addError(failure);
+                    return;
+                }
+              }
+
+              sink.add(balances);
+            },
+            handleError: (error, stackTrace, sink) => _reportQueryError('account balances read failed', error, stackTrace, sink, entity: 'account'),
+          ),
+        );
+  }
+
+  @override
   Future<GPResult<bool>> hasLiveTransactions(String accountId) async {
     try {
       return GPOk<bool>(await _dao.hasLiveTransactions(_ownerId, accountId));
@@ -210,12 +262,12 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   /// Null when the write may go ahead. Call only inside the write's transaction. Two currency codes, because the user has two different things to fix.
-  Future<GPFailure?> _refusalFromAccounts(TransactionEntity transaction) async {
-    final currency = await _dao.liveAccountCurrency(_ownerId, transaction.accountId);
+  Future<GPFailure?> _refusalFromAccounts({required String accountId, required String? destinationAccountId, required String currencyCode}) async {
+    final currency = await _dao.liveAccountCurrency(_ownerId, accountId);
     if (currency == null) return const GPNotFoundFailure();
-    if (currency != transaction.amount.currencyCode) return const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch);
+    if (currency != currencyCode) return const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch);
 
-    final destinationId = transaction.destinationAccountId;
+    final destinationId = destinationAccountId;
     if (destinationId == null) return null;
 
     final destinationCurrency = await _dao.liveAccountCurrency(_ownerId, destinationId);
@@ -237,13 +289,13 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   /// An [Exception] becomes a logged [GPDatabaseFailure], the only error the interface promises on the channel; anything else is a bug and passes through.
-  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
+  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id, String entity = 'transaction'}) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);
       return;
     }
 
-    _logger.error(message, fields: {'entity': 'transaction', 'id': ?id}, error: error, stackTrace: stackTrace);
+    _logger.error(message, fields: {'entity': entity, 'id': ?id}, error: error, stackTrace: stackTrace);
     sink.addError(const GPDatabaseFailure());
   }
 }

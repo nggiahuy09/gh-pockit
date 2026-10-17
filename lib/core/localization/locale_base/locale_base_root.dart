@@ -7,6 +7,7 @@ abstract class GPLocaleBaseRoot {
 
   String get appName;
   String get backToHome;
+  String get cancel;
 }
 
 abstract class GPLocaleBaseRootBottomNav {

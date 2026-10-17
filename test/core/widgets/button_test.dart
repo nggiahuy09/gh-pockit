@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +26,23 @@ void main() {
 
       await tester.tap(find.text('Save'));
 
+      expect(taps, 1);
+    });
+
+    testWidgets('a press held across frames still fires: the ring must not rebuild the button out from under the gesture', (WidgetTester tester) async {
+      var taps = 0;
+      await tester.pumpWidget(_host(GPButton(label: 'Save', onPressed: () => taps++)));
+
+      // `tap` sends down and up in one frame; a finger on a device holds past the press timeout, the ring paints, and only then lifts.
+      final gesture = await tester.startGesture(tester.getCenter(find.text('Save')));
+      await tester.pump(kPressTimeout + const Duration(milliseconds: 50));
+      await tester.pump();
+      expect(_ringCount(tester), 1, reason: 'a pressed button paints its ring');
+
+      await gesture.up();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
       expect(taps, 1);
     });
 

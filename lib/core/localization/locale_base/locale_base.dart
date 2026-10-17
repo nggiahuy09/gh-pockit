@@ -8,6 +8,7 @@ part 'locale_base_budgets.dart';
 part 'locale_base_categories.dart';
 part 'locale_base_settings.dart';
 part 'locale_base_error.dart';
+part 'locale_base_widgets.dart';
 
 /// Hand-written, not ARB (ADR-0004): keep every getter abstract, so a new string does not compile until both languages implement it.
 abstract class GPLocaleBase {
@@ -23,4 +24,5 @@ abstract class GPLocaleBase {
   GPLocaleBaseCategories get categories;
   GPLocaleBaseSettings get settings;
   GPLocaleBaseError get error;
+  GPLocaleBaseWidgets get widgets;
 }

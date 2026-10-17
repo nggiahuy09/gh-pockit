@@ -540,14 +540,193 @@ khi đã có row, nên các trạng thái chồng lên nhau
 
 ## W6 · 12–18/10 🔴 CRUD UI + balances
 
-| Ngày | Task                                                                                                                                                                                               |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date                                                                                                                     |
-| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI                                                                                                                                 |
-| T4   | Edit + soft delete + undo (snackbar)                                                                                                                                                               |
-| T5   | Transfer flow: 1 transaction, 2 account, không double-count                                                                                                                                        |
-| T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010) |
-| Flex | Dashboard v0: tổng thu/chi tháng này + balance từng account                                                                                                                                        |
+| Ngày | Task                                                                                                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới |
+| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới                                                                                                                                                                                                       |
+| T4   | Edit + soft delete + undo (snackbar) ✅ Done (13/10) — chi tiết ở _W6 T4_ dưới                                                                                                                                                                                                                                     |
+| T5   | Transfer flow: 1 transaction, 2 account, không double-count ✅ Done (14/10) — chi tiết ở _W6 T5_ dưới                                                                                                                                                                                                              |
+| T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật ✅ Done (15/10) — chi tiết ở _W6 T6_ dưới |
+| Flex | ~~Dashboard v0: tổng thu/chi tháng này~~ → dời sang W7 T4 (chốt 16/10: làm một lần cùng `watchMonthlySummary()`); balance từng account đã có ở T6 (Home + Accounts). Polish `AccountsPage` theo artboard "Tài khoản — polish" ✅ Done (16/10) — chi tiết ở _W6 Flex_ dưới |
+
+### W6 — nợ chốt trước khi vào tuần (12/10)
+
+| Nợ                                                                                               | Chốt                                                                                                                                                                                | Trạng thái                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Currency của account, type của category sửa được (ADR-0010 _Still open_)                         | **Khoá hẳn cả hai**, không phải "khoá khi đã có transaction": bản có điều kiện cần query riêng chạy ngoài write, sync vẫn lọt vào giữa; row còn rỗng mà chọn sai thì xoá đi tạo lại | ✅ 12/10 — ADR-0010 _Amended 2026-10-12_. Khoá ở API chứ không ở runtime: `CategoryEntity.update` bỏ `type`, `AccountEntity.update` nhận `initialBalanceMinorUnits` giữ currency cũ → không cần `GPValidationCode` hay chuỗi l10n mới. `toPatch` của cả hai mapper bỏ cột (`currency_code`, `type`) như đã bỏ `name_key`/`is_system`. Test "category bị lật type" của `UpdateTransactionUseCase` bỏ vì tình huống không còn dựng được. P4: server phải chặn y vậy (W10) |
+| `AccountsPage` gọi repository thẳng (vi phạm ADR-0013) + polish artboard                         | Ghép vào T6 + Flex: T6 đằng nào cũng viết lại trang để hiện balance thật — làm một lần                                                                                              | ✅ T6 (15/10) use case + balance; Flex (16/10) polish                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Form account không có trong bảng W6 (`locale_base_accounts.dart` hẹn "account form exists (W6)") | Form account tối thiểu vào T2; **category để sau** — bộ seed mặc định đủ cho P1                                                                                                     | Đã ghi vào T2                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Nút đổi theme (`GPThemeModeStore`, ADR-0005 _Owed_)                                              | Đăng issue `later`                                                                                                                                                                  | Xem bảng nợ W4 T2                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+### W6 T2 — form tạo transaction + form account (12/10)
+
+> Chốt 12/10: ô tiền kiểu máy tính tiền (**ADR-0015**); form chạy được bằng component sẵn có, thiết kế artboard ở Flex.
+
+- [x] **Use case** (ADR-0013, forwarding): `WatchAccountsUseCase`, `WatchAccountUseCase`, `CreateAccountUseCase`, `UpdateAccountUseCase`,
+      `WatchCategoriesUseCase`. Form transaction ghi qua `CreateTransactionUseCase` có sẵn (rule 3 của ADR-0010).
+- [x] **`GPMoneyField` + `GPMoneyInputFormatter`** (`core/widgets/money_field.dart`): chữ số gõ vào = minor units, render lại bằng
+      `GPMoneyFormatter` mỗi phím, trần 15 chữ số, rỗng = null chứ không phải 0. Chỉ là độ lớn — dấu do caller (loại giao dịch, công tắc "đang nợ").
+      Đổi account khác currency giữ nguyên chữ số, đọc lại theo exponent mới.
+- [x] **`TransactionFormCubit`**: theo dõi account + category (cả hai loại, lọc theo type trong state). Mặc định account cũ nhất; account đang chọn bị
+      archive/xoá ở chỗ khác → về account cũ nhất còn lại; đổi type bỏ category khác loại. `occurredAt` = ngày chọn + giờ hiện tại (nhập lùi ngày vẫn giữ
+      thứ tự gõ). Không gõ số tiền → gửi 0, để entity trả `transactionAmountNotPositive` thay vì nút bị khoá không lý do. Chỉ chi/thu; transfer ở T5.
+- [x] **`AccountFormCubit`**: tạo + sửa chung một form. Currency chỉ chọn khi tạo (ADR-0010 bổ sung 12/10); sửa thì đọc account một lần, đổi chỗ khác
+      giữa chừng → `GPConflictFailure`, không ghi đè.
+- [x] **UI**: `TransactionFormPage` thay placeholder `/transactions/new` — loại (segmented), số tiền, account, category ("Chưa phân loại" là một lựa chọn),
+      ngày (`dayLabel`, date picker tới +1 năm), ghi chú. Chưa có account → empty state có nút "Thêm tài khoản". `AccountFormPage` ở `/accounts/new` và
+      `/accounts/:accountId/edit`, ngoài shell như form transaction; `AccountsPage` có nút + trên app bar và chạm dòng để sửa. Lỗi lưu hiện bằng
+      `GPFormFailureBanner` (`core/widgets/`, live region). Chuỗi mới ở cả `en` và `vi`; `addComingSoon` bỏ.
+- [x] **Test** (+44, suite: 750): formatter + field; use case trên repository thật; hai cubit trên in-memory Drift; widget test cả app — thêm account từ
+      empty state của form rồi quay lại, lưu chi tiêu → list hiện ngay, lưu bị từ chối → banner, thu nhập chỉ thấy category thu, sửa account giữ currency.
+      `InMemoryRepositories` thêm `categories`; `FakeCategoryRepository` cho shell test.
+- Phát hiện khi test: một `.first` trên stream drift trong `testWidgets` chỉ hoàn thành bằng thời gian thật (DB mở ngoài fake zone) — `settleRead` trong
+  test page chạy `runAsync` một nhịp. Stream sống (`StreamBuilder`, `listen`) không bị.
+- Chưa làm (đúng lịch): map lỗi về từng field (T3), sửa/xoá transaction (T4), transfer (T5), `AccountsPage` qua use case + balance (T6).
+
+**Soát lại (12/10): chạy trên iOS simulator (iPhone 17) + một agent review độc lập.** Widget test xanh không đủ — 4 lỗi chỉ lộ trên máy:
+
+- [x] **`GPButton` nuốt tap trên máy thật** (lỗi có từ trước, không phải của T2, nhưng chặn mọi nút Lưu): nhấn giữ qua một frame thì ring focus
+      bọc nút vào `DecoratedBox` → cây đổi cấu trúc → `FilledButton` bị remount giữa cú chạm → tap bị huỷ + assertion "widget tree was locked".
+      `tester.tap` gửi down/up trong cùng frame nên test cũ không bao giờ thấy. Giờ luôn bọc `DecoratedBox` (shadow rỗng khi không có ring);
+      test mới giữ tay qua `kPressTimeout` rồi mới nhả.
+- [x] **Caret của ô tiền đặt được giữa số**: chạm bên trái số đặt caret ở đầu, gõ 5 thì 45.000 thành 545.000 (agent dựng thêm ca 12.500 → lưu
+      12.008). Selection đổi không qua formatter → `GPMoneyField` tắt interactive selection + listener ghim caret về cuối. ADR-0015 sửa theo;
+      hệ quả mới: không paste/chọn được trong ô tiền. Test mutation: gỡ fix thì test đỏ đúng chỗ (caret = 0).
+- [x] **Thứ tự category trông như ngẫu nhiên**: seed cùng `created_at`, repository tie-break theo id (v5 hash). `inDisplayOrder`
+      (`categories/presentation/`): seed theo thứ tự `DefaultCategory` ("Khác" cuối), của người dùng xếp sau theo thứ tự tạo.
+- [x] **Ký hiệu tiền sai phía**: ô tiền luôn để ₫/$ ở sau, list thì `₫45,000` (en). `GPMoneyFormatter.symbolAffixes` → prefix/suffix theo ngôn ngữ.
+- [x] Từ review: **pop khi không còn trang dưới** (cold deep link `/transactions/new` → `GoError`, `/accounts/new` → màn trắng ở release) →
+      `context.popOrGoNamed(tab)` (`app/router/pop_or_go.dart`), test mutation xác nhận; **mở form trước nửa đêm, lưu sau nửa đêm bị lùi một ngày**
+      → không chọn ngày = lấy `now` lúc lưu (`pickedDay` null), chọn ngày mới ghép giờ hiện tại; **ghi chú: field đếm ký tự, entity đếm UTF-16**
+      (300 emoji qua được field rồi bị từ chối) → `GPUtf16LengthLimitingFormatter` cho note (500) và tên account (100), không cắt đôi surrogate,
+      không cắt khi IME đang soạn; **edit lỗi load mà submit lại tạo account mới** → chặn trong cubit; **id cũ từ dropdown đang mở** → cubit bỏ qua
+      id không còn trong list, page bỏ `!`; **mapping TransactionType → CategoryType lặp ở presentation** → `TransactionType.categoryType` ở domain,
+      `refusalFromCategory` dùng chung.
+- [x] Empty state của Accounts bỏ câu "Bấm +" (tab này có **hai** dấu +: app bar thêm account, dock thêm giao dịch) → nút "Thêm tài khoản" riêng.
+- Đã soát trên máy: luồng chính, banner từ chối, sửa account giữ currency, tiếng Việt đủ dấu, date picker Việt hoá (tuần bắt đầu T2).
+  Ghi nhận, chưa sửa: autocorrect của iOS sửa tên không dấu ("tien mat" → "turn ma") — người dùng Việt dùng bàn phím tiếng Việt; xét lại ở Flex.
+- Test: 777 (+27 so với lúc xong T2).
+
+### W6 T3 — lỗi validate về đúng ô (12/10)
+
+> Chốt 12/10: lỗi hiện **khi bấm Lưu**, sửa đúng ô đó thì tắt; **mỗi lần một lỗi**, ô trên cùng trước — giữ nguyên API domain (**ADR-0016**).
+
+- Đã có từ trước, không phải viết lại: mọi rule chạy ở domain (entity / repository / use case, ADR-0010), mỗi `GPValidationCode` có câu ở cả `en`
+  và `vi` qua switch không wildcard. Thiếu là **chỗ hiện**: một banner cuối form, xa ô số tiền, thường bị bàn phím che, trình đọc màn hình không biết ô nào.
+- [x] **Map lỗi → ô** ở presentation: `TransactionFormField` + `transactionFormFieldOf`, `AccountFormField` + `accountFormFieldOf`. Switch trong không
+      wildcard như switch message — thêm code mới phải chọn chỗ hiện mới compile. Code không có ô trong form này (của form khác, của transfer khi form
+      chưa có ô đích, từ chối xoá) → null → banner.
+- [x] **Hiện**: lỗi có ô → `errorText` của ô đó + **focus nhảy về ô** (ô text tự cuộn vào tầm nhìn, dropdown cuộn bằng `Scrollable.ensureVisible`);
+      lỗi không có ô (conflict, row đã mất, lỗi đọc) → `GPFormFailureBanner`. Không bao giờ cả hai. `GPMoneyField` nhận `focusNode`.
+- [x] **Xoá**: một lần sửa chỉ xoá lỗi nó sửa được — lỗi của chính ô đó, hoặc lỗi không có ô. Lỗi số tiền còn nguyên khi gõ ghi chú; banner conflict
+      tắt ở lần sửa đầu (lần lưu sau sẽ báo lại nếu còn).
+- Thực tế hôm nay mỗi form có đúng một ô người dùng gõ sai được (số tiền; tên tài khoản) — các code khác bị chặn trước bởi picker, formatter hay currency
+  đã khoá. T5 thêm ô tài khoản đích: ba code transfer chuyển từ null sang ô đó.
+- [x] **Bàn phím** (thấy trên simulator khi soát T3): bàn phím số của iOS **không có phím Done**, ô ghi chú nhiều dòng thì return là xuống dòng →
+      bàn phím che nút Lưu mà không cụp được. List của hai form `keyboardDismissBehavior: onDrag`, `GPMoneyField` chạm ra ngoài thì mất focus.
+- [x] Test (+13, suite: 792): map từng code; cubit — lỗi ô sống qua sửa ô khác, lỗi không ô tắt ở lần sửa đầu; widget — lỗi dưới ô số tiền, không banner,
+      focus về từ ô ghi chú (mutation: bỏ lệnh focus thì đỏ); tên trống dưới ô tên; conflict khi sửa account → banner; kéo form / chạm ra ngoài thì bàn phím cụp (mutation: gỡ từng fix thì đỏ).
+
+### W6 T4 — sửa, xoá mềm, hoàn tác (13/10)
+
+> Chốt 13/10: **xoá ghi ngay, Hoàn tác = khôi phục** (`deleted_at = NULL`) chứ không hoãn ghi tới khi snackbar tắt (**ADR-0017**); xoá bằng **vuốt dòng + nút
+> Xoá trong form sửa**; **transfer chưa mở được** tới T5 (form chưa có ô account đích), vẫn vuốt xoá được.
+
+- [x] **Data**: `TransactionRepository.restoreTransaction(id)` — trong một transaction DB: đọc row (kể cả tombstone), chỉ nhận tombstone của owner, xét lại
+      luật account (ADR-0010 rule 1–2) trên chính các cột của row; account đã bị xoá trong lúc đó → `GPNotFoundFailure`, row vẫn nằm xoá. Không xét
+      category (khôi phục không tạo filing mới — cùng lý do `UpdateTransactionUseCase` bỏ qua). DAO `restore`: `deleted_at = NULL`, `updated_at` mới,
+      `pending`, không đụng `version`, chỉ trên tombstone. `_refusalFromAccounts` nhận ba cột thay vì entity để dùng chung.
+- [x] **Use case** (ADR-0013, forwarding): `DeleteTransactionUseCase` (đúng hẹn của ADR-0013), `RestoreTransactionUseCase`, `WatchTransactionUseCase`.
+- [x] **Form sửa** = form tạo (`TransactionFormCubit(transactionId:)`), như form account: đọc giao dịch một lần, đổi chỗ khác giữa chừng → conflict.
+      Không chọn ngày = giữ nguyên ngày giờ; chọn ngày khác = giữ giờ trong ngày cũ. Account đã lưu trữ/xoá và category đã xoá **được giữ** chứ không
+      tự nhảy (sửa ghi chú không được âm thầm chuyển account hay đổi filing); dropdown hiện trống / "Chưa phân loại" cho tới khi người dùng chọn lại.
+      Bàn phím không tự bật khi sửa. Nút xoá trên app bar. `TransactionFormState` có `==` (emit trùng bị bỏ).
+- [x] **List**: chạm dòng → `/transactions/:transactionId/edit` (ngoài shell như form tạo); vuốt sang trái → xoá, ghi trong `confirmDismiss` trước khi
+      dòng trôi đi, snapshot kế tiếp của list mới là thứ gỡ dòng; bị từ chối thì dòng trượt về. Trình đọc màn hình có action "Xóa" riêng của từng dòng.
+      `TransactionDeletionCubit` (xoá + khôi phục) cạnh `TransactionListBloc` — list bloc vẫn chỉ đọc.
+- [x] **Vuốt hỏi trước** (bổ sung 13/10 sau khi thử, ADR-0017 _Amended_): dialog "Xóa giao dịch này?" kèm tên + số tiền của dòng; Hủy hoặc chạm ra ngoài
+      → dòng trượt về, không ghi gì. Action "Xóa" của trình đọc màn hình cũng hỏi (nó thay cho cú vuốt). Nút xoá trong form sửa **không** hỏi — cú bấm
+      có chủ đích, trên màn của đúng giao dịch đó. Hoàn tác vẫn có sau mọi lần xoá. `root.cancel` là chuỗi dùng chung đầu tiên.
+- [x] **Snackbar**: "Đã xóa giao dịch · Hoàn tác", một cái một lúc — xoá mới thay snackbar cũ, chỉ lần xoá mới nhất hoàn tác được. Xoá từ form: form pop với
+      `TransactionFormOutcome.deleted`, list hiện snackbar. Hoàn tác bị từ chối → snackbar nói lý do. `AppShell` đẩy mọi snackbar trong shell lên trên
+      dock (`insetPadding` của theme) — sửa luôn snackbar của Settings vốn nằm đè dock. `popOrGoNamed` mang được kết quả.
+- [x] **Sync (quyết cho P4, ADR-0017)**: xoá = mutation `delete`, khôi phục = update xoá `deleted_at`; khôi phục khi delete chưa đẩy thì hai cái triệt
+      tiêu (W12 coalescing), đã đẩy thì server phải cho bỏ tombstone (W10).
+- Biết trước, chấp nhận: form mở lạnh từ deep link không có list bên dưới → xoá vẫn đúng nhưng không có Hoàn tác; transfer mở bằng deep link vẫn vào form
+  chỉ-chi/thu (T5 sửa).
+- [x] **Test** (+39, suite: 831 — dialog thêm 2: Hủy giữ dòng và không ghi, chạm ra ngoài giữ dòng; test action a11y giờ đi qua dialog; mutation: bỏ dialog
+      / coi chạm ngoài là đồng ý → đỏ): DAO `restore`; repository — khôi phục, không phải tombstone / không có / của owner khác, account hoặc account đích đã xoá,
+      account lưu trữ vẫn nhận, lỗi DB; use case; `TransactionDeletionCubit`; form cubit — load, lưu tại chỗ giữ ngày, chọn ngày giữ giờ, xoá category/ghi
+      chú, giữ category đã xoá và account đã lưu trữ **khi list phát lại sau load**, không load được thì không tạo mới, conflict, xoá, xoá và lưu cùng lúc;
+      widget cả app — chạm dòng mở form đã điền, ngày của giao dịch, transfer không mở, deep link tới giao dịch đã mất, xoá từ form + Hoàn tác, vuốt + Hoàn
+      tác + snackbar trên dock, xoá lần hai thay snackbar, action của trình đọc màn hình đúng dòng, Hoàn tác bị từ chối, deep link rồi xoá. Mutation: gỡ
+      từng fix (inset snackbar, giữ account/category, giữ ngày/giờ, luật account khi khôi phục, autofocus, chặn edit-không-load, transfer mở được, action
+      a11y, thay snackbar) → test tương ứng đỏ. Hai giữ-account/category ban đầu **không** đỏ vì list về trước load — test sửa để list phát lại sau load.
+- Soát trên iOS simulator (iPhone 17): sửa ghi chú giữ đúng ngày/vị trí; vuốt xoá; snackbar nằm trên dock; Hoàn tác từ vuốt và từ form — xác nhận thêm bằng
+  `deleted_at`/`updated_at` trong file SQLite của app. Ghi nhận: snackbar 4 giây (mặc định Material) — ba lần bấm Hoàn tác của agent tới sau khi hết
+  giờ; với người thì đủ, xét lại ở Flex nếu thấy ngắn.
+
+### W6 T5 — luồng chuyển khoản (14/10)
+
+> Chốt 14/10: ô account đích **lọc sẵn** (cùng loại tiền, khác nguồn); chưa có account nào ghép được thì ô đích **nói lý do + nút thêm tài khoản**
+> thay vì khoá lựa chọn; dòng transfer trên list **giữ nguyên** ("Chuyển khoản" hoặc ghi chú) — "A → B" đợi JOIN account của W7 T5.
+
+- Đã có từ W4, không viết lại: một transfer = một row có `destination_account_id`, CHECK trong schema (ADR-0009); entity từ chối thiếu đích / đích trùng
+  nguồn, repository từ chối đích đã mất / khác loại tiền; list lọc theo account khớp cả hai phía (ADR-0011). "Không double-count" là số dư ở T6: transfer
+  trừ nguồn, cộng đích, không bao giờ là thu hay chi — T5 ghi đúng hình dạng đó.
+- [x] **Form**: segmented thêm "Chuyển khoản"; ô account đổi nhãn "Từ tài khoản", ô category thay bằng "Đến tài khoản". Đích không chọn sẵn — lưu khi
+      chưa chọn → `transactionDestinationMissing` dưới ô đích. Đổi loại bỏ field không còn hợp lệ (category khi thành transfer, đích khi thôi là transfer);
+      đổi nguồn sang chính đích hoặc loại tiền khác → bỏ đích. Đích bị lưu trữ/xoá chỗ khác → bỏ, không thay; sửa transfer thì giữ đích gốc như giữ account.
+- [x] **Lỗi về ô** (ADR-0016): ba mã transfer từ null (banner) chuyển sang `TransactionFormField.destination`.
+- [x] **Domain**: `TransactionEntity.update(clearDestination:)` như `clearCategory` — trước đó `null` là "giữ", nên transfer bị bỏ đích trong form sẽ lưu
+      lại đích cũ thay vì báo thiếu.
+- [x] **List**: dòng transfer mở được để sửa (T4 chặn tạm).
+- [x] **Test** (+13, suite: 845): entity `clearDestination`; map ba mã về ô đích; cubit — đích chỉ là account khác cùng loại tiền, lưu một row có đích
+      không category, thiếu đích ra lỗi ở ô đích, đổi loại bỏ category/đích, đổi nguồn bỏ đích không ghép được, đích không có trong list bị bỏ qua, đích bị
+      lưu trữ thì bỏ, sửa transfer giữ đích gốc kể cả đã lưu trữ, transfer sửa thành chi tiêu lưu không đích; widget — tạo transfer từ form, lưu thiếu đích
+      báo dưới ô, chỉ một account thì ô đích nói lý do + thêm tài khoản rồi quay lại, mở dòng transfer thấy đủ hai account. Mutation: 7 chỗ gỡ → đỏ.
+- Soát trên iOS simulator: chỉ một account → gợi ý + "Thêm tài khoản" → thêm "Bank" quay lại thấy dropdown đích; lưu thiếu đích → lỗi dưới ô; menu đích
+  chỉ có "Bank"; lưu → dòng ⇄ "Chuyển khoản" không dấu, DB một row có `destination_account_id`.
+- Để sau: "A → B" trên dòng list (W7 T5); số dư hai phía (T6).
+
+
+### W6 T6 — số dư thật + `AccountsPage` qua use case (15/10)
+
+> Chốt 15/10: **một câu SQL ở phía transactions** (TransactionDao vốn đã đọc `accounts`), không ghép hai stream (**ADR-0019**); **Home dùng chung**
+> use case nên Home và tab Tài khoản luôn cùng một số dư.
+
+- [x] **DAO** `watchAccountBalances(ownerId)`: chọn account sống, chưa lưu trữ của owner (đúng hàng + thứ tự `watchAccounts`), mỗi vế ADR-0009 là một
+      subquery `SUM` tương quan — vế nguồn qua index `account_id`, vế đích qua index `destination_account_id`. Không join account bên kia → transfer của
+      account đã xoá vẫn tính ở đầu kia (ADR-0010). Type lạ cộng 0 (row không đọc được, list đã đếm — ADR-0011). `readsFrom` cả hai bảng → ghi bảng nào
+      cũng chạy lại. Plan đo được: hai `SEARCH t USING INDEX`, không `SCAN t`; `TEMP B-TREE` chỉ để sort vài account.
+- [x] **Repository** `TransactionRepository.watchAccountBalances()` → `List<AccountBalance>` (value object mới ở accounts domain: account + `Money` theo
+      tiền của account). Row account hỏng → cả list `GPDatabaseFailure` như `watchAccounts`; log `{entity: account, id, reason}`.
+- [x] **Use case** `WatchAccountBalancesUseCase` (forwarding, accounts domain, nhận `TransactionRepository`).
+- [x] **`AccountsPage` qua `AccountsCubit`** (đóng nợ ADR-0013 từ W5): hết `StreamBuilder` trên repository; hiện số dư thật, âm giữ dấu trừ và đỏ.
+      **Home**: `HomeAccountsCubit` đọc cùng use case, dòng account có số dư bên phải.
+- [x] **Test** (suite: 923): DAO — 4 vế, số dư ban đầu, tombstone không tính bên nào, account đã xoá rời list mà transfer vẫn
+      tính ở đầu kia, chỉ account sống/chưa lưu trữ/của owner theo thứ tự tạo, type lạ cộng 0, chạy lại khi ghi, plan dùng hai index; repository — `Money`
+      theo tiền của account, row hỏng fail cả list kèm log, lỗi DB; `AccountsCubit` — loading, failure giữ list cũ, lỗi không phải `GPFailure` bị rethrow;
+      page — số dư sau chi/thu/transfer, theo dõi live, nợ đỏ có dấu trừ, tiếng Việt; Home — số dư và cập nhật live. Test cũ của page đổi sang cubit;
+      test cấp app đăng ký thêm `TransactionRepository`; `FakeTransactionRepository` mặc định phát list rỗng. Mutation: 7 chỗ gỡ → đỏ.
+- Chưa soát trên simulator (máy ảo đã tắt).
+- Để sau: tổng tài sản (nhiều loại tiền không cộng được — Flex/multi-currency); covering index nếu W7 T2 / W8 đo thấy cần.
+
+
+### W6 Flex — polish `AccountsPage` (16/10)
+
+> Chốt 16/10: tổng thu/chi tháng **dời sang W7 T4** (làm cùng `watchMonthlySummary()`); Flex chỉ còn polish theo artboard Pockit Design
+> "Màn Tài khoản — danh sách · loading · trống · lỗi" (`Accounts.dc.html`, mới hơn `W5Accounts.dc.html`).
+
+- [x] **Hàng account dùng chung** (`accounts/presentation/widgets/account_balance_list.dart`): `AccountBalanceCard` + `AccountBalanceRow` tách từ
+      hàng của Home — icon tròn 40, tên, loại, số dư 16/600 tnum, âm đỏ có dấu; Home và tab Tài khoản dùng đúng một bản.
+- [x] **Danh sách**: dòng đầu "N tài khoản" + chú thích cột **"Số dư"** (artboard ghi "Số dư ban đầu" — vẽ trước T6, giờ là số dư thật); một card.
+- [x] **Loading** = `AccountListSkeleton` đúng khung hàng (thay spinner), có nhãn cho trình đọc màn hình. **Trống**: ẩn nút + trên app bar (empty state
+      có nút riêng). **Lỗi**: thêm câu phụ "Danh sách sẽ tự hiện lại…", không có thử lại.
+- Chưa làm, theo artboard: card **"Đã lưu trữ"** (chưa có UI lưu trữ, list đã loại account lưu trữ — làm cùng tính năng archive); phụ đề
+  "Thẻ tín dụng · Khoản nợ" (chưa rõ quy tắc — artboard để cả thẻ số dư 0).
+- [x] Test (suite: 925): header đếm số ít/số nhiều, câu phụ khi lỗi, skeleton + nhãn; router — có account thì + mở form, không account thì không có +.
+- Soát trên iOS simulator: tab Tài khoản và Home khớp artboard, số dư đối chiếu đúng với tính tay từ SQLite của app.
 
 **🏁 Milestone P1:** app dùng được hoàn toàn offline, không có dòng network nào. **Tag `v0.1-local`.**
 
@@ -561,7 +740,7 @@ khi đã có row, nên các trạng thái chồng lên nhau
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó |
 | T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart                                                                                  |
-| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()`                                                                                                                                    |
+| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) |
 | T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                       |
 | T6   | Chuyển DB sang background isolate                                                                                                                                                      |
 | Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                             |

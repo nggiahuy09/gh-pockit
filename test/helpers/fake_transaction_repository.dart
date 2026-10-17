@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
@@ -10,6 +11,11 @@ import 'package:ghpockit/features/transactions/domain/repositories/transaction_r
 
 /// Every [watchTransactions] call opens a [FakeWatch] the test drives by hand; [log] records each `listen #n` / `cancel #n` in the order they happen.
 class FakeTransactionRepository implements TransactionRepository {
+  /// With no [balances], each call gets a fresh one-empty-list stream, as `FakeAccountRepository` does.
+  FakeTransactionRepository({this.balances});
+
+  final Stream<List<AccountBalance>>? balances;
+
   final List<FakeWatch> watches = <FakeWatch>[];
   final List<String> log = <String>[];
 
@@ -44,6 +50,12 @@ class FakeTransactionRepository implements TransactionRepository {
 
   @override
   Future<GPResult<void>> deleteTransaction(String id) => throw UnimplementedError();
+
+  @override
+  Future<GPResult<void>> restoreTransaction(String id) => throw UnimplementedError();
+
+  @override
+  Stream<List<AccountBalance>> watchAccountBalances() => balances ?? Stream<List<AccountBalance>>.value(const <AccountBalance>[]);
 
   @override
   Future<GPResult<bool>> hasLiveTransactions(String accountId) => throw UnimplementedError();

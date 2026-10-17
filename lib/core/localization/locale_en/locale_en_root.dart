@@ -11,6 +11,9 @@ final class GPLocaleEnRoot implements GPLocaleBaseRoot {
 
   @override
   String get backToHome => 'Back to home';
+
+  @override
+  String get cancel => 'Cancel';
 }
 
 final class GPLocaleEnRootBottomNav implements GPLocaleBaseRootBottomNav {
