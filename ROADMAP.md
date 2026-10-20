@@ -540,21 +540,21 @@ khi đã có row, nên các trạng thái chồng lên nhau
 
 ## W6 · 12–18/10 🔴 CRUD UI + balances
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                               |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới |
-| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới                                                                                                                                                                                                       |
-| T4   | Edit + soft delete + undo (snackbar) ✅ Done (13/10) — chi tiết ở _W6 T4_ dưới                                                                                                                                                                                                                                     |
-| T5   | Transfer flow: 1 transaction, 2 account, không double-count ✅ Done (14/10) — chi tiết ở _W6 T5_ dưới                                                                                                                                                                                                              |
-| T6   | `watchAccountBalances()` = initial_balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật ✅ Done (15/10) — chi tiết ở _W6 T6_ dưới |
-| Flex | ~~Dashboard v0: tổng thu/chi tháng này~~ → dời sang W7 T4 (chốt 16/10: làm một lần cùng `watchMonthlySummary()`); balance từng account đã có ở T6 (Home + Accounts). Polish `AccountsPage` theo artboard "Tài khoản — polish" ✅ Done (16/10) — chi tiết ở _W6 Flex_ dưới |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Form tạo transaction: amount input theo minor unit, chọn account/category/date. **+ Form tạo/sửa account tối thiểu** (tên, loại, currency, số dư ban đầu) — không có nó thì picker account của form transaction rỗng; currency chỉ hiện khi tạo (ADR-0010 bổ sung 12/10) ✅ Done (12/10) — chi tiết ở _W6 T2_ dưới                                         |
+| T3   | Validate form ở domain layer, map `ValidationFailure` → message UI ✅ Done (12/10) — chi tiết ở _W6 T3_ dưới                                                                                                                                                                                                                                               |
+| T4   | Edit + soft delete + undo (snackbar) ✅ Done (13/10) — chi tiết ở _W6 T4_ dưới                                                                                                                                                                                                                                                                             |
+| T5   | Transfer flow: 1 transaction, 2 account, không double-count ✅ Done (14/10) — chi tiết ở _W6 T5_ dưới                                                                                                                                                                                                                                                      |
+| T6   | `watchAccountBalances()` = initial*balance + aggregate query — 4 vế theo ADR-0009 (transfer vào qua `destination_account_id`, index đã có từ W4); transfer của account đã xoá vẫn tính cho account bên kia (ADR-0010). **`AccountsPage` chuyển sang use case + BLoC** (ADR-0013) cùng lúc đổi sang balance thật ✅ Done (15/10) — chi tiết ở \_W6 T6* dưới |
+| Flex | ~~Dashboard v0: tổng thu/chi tháng này~~ → dời sang W7 T4 (chốt 16/10: làm một lần cùng `watchMonthlySummary()`); balance từng account đã có ở T6 (Home + Accounts). Polish `AccountsPage` theo artboard "Tài khoản — polish" ✅ Done (16/10) — chi tiết ở _W6 Flex_ dưới                                                                                  |
 
 ### W6 — nợ chốt trước khi vào tuần (12/10)
 
 | Nợ                                                                                               | Chốt                                                                                                                                                                                | Trạng thái                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Currency của account, type của category sửa được (ADR-0010 _Still open_)                         | **Khoá hẳn cả hai**, không phải "khoá khi đã có transaction": bản có điều kiện cần query riêng chạy ngoài write, sync vẫn lọt vào giữa; row còn rỗng mà chọn sai thì xoá đi tạo lại | ✅ 12/10 — ADR-0010 _Amended 2026-10-12_. Khoá ở API chứ không ở runtime: `CategoryEntity.update` bỏ `type`, `AccountEntity.update` nhận `initialBalanceMinorUnits` giữ currency cũ → không cần `GPValidationCode` hay chuỗi l10n mới. `toPatch` của cả hai mapper bỏ cột (`currency_code`, `type`) như đã bỏ `name_key`/`is_system`. Test "category bị lật type" của `UpdateTransactionUseCase` bỏ vì tình huống không còn dựng được. P4: server phải chặn y vậy (W10) |
-| `AccountsPage` gọi repository thẳng (vi phạm ADR-0013) + polish artboard                         | Ghép vào T6 + Flex: T6 đằng nào cũng viết lại trang để hiện balance thật — làm một lần                                                                                              | ✅ T6 (15/10) use case + balance; Flex (16/10) polish                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `AccountsPage` gọi repository thẳng (vi phạm ADR-0013) + polish artboard                         | Ghép vào T6 + Flex: T6 đằng nào cũng viết lại trang để hiện balance thật — làm một lần                                                                                              | ✅ T6 (15/10) use case + balance; Flex (16/10) polish                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | Form account không có trong bảng W6 (`locale_base_accounts.dart` hẹn "account form exists (W6)") | Form account tối thiểu vào T2; **category để sau** — bộ seed mặc định đủ cho P1                                                                                                     | Đã ghi vào T2                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Nút đổi theme (`GPThemeModeStore`, ADR-0005 _Owed_)                                              | Đăng issue `later`                                                                                                                                                                  | Xem bảng nợ W4 T2                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
@@ -689,7 +689,6 @@ khi đã có row, nên các trạng thái chồng lên nhau
   chỉ có "Bank"; lưu → dòng ⇄ "Chuyển khoản" không dấu, DB một row có `destination_account_id`.
 - Để sau: "A → B" trên dòng list (W7 T5); số dư hai phía (T6).
 
-
 ### W6 T6 — số dư thật + `AccountsPage` qua use case (15/10)
 
 > Chốt 15/10: **một câu SQL ở phía transactions** (TransactionDao vốn đã đọc `accounts`), không ghép hai stream (**ADR-0019**); **Home dùng chung**
@@ -711,7 +710,6 @@ khi đã có row, nên các trạng thái chồng lên nhau
       test cấp app đăng ký thêm `TransactionRepository`; `FakeTransactionRepository` mặc định phát list rỗng. Mutation: 7 chỗ gỡ → đỏ.
 - Chưa soát trên simulator (máy ảo đã tắt).
 - Để sau: tổng tài sản (nhiều loại tiền không cộng được — Flex/multi-currency); covering index nếu W7 T2 / W8 đo thấy cần.
-
 
 ### W6 Flex — polish `AccountsPage` (16/10)
 
@@ -736,14 +734,31 @@ khi đã có row, nên các trạng thái chồng lên nhau
 
 ## W7 · 19–25/10 🔴 Index + aggregate
 
-| Ngày | Task                                                                                                                                                                                   |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó |
-| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart                                                                                  |
-| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) |
-| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                       |
-| T6   | Chuyển DB sang background isolate                                                                                                                                                      |
-| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                             |
+| Ngày | Task                                                                                                                                                                                                                                                               |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó ✅ Done (20/10) — không thiếu index, schema giữ v4; chi tiết ở _W7 T2_ dưới |
+| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart                                                                                                                                                              |
+| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009)                                                                                                   |
+| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                                                                                                   |
+| T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
+| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                                                                                                         |
+
+### W7 T2 — audit index bằng `EXPLAIN QUERY PLAN` (20/10)
+
+> Kết luận: **không thiếu index** → không bump schema, không migration (vẫn v4). Audit chạy trên SQL mà DAO thật sự gửi đi, cộng dạng dự kiến của
+> aggregate T3/T4; SQLite 3.54.0 (bản của test host).
+
+- [x] **List** (`selectTransactions`): không lọc và lọc khoảng ngày → seek `transactions_owner_id_occurred_at_id`, không `TEMP B-TREE`; lọc category
+      (+ khoảng ngày) → seek `transactions_category_id_occurred_at_id`; lọc account / type → owner index + lọc thêm (đã ghim; `UNION ALL` đợi W8).
+- [x] **Balance** (`accountBalancesSql`): mỗi vế một `SEARCH t USING INDEX` theo account, không `SCAN t`; phải đọc lại bảng để lấy `type`/`amount_minor`/
+      `deleted_at` như ADR-0019 đã ghi. `hasLiveTransactionsSql`: `MULTI-INDEX OR` trên hai account index. `watchTransaction`: primary key.
+- [x] **Aggregate dự kiến T3/T4** (thu/chi tháng `GROUP BY type`, chi theo category trong tháng `GROUP BY category_id`): seek owner index theo
+      `(owner_id, occurred_at>? AND occurred_at<?)` + `TEMP B-TREE FOR GROUP BY` trên vài nhóm, không scan.
+- **Covering index — thử nhưng không thêm.** `(owner_id, occurred_at, type, deleted_at, category_id, amount_minor)` đưa T3/T4 sang `COVERING INDEX`;
+  `(account_id, deleted_at, type, amount_minor)` làm tương tự với vế nguồn của balance. Thứ tiết kiệm được chỉ là bước đọc lại bảng cho các dòng
+  trong một tháng, đổi lại mỗi lần ghi phải cập nhật thêm một index rộng, và ADR-0009 quy định index đi cùng query đầu tiên đọc nó → đợi số đo 50k của W8.
+- Không có test mới: plan test của aggregate viết ở **T3/T4** cùng query (seek owner index theo khoảng ngày, không `SCAN`), như `selectTransactions`.
+  Audit hôm nay chỉ là ảnh chụp tại một thời điểm, không ngăn được plan đổi về sau.
 
 ## W8 · 26/10–01/11 🟡 Seed + benchmark
 

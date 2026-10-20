@@ -70,7 +70,10 @@ Negative:
   through the index, with no covering index for `type`, `amount_minor` and
   `deleted_at`. That is fine for the accounts of one person today. W7 T2's
   `EXPLAIN QUERY PLAN` audit and W8's 50k-row benchmark decide whether it
-  needs a covering index.
+  needs a covering index. The audit (2026-10-20) found no scan and added no
+  index. An index on `(account_id, deleted_at, type, amount_minor)` does turn
+  the source side into a covering-index search, but whether that saves enough
+  to pay for one more index on every write is W8's to measure.
 - Every transaction write re-runs the whole list. That is cheap with a handful
   of accounts, and the same trade the transaction list makes (ADR-0011).
 - The `ORDER BY` on accounts uses a temporary B-tree, which is nothing for a
