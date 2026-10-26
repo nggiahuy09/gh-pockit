@@ -1,119 +1,92 @@
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
+import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 
-/// No `ownerId` or `deletedAt`: the repository scopes by owner and the DAO filters out tombstones.
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import 'account_type.dart';
+
 @immutable
-final class AccountEntity {
+final class AccountEntity with Equatable {
   const AccountEntity._({
-    required this.id,
-    required this.name,
-    required this.type,
     required this.initialBalance,
-    required this.isArchived,
+    required this.type,
     required this.createdAt,
     required this.updatedAt,
+    required this.id,
+    required this.name,
     required this.version,
+    required this.isArchived,
   });
-
-  /// In UTF-16 code units, so an emoji counts as two.
-  static const int nameMaxLength = 100;
-
-  final String id;
-
-  /// Trimmed. Not unique, on purpose: two wallets may share a name.
-  final String name;
-
-  final AccountType type;
-
-  /// The opening balance. The current one is computed, never stored.
-  final Money initialBalance;
-
-  final bool isArchived;
-
-  /// UTC; [create] normalises.
-  final DateTime createdAt;
-
-  /// UTC. Moved only by the repository, through [stampedAt].
-  final DateTime updatedAt;
-
-  /// Optimistic-concurrency token. The server's number: the client never increments it.
-  final int version;
 
   /// Also how the mapper reads a row, so a stricter rule here makes existing rows unreadable.
   static GPResult<AccountEntity> create({
-    required String id,
-    required String name,
-    required AccountType type,
     required Money initialBalance,
+    required AccountType type,
     required DateTime createdAt,
     required DateTime updatedAt,
-    bool isArchived = false,
+    required String id,
+    required String name,
     int version = 1,
+    bool isArchived = false,
   }) {
     final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return const GPErr(GPValidationFailure(GPValidationCode.accountNameEmpty));
+    if (trimmedName.length > nameMaxLength) return const GPErr(GPValidationFailure(GPValidationCode.accountNameTooLong));
 
-    if (trimmedName.isEmpty) return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameEmpty));
-
-    if (trimmedName.length > nameMaxLength) {
-      return const GPErr<AccountEntity>(GPValidationFailure(GPValidationCode.accountNameTooLong));
-    }
-
-    return GPOk<AccountEntity>(
+    return GPOk(
       AccountEntity._(
-        id: id,
-        name: trimmedName,
-        type: type,
         initialBalance: initialBalance,
-        isArchived: isArchived,
+        type: type,
         createdAt: createdAt.toUtc(),
         updatedAt: updatedAt.toUtc(),
+        id: id,
+        name: trimmedName,
         version: version,
+        isArchived: isArchived,
       ),
     );
   }
 
-  /// Keeps the old [updatedAt]: the repository restamps it with [stampedAt]. Pass [version] only with a number the server returned.
-  /// Takes minor units, not a [Money]: the currency is fixed at creation (ADR-0010).
-  GPResult<AccountEntity> update({String? name, AccountType? type, int? initialBalanceMinorUnits, bool? isArchived, int? version}) => create(
-    id: id,
-    name: name ?? this.name,
-    type: type ?? this.type,
+  final Money initialBalance;
+  final AccountType type;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String id;
+  final String name;
+
+  /// The server's optimistic-concurrency token: the client never increments it.
+  final int version;
+
+  final bool isArchived;
+
+  static const nameMaxLength = 100;
+
+  @override
+  List<Object?> get props => [initialBalance, type, createdAt, updatedAt, id, name, version, isArchived];
+
+  /// Keeps [updatedAt]: the repository restamps it. The currency is fixed at creation (ADR-0010), so the balance comes in as minor units.
+  GPResult<AccountEntity> update({AccountType? type, String? name, int? initialBalanceMinorUnits, int? version, bool? isArchived}) => create(
     initialBalance: initialBalanceMinorUnits == null ? initialBalance : Money(initialBalanceMinorUnits, initialBalance.currencyCode),
+    type: type ?? this.type,
     createdAt: createdAt,
     updatedAt: updatedAt,
-    isArchived: isArchived ?? this.isArchived,
+    id: id,
+    name: name ?? this.name,
     version: version ?? this.version,
+    isArchived: isArchived ?? this.isArchived,
   );
 
-  AccountEntity stampedAt(DateTime updatedAt) => AccountEntity._(
-    id: id,
-    name: name,
-    type: type,
+  AccountEntity withUpdatedAt(DateTime updatedAt) => AccountEntity._(
     initialBalance: initialBalance,
-    isArchived: isArchived,
+    type: type,
     createdAt: createdAt,
     updatedAt: updatedAt.toUtc(),
+    id: id,
+    name: name,
     version: version,
+    isArchived: isArchived,
   );
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AccountEntity &&
-          other.id == id &&
-          other.name == name &&
-          other.type == type &&
-          other.initialBalance == initialBalance &&
-          other.isArchived == isArchived &&
-          other.createdAt == createdAt &&
-          other.updatedAt == updatedAt &&
-          other.version == version;
-
-  @override
-  int get hashCode => Object.hash(id, name, type, initialBalance, isArchived, createdAt, updatedAt, version);
 
   /// No name or balance: entities end up in logs (golden rule 9).
   @override

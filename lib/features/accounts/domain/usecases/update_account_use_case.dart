@@ -1,12 +1,26 @@
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013).
-class UpdateAccountUseCase {
-  const UpdateAccountUseCase({required AccountRepository accountRepository}) : _accounts = accountRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/result.dart';
+import '../entities/account_entity.dart';
+import '../repositories/account_repository.dart';
 
-  final AccountRepository _accounts;
+final class UpdateAccountUseCase with GPUseCase<UpdateAccountInput, AccountEntity> {
+  const UpdateAccountUseCase(this._repository);
 
-  Future<GPResult<AccountEntity>> call(AccountEntity account) => _accounts.updateAccount(account);
+  final AccountRepository _repository;
+
+  @override
+  Future<GPResult<AccountEntity>> execute(UpdateAccountInput input) => _repository.updateAccount(input.account);
+}
+
+@immutable
+final class UpdateAccountInput implements GPLoggable {
+  const UpdateAccountInput(this.account);
+
+  final AccountEntity account;
+
+  @override
+  Map<String, Object?> toLog() => {'account_id': account.id, 'version': account.version};
 }

@@ -1,15 +1,31 @@
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013). The currency chosen here is the account's for good (ADR-0010).
-class CreateAccountUseCase {
-  const CreateAccountUseCase({required AccountRepository accountRepository}) : _accounts = accountRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../entities/account_entity.dart';
+import '../entities/account_type.dart';
+import '../repositories/account_repository.dart';
 
-  final AccountRepository _accounts;
+/// The currency chosen here is the account's for good (ADR-0010).
+final class CreateAccountUseCase with GPUseCase<CreateAccountInput, AccountEntity> {
+  const CreateAccountUseCase(this._repository);
 
-  Future<GPResult<AccountEntity>> call({required String name, required AccountType type, required Money initialBalance}) =>
-      _accounts.createAccount(name: name, type: type, initialBalance: initialBalance);
+  final AccountRepository _repository;
+
+  @override
+  Future<GPResult<AccountEntity>> execute(CreateAccountInput input) => _repository.createAccount(initialBalance: input.initialBalance, type: input.type, name: input.name);
+}
+
+@immutable
+final class CreateAccountInput implements GPLoggable {
+  const CreateAccountInput(this.initialBalance, this.type, this.name);
+
+  final Money initialBalance;
+  final AccountType type;
+  final String name;
+
+  @override
+  Map<String, Object?> toLog() => {'type': type.storageValue, 'currency_code': initialBalance.currencyCode};
 }

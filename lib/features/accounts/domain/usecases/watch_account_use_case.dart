@@ -1,11 +1,25 @@
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013).
-class WatchAccountUseCase {
-  const WatchAccountUseCase({required AccountRepository accountRepository}) : _accounts = accountRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../entities/account_entity.dart';
+import '../repositories/account_repository.dart';
 
-  final AccountRepository _accounts;
+final class WatchAccountUseCase with GPStreamUseCase<WatchAccountInput, AccountEntity?> {
+  const WatchAccountUseCase(this._repository);
 
-  Stream<AccountEntity?> call(String id) => _accounts.watchAccount(id);
+  final AccountRepository _repository;
+
+  @override
+  Stream<AccountEntity?> execute(WatchAccountInput input) => _repository.watchAccount(input.accountId);
+}
+
+@immutable
+final class WatchAccountInput implements GPLoggable {
+  const WatchAccountInput(this.accountId);
+
+  final String accountId;
+
+  @override
+  Map<String, Object?> toLog() => {'account_id': accountId};
 }

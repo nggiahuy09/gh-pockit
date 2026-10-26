@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:ghpockit/app/router/routes.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/widgets/money_text.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
-import 'package:ghpockit/features/accounts/presentation/account_type_label.dart';
 import 'package:go_router/go_router.dart';
 
-/// One card of account rows, as the canvas draws them on Home and on the Accounts tab: the same rows on both, so the two never drift apart.
-class AccountBalanceCard extends StatelessWidget {
-  const AccountBalanceCard({required this.balances, super.key});
+import '../../../../app/router/routes.dart';
+import '../../../../core/localization/localization_scope.dart';
+import '../../../../core/theme/theme_context.dart';
+import '../../../../core/widgets/money_text.dart';
+import '../../domain/entities/account_balance.dart';
+import '../account_type_extension.dart';
+
+/// The same rows on Home and on the Accounts tab, so the two never drift apart.
+final class AccountBalanceCardWidget extends StatelessWidget {
+  const AccountBalanceCardWidget({super.key, required this.balances});
 
   final List<AccountBalance> balances;
 
@@ -25,10 +28,10 @@ class AccountBalanceCard extends StatelessWidget {
         child: Material(
           type: MaterialType.transparency,
           child: Column(
-            children: <Widget>[
-              for (var i = 0; i < balances.length; i++) ...<Widget>[
-                if (i > 0) Divider(height: 1, thickness: 1, color: colors.outlineVariant),
-                AccountBalanceRow(balance: balances[i]),
+            children: [
+              for (var i = 0; i < balances.length; i++) ...[
+                if (i > 0) Divider(height: 1.0, thickness: 1.0, color: colors.outlineVariant),
+                AccountBalanceRowWidget(balance: balances[i]),
               ],
             ],
           ),
@@ -38,56 +41,57 @@ class AccountBalanceCard extends StatelessWidget {
   }
 }
 
-/// Icon, name, type and balance; a tap opens the account's edit form.
-class AccountBalanceRow extends StatelessWidget {
-  const AccountBalanceRow({required this.balance, super.key});
-
-  static const double minHeight = 64;
+/// A tap opens the account's edit form.
+final class AccountBalanceRowWidget extends StatelessWidget {
+  const AccountBalanceRowWidget({super.key, required this.balance});
 
   final AccountBalance balance;
+
+  static const minHeight = 64.0;
+
+  void _handleTap(BuildContext context) => unawaited(context.pushNamed(RouteNames.editAccount, pathParameters: {'accountId': balance.account.id}));
 
   @override
   Widget build(BuildContext context) {
     final account = balance.account;
-    final l10n = context.l10n;
     final colors = context.colors;
     final spacing = context.spacing;
 
     return InkWell(
-      onTap: () => context.pushNamed(RouteNames.editAccount, pathParameters: <String, String>{'accountId': account.id}),
+      onTap: () => _handleTap(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: minHeight),
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: spacing.md, vertical: spacing.sm),
           child: Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
-                child: Icon(account.type.icon, size: 20, color: colors.onSurfaceVariant),
+            spacing: spacing.smd,
+            children: [
+              SizedBox.square(
+                dimension: 40.0,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
+                  child: Icon(account.type.icon, size: 20.0, color: colors.onSurfaceVariant),
+                ),
               ),
-              SizedBox(width: spacing.smd),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
+                  children: [
                     Text(
                       account.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.text.bodyLarge.copyWith(color: colors.onSurface),
                     ),
-                    Text(account.type.labelIn(l10n), style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant)),
+                    Text(account.type.getTitle(context.l10n), style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant)),
                   ],
                 ),
               ),
-              SizedBox(width: spacing.smd),
               // Neutral keeps the balance's own sign; red only repeats it for money owed.
               GPMoneyText(
-                balance.balance,
                 style: context.text.bodyLarge.copyWith(fontWeight: FontWeight.w600, color: balance.balance.isNegative ? colors.expense : colors.onSurface),
+                amount: balance.balance,
               ),
             ],
           ),
@@ -98,60 +102,54 @@ class AccountBalanceRow extends StatelessWidget {
 }
 
 /// The card's frame with bars where the text goes, so the list lands in place rather than pushing the page around.
-class AccountListSkeleton extends StatelessWidget {
-  const AccountListSkeleton({super.key});
+final class AccountListSkeletonWidget extends StatelessWidget {
+  const AccountListSkeletonWidget({super.key});
 
   /// Name and balance bar widths per row: uneven on purpose, so it reads as text rather than a grid.
-  static const List<(double, double)> _rows = <(double, double)>[(120, 80), (150, 96), (104, 72), (168, 64)];
+  static const _rows = [(120.0, 80.0), (150.0, 96.0), (104.0, 72.0), (168.0, 64.0)];
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
 
-    Widget bar(double width, double height, {BorderRadius? radius}) => Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(color: colors.surfaceVariant, borderRadius: radius ?? context.radii.borderSm),
-    );
-
     return Semantics(
       container: true,
       label: context.l10n.accounts.loading,
       child: ExcludeSemantics(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, 0),
+          padding: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, 0.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
+            children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(spacing.xs, spacing.xs, spacing.xs, spacing.sm),
-                child: bar(96, 12),
+                child: const _SkeletonBar(height: 12.0, width: 96.0),
               ),
               DecoratedBox(
                 decoration: BoxDecoration(color: colors.surface, borderRadius: context.radii.borderLg, boxShadow: context.shadows.small),
                 child: Column(
-                  children: <Widget>[
+                  children: [
                     for (final (name, amount) in _rows)
                       SizedBox(
-                        height: AccountBalanceRow.minHeight,
+                        height: AccountBalanceRowWidget.minHeight,
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: spacing.md),
                           child: Row(
-                            children: <Widget>[
-                              bar(40, 40, radius: BorderRadius.circular(20)),
-                              SizedBox(width: spacing.smd),
+                            spacing: spacing.smd,
+                            children: [
+                              _SkeletonBar(borderRadius: BorderRadius.circular(20.0), height: 40.0, width: 40.0),
                               Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  bar(name, 14),
-                                  SizedBox(height: spacing.xs),
-                                  bar(64, 10),
+                                spacing: spacing.xs,
+                                children: [
+                                  _SkeletonBar(height: 14.0, width: name),
+                                  const _SkeletonBar(height: 10.0, width: 64.0),
                                 ],
                               ),
                               const Spacer(),
-                              bar(amount, 14),
+                              _SkeletonBar(height: 14.0, width: amount),
                             ],
                           ),
                         ),
@@ -165,4 +163,21 @@ class AccountListSkeleton extends StatelessWidget {
       ),
     );
   }
+}
+
+final class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({this.borderRadius, required this.height, required this.width});
+
+  final BorderRadius? borderRadius;
+  final double height;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(color: context.colors.surfaceVariant, borderRadius: borderRadius ?? context.radii.borderSm),
+    ),
+  );
 }

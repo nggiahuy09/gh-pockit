@@ -1,16 +1,11 @@
 import 'package:drift/drift.dart';
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 
-enum AccountMapperReason {
-  unknownType,
-  malformedCurrencyCode,
-  brokenDomainRule,
-}
+import '../../../../core/database/database.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../../domain/entities/account_entity.dart';
+import '../../domain/entities/account_type.dart';
 
 /// Not a `GPResult`: the user gets the same failure for every bad row, but the log needs the [AccountMapperReason].
 sealed class AccountMapping {
@@ -28,62 +23,61 @@ final class UnmappableAccountRow extends AccountMapping {
 
   final AccountMapperReason reason;
 
-  /// Always [GPDatabaseFailure]: a bad row is unreadable data, not a validation error about a field that is not on screen.
+  /// A bad row is unreadable data, not a validation error about a field that is not on screen.
   GPFailure get failure => const GPDatabaseFailure();
 }
 
-class AccountMapper {
-  const AccountMapper();
-
-  /// Does not filter tombstones: a soft-deleted row maps to an entity that looks alive.
-  AccountMapping toEntity(AccountRow row) {
-    final type = AccountType.fromStorage(row.type);
-    if (type == null) {
-      return const UnmappableAccountRow(AccountMapperReason.unknownType);
-    }
+extension AccountRowMapper on AccountRow {
+  /// Maps a tombstone like a live row: the DAO's reads filter them.
+  AccountMapping toDomain() {
+    final accountType = AccountType.fromStorage(type);
+    if (accountType == null) return const UnmappableAccountRow(AccountMapperReason.unknownType);
 
     // Not the throwing `Money(...)`: a bad code from storage is data, not a bug (ADR-0006).
-    final initialBalance = Money.fromStorage(row.initialBalance, row.currencyCode);
-    if (initialBalance == null) {
-      return const UnmappableAccountRow(AccountMapperReason.malformedCurrencyCode);
-    }
+    final balance = Money.fromStorage(initialBalance, currencyCode);
+    if (balance == null) return const UnmappableAccountRow(AccountMapperReason.malformedCurrencyCode);
 
     final entity = AccountEntity.create(
-      id: row.id,
-      name: row.name,
-      type: type,
-      initialBalance: initialBalance,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(row.updatedAt, isUtc: true),
-      isArchived: row.isArchived,
-      version: row.version,
+      initialBalance: balance,
+      type: accountType,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAt, isUtc: true),
+      id: id,
+      name: name,
+      version: version,
+      isArchived: isArchived,
     );
 
     return switch (entity) {
-      GPOk<AccountEntity>(:final value) => MappedAccount(value),
-      GPErr<AccountEntity>() => const UnmappableAccountRow(AccountMapperReason.brokenDomainRule),
+      GPOk(:final value) => MappedAccount(value),
+      GPErr() => const UnmappableAccountRow(AccountMapperReason.brokenDomainRule),
     };
   }
+}
 
-  /// `.insert`, so a non-null column added to the table is a compile error here until it is set.
-  AccountsTableCompanion toInsert(AccountEntity entity, {required String ownerId}) => AccountsTableCompanion.insert(
-    id: entity.id,
+extension AccountEntityMapper on AccountEntity {
+  /// `.insert`, so a new non-null column is a compile error here until it is set.
+  AccountsTableCompanion toInsert(String ownerId) => AccountsTableCompanion.insert(
+    id: id,
     ownerId: ownerId,
-    name: entity.name,
-    type: entity.type.storageValue,
-    currencyCode: entity.initialBalance.currencyCode,
-    initialBalance: entity.initialBalance.minorUnits,
-    isArchived: entity.isArchived,
-    createdAt: entity.createdAt.millisecondsSinceEpoch,
-    updatedAt: entity.updatedAt.millisecondsSinceEpoch,
-    version: entity.version,
+    name: name,
+    type: type.storageValue,
+    currencyCode: initialBalance.currencyCode,
+    initialBalance: initialBalance.minorUnits,
+    isArchived: isArchived,
+    createdAt: createdAt.millisecondsSinceEpoch,
+    updatedAt: updatedAt.millisecondsSinceEpoch,
+    version: version,
   );
 
-  /// User-editable columns only: `currency_code` is fixed at insert (ADR-0010), `version` is the server's, and `AccountDao.updateAccount` stamps `updated_at`.
-  AccountsTableCompanion toPatch(AccountEntity entity) => AccountsTableCompanion(
-    name: Value(entity.name),
-    type: Value(entity.type.storageValue),
-    initialBalance: Value(entity.initialBalance.minorUnits),
-    isArchived: Value(entity.isArchived),
+  /// User-editable columns only: the currency is fixed at insert (ADR-0010), `version` is the server's, the DAO stamps `updated_at`.
+  AccountsTableCompanion toPatch() => AccountsTableCompanion(
+    name: Value(name),
+    type: Value(type.storageValue),
+    initialBalance: Value(initialBalance.minorUnits),
+    isArchived: Value(isArchived),
   );
 }
+
+/// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).
+enum AccountMapperReason { unknownType, malformedCurrencyCode, brokenDomainRule }
