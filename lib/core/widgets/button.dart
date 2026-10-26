@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:ghpockit/core/theme/colors.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/theme/tokens/dimensions.dart';
+
+import '../theme/colors.dart';
+import '../theme/theme_context.dart';
+import '../theme/tokens/dimensions.dart';
 
 enum GPButtonVariant {
   primary,
@@ -17,33 +18,26 @@ enum GPButtonVariant {
 }
 
 enum GPButtonSize {
-  /// 40 — under Android's 48 touch target, so only inside a row that is itself tappable.
+  /// 40: under Android's 48 touch target, so only inside a row that is itself tappable.
   small,
 
-  /// 48 — Android's minimum touch target.
   medium,
-
   large,
 }
 
-class GPButton extends StatefulWidget {
+final class GPButton extends StatefulWidget {
   const GPButton({
-    required this.label,
-    this.onPressed,
-    this.variant = GPButtonVariant.primary,
-    this.size = GPButtonSize.medium,
+    super.key,
     this.leading,
     this.trailing,
-    this.isLoading = false,
-    this.expanded = false,
+    this.size = GPButtonSize.medium,
+    this.variant = GPButtonVariant.primary,
+    required this.label,
     this.autofocus = false,
-    super.key,
+    this.expanded = false,
+    this.isLoading = false,
+    this.onPressed,
   });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final GPButtonVariant variant;
-  final GPButtonSize size;
 
   /// Replaced by the spinner while [isLoading]. Without one the button grows by the spinner's width, so make a form's submit button [expanded].
   final Widget? leading;
@@ -51,37 +45,63 @@ class GPButton extends StatefulWidget {
   /// Hidden while [isLoading].
   final Widget? trailing;
 
+  final GPButtonSize size;
+  final GPButtonVariant variant;
+  final String label;
+  final bool autofocus;
+  final bool expanded;
+
   /// Shows a spinner and refuses input.
   final bool isLoading;
 
-  final bool expanded;
-  final bool autofocus;
+  final void Function()? onPressed;
 
   @override
   State<GPButton> createState() => _GPButtonState();
 }
 
-class _GPButtonState extends State<GPButton> {
+final class _GPButtonState extends State<GPButton> {
   // The Material button updates these during build, where setState throws: hence the post-frame listener and the deferred setState.
-  final WidgetStatesController _statesController = WidgetStatesController();
+  final _statesController = WidgetStatesController();
 
   bool get _isEnabled => widget.onPressed != null && !widget.isLoading;
+
+  double get _height => switch (widget.size) {
+    GPButtonSize.small => 40.0,
+    GPButtonSize.medium => 48.0,
+    GPButtonSize.large => 56.0,
+  };
+
+  double get _horizontalPadding => switch (widget.size) {
+    GPButtonSize.small => 14.0,
+    GPButtonSize.medium => 20.0,
+    GPButtonSize.large => 24.0,
+  };
+
+  double get _iconSize => switch (widget.size) {
+    GPButtonSize.small => 16.0,
+    GPButtonSize.medium || GPButtonSize.large => 20.0,
+  };
+
+  double get _gap => widget.size == GPButtonSize.small ? 6.0 : 8.0;
+
+  bool get _isBare => widget.variant == GPButtonVariant.outlined || widget.variant == GPButtonVariant.text;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _statesController.addListener(_onStatesChanged) : null);
+    WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _statesController.addListener(_handleStatesChange) : null);
   }
 
   @override
   void dispose() {
     _statesController
-      ..removeListener(_onStatesChanged)
+      ..removeListener(_handleStatesChange)
       ..dispose();
     super.dispose();
   }
 
-  void _onStatesChanged() {
+  void _handleStatesChange() {
     if (!mounted) return;
 
     if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
@@ -90,25 +110,6 @@ class _GPButtonState extends State<GPButton> {
       setState(() {});
     }
   }
-
-  double get _height => switch (widget.size) {
-    GPButtonSize.small => 40,
-    GPButtonSize.medium => 48,
-    GPButtonSize.large => 56,
-  };
-
-  double get _horizontalPadding => switch (widget.size) {
-    GPButtonSize.small => 14,
-    GPButtonSize.medium => 20,
-    GPButtonSize.large => 24,
-  };
-
-  double get _iconSize => switch (widget.size) {
-    GPButtonSize.small => 16,
-    GPButtonSize.medium || GPButtonSize.large => 20,
-  };
-
-  double get _gap => widget.size == GPButtonSize.small ? 6 : 8;
 
   /// Heavier than the title roles: at their weight a 14sp label inside a filled shape loses against its own background.
   TextStyle _labelStyle(BuildContext context) => switch (widget.size) {
@@ -134,120 +135,122 @@ class _GPButtonState extends State<GPButton> {
 
   /// Full opacity: WCAG 1.4.11 wants 3:1 and a soft halo lands near 1.5:1. A shadow, not a border, so focus does not resize the button.
   List<BoxShadow> _focusRing(GPColors colors) {
-    if (!_isEnabled) return const <BoxShadow>[];
-
     final states = _statesController.value;
-    if (!states.contains(WidgetState.focused) && !states.contains(WidgetState.pressed)) return const <BoxShadow>[];
+    if (!_isEnabled || (!states.contains(WidgetState.focused) && !states.contains(WidgetState.pressed))) return const [];
 
     final color = switch (widget.variant) {
+      GPButtonVariant.primary || GPButtonVariant.accent => colors.accentInk,
+      GPButtonVariant.tonal || GPButtonVariant.outlined || GPButtonVariant.text => colors.onSurfaceVariant,
       GPButtonVariant.danger => colors.danger,
-      GPButtonVariant.accent || GPButtonVariant.primary => colors.accentInk,
-      _ => colors.onSurfaceVariant,
     };
-    return <BoxShadow>[BoxShadow(color: color, spreadRadius: 2)];
+    return [BoxShadow(color: color, spreadRadius: 2.0)];
   }
 
   ButtonStyle _style(BuildContext context) {
     final colors = context.colors;
     final foreground = _foreground(colors);
     final background = _background(colors);
-    final isBare = widget.variant == GPButtonVariant.outlined || widget.variant == GPButtonVariant.text;
 
     return ButtonStyle(
       animationDuration: GPDurationTokens.fast,
-      elevation: const WidgetStatePropertyAll<double>(0),
-      minimumSize: WidgetStatePropertyAll<Size>(Size(0, _height)),
-      fixedSize: WidgetStatePropertyAll<Size?>(Size.fromHeight(_height)),
-      padding: WidgetStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: _horizontalPadding)),
-      foregroundColor: WidgetStateProperty.resolveWith((Set<WidgetState> states) => states.contains(WidgetState.disabled) ? colors.onSurfaceVariant : foreground),
-      backgroundColor: WidgetStateProperty.resolveWith((Set<WidgetState> states) => states.contains(WidgetState.disabled) && !isBare ? colors.surfaceVariant : background),
-      overlayColor: WidgetStatePropertyAll<Color>(foreground.withValues(alpha: 0.08)),
+      elevation: const WidgetStatePropertyAll(0.0),
+      minimumSize: WidgetStatePropertyAll(Size(0.0, _height)),
+      fixedSize: WidgetStatePropertyAll(Size.fromHeight(_height)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: _horizontalPadding)),
+      foregroundColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.disabled) ? colors.onSurfaceVariant : foreground),
+      backgroundColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.disabled) && !_isBare ? colors.surfaceVariant : background),
+      overlayColor: WidgetStatePropertyAll(foreground.withValues(alpha: 0.08)),
       side: widget.variant == GPButtonVariant.outlined
-          ? WidgetStateProperty.resolveWith((Set<WidgetState> states) => BorderSide(color: states.contains(WidgetState.disabled) ? colors.outlineVariant : colors.outline))
+          ? WidgetStateProperty.resolveWith((states) => BorderSide(color: states.contains(WidgetState.disabled) ? colors.outlineVariant : colors.outline))
           : null,
-      shape: WidgetStatePropertyAll<OutlinedBorder>(RoundedRectangleBorder(borderRadius: context.radii.borderMd)),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: context.radii.borderMd)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final style = _style(context);
+    final onPressed = _isEnabled ? widget.onPressed : null;
     final content = _GPButtonContent(
-      label: widget.label,
       labelStyle: _labelStyle(context),
       leading: widget.leading,
-      trailing: widget.trailing,
-      isLoading: widget.isLoading,
-      iconSize: _iconSize,
-      gap: _gap,
       spinnerColor: _foreground(context.colors),
+      trailing: widget.trailing,
+      label: widget.label,
+      gap: _gap,
+      iconSize: _iconSize,
+      isLoading: widget.isLoading,
     );
-    final onPressed = _isEnabled ? widget.onPressed : null;
-
-    Widget button = switch (widget.variant) {
+    final button = switch (widget.variant) {
       GPButtonVariant.outlined => OutlinedButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
       GPButtonVariant.text => TextButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
-      _ => FilledButton(onPressed: onPressed, style: style, autofocus: widget.autofocus, statesController: _statesController, child: content),
+      GPButtonVariant.primary || GPButtonVariant.accent || GPButtonVariant.tonal || GPButtonVariant.danger => FilledButton(
+        onPressed: onPressed,
+        style: style,
+        autofocus: widget.autofocus,
+        statesController: _statesController,
+        child: content,
+      ),
     };
-
-    if (widget.expanded) button = SizedBox(width: double.infinity, child: button);
 
     // Always wrapped, ring or not: inserting the box on press would remount the button and cancel the tap still in flight.
     return DecoratedBox(
       decoration: BoxDecoration(borderRadius: context.radii.borderMd, boxShadow: _focusRing(context.colors)),
-      child: button,
+      child: widget.expanded ? SizedBox(width: double.infinity, child: button) : button,
     );
   }
 }
 
-class _GPButtonContent extends StatelessWidget {
+final class _GPButtonContent extends StatelessWidget {
   const _GPButtonContent({
-    required this.label,
     required this.labelStyle,
     required this.leading,
-    required this.trailing,
-    required this.isLoading,
-    required this.iconSize,
-    required this.gap,
     required this.spinnerColor,
+    required this.trailing,
+    required this.label,
+    required this.gap,
+    required this.iconSize,
+    required this.isLoading,
   });
 
-  final String label;
   final TextStyle labelStyle;
   final Widget? leading;
-  final Widget? trailing;
-  final bool isLoading;
-  final double iconSize;
-  final double gap;
   final Color spinnerColor;
+  final Widget? trailing;
+  final String label;
+  final double gap;
+  final double iconSize;
+  final bool isLoading;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: <Widget>[
-      if (isLoading)
-        SizedBox(
-          width: iconSize,
-          height: iconSize,
-          child: CircularProgressIndicator(strokeWidth: 2, color: spinnerColor),
-        )
-      else if (leading != null)
-        IconTheme.merge(
-          data: IconThemeData(size: iconSize),
-          child: leading!,
+  Widget build(BuildContext context) {
+    final leading = this.leading;
+    final trailing = this.trailing;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      spacing: gap,
+      children: [
+        if (isLoading)
+          SizedBox.square(
+            dimension: iconSize,
+            child: CircularProgressIndicator(strokeWidth: 2.0, color: spinnerColor),
+          )
+        else if (leading != null)
+          IconTheme.merge(
+            data: IconThemeData(size: iconSize),
+            child: leading,
+          ),
+        Flexible(
+          child: Text(label, style: labelStyle, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
         ),
-      if (isLoading || leading != null) SizedBox(width: gap),
-      Flexible(
-        child: Text(label, style: labelStyle, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center),
-      ),
-      if (!isLoading && trailing != null) ...<Widget>[
-        SizedBox(width: gap),
-        IconTheme.merge(
-          data: IconThemeData(size: iconSize),
-          child: trailing!,
-        ),
+        if (!isLoading && trailing != null)
+          IconTheme.merge(
+            data: IconThemeData(size: iconSize),
+            child: trailing,
+          ),
       ],
-    ],
-  );
+    );
+  }
 }

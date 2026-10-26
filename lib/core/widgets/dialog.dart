@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/theme/tokens/dimensions.dart';
-import 'package:ghpockit/core/widgets/button.dart';
+
+import '../localization/localization_scope.dart';
+import '../theme/theme_context.dart';
+import '../theme/tokens/dimensions.dart';
+import 'button.dart';
 
 enum GPDialogTone { info, warning, danger }
 
 @immutable
-class GPDialogAction<T> {
-  const GPDialogAction({required this.label, required this.value, this.variant = GPButtonVariant.primary});
+final class GPDialogAction<T> {
+  const GPDialogAction({required this.value, this.variant = GPButtonVariant.primary, required this.label});
 
   /// The way out: tonal, and the value a tap on the scrim or Back also stands for.
-  const GPDialogAction.cancel({required this.label, required this.value}) : variant = GPButtonVariant.tonal;
+  const GPDialogAction.cancel({required this.value, required this.label}) : variant = GPButtonVariant.tonal;
 
-  final String label;
   final T value;
   final GPButtonVariant variant;
+  final String label;
 
   bool get isDestructive => variant == GPButtonVariant.danger;
 }
@@ -23,13 +24,13 @@ class GPDialogAction<T> {
 /// For a decision the user must make before going on, with one or two [actions] listed cancel first. Picking belongs in a sheet, "done" in a
 /// snackbar, a bad field under the field. The scrim and Back close it with null, which callers read as cancel.
 Future<T?> showGPDialog<T>({
-  required BuildContext context,
-  required String title,
   required List<GPDialogAction<T>> actions,
-  String? message,
   Widget? content,
+  required BuildContext context,
   IconData? icon,
   GPDialogTone tone = GPDialogTone.info,
+  String? message,
+  required String title,
 }) {
   assert(actions.isNotEmpty && actions.length <= 2, 'A dialog takes one or two actions; three or more belong in a sheet.');
 
@@ -39,43 +40,45 @@ Future<T?> showGPDialog<T>({
     barrierLabel: context.l10n.widgets.dismiss,
     barrierColor: context.colors.scrim,
     transitionDuration: GPDurationTokens.normal,
-    pageBuilder: (BuildContext context, _, _) => GPDialog<T>(title: title, message: message, content: content, icon: icon, tone: tone, actions: actions),
-    transitionBuilder: (BuildContext context, Animation<double> animation, _, Widget child) {
+    pageBuilder: (_, _, _) => GPDialog(actions: actions, content: content, icon: icon, tone: tone, message: message, title: title),
+    transitionBuilder: (_, animation, _, child) {
       final curved = CurvedAnimation(parent: animation, curve: Curves.easeOut);
       return FadeTransition(
         opacity: curved,
-        child: ScaleTransition(scale: Tween<double>(begin: 0.96, end: 1).animate(curved), child: child),
+        child: ScaleTransition(scale: Tween(begin: 0.96, end: 1.0).animate(curved), child: child),
       );
     },
   );
 }
 
-class GPDialog<T> extends StatelessWidget {
-  const GPDialog({required this.title, required this.actions, this.message, this.content, this.icon, this.tone = GPDialogTone.info, super.key});
+final class GPDialog<T> extends StatelessWidget {
+  const GPDialog({super.key, required this.actions, this.content, this.icon, this.tone = GPDialogTone.info, this.message, required this.title});
 
-  static const double maxWidth = 400;
-
-  final String title;
-  final String? message;
+  final List<GPDialogAction<T>> actions;
 
   /// Under the message: what the decision is about, when a sentence cannot show it (the row a swipe is deleting).
   final Widget? content;
 
   final IconData? icon;
   final GPDialogTone tone;
-  final List<GPDialogAction<T>> actions;
+  final String? message;
+  final String title;
+
+  static const maxWidth = 400.0;
 
   /// Focus starts on cancel when the other choice destroys data, so Enter cannot delete; otherwise on the choice the dialog is asking for.
   int get _initialFocus {
-    final destroys = actions.any((GPDialogAction<T> action) => action.isDestructive);
-    final cancel = actions.indexWhere((GPDialogAction<T> action) => action.variant == GPButtonVariant.tonal);
-    return destroys && cancel >= 0 ? cancel : actions.length - 1;
+    final cancel = actions.indexWhere((action) => action.variant == GPButtonVariant.tonal);
+    return actions.any((action) => action.isDestructive) && cancel >= 0 ? cancel : actions.length - 1;
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
+    final content = this.content;
+    final icon = this.icon;
+    final message = this.message;
     final iconColor = switch (tone) {
       GPDialogTone.info => colors.onSurfaceVariant,
       GPDialogTone.warning => colors.warning,
@@ -106,30 +109,31 @@ class GPDialog<T> extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      if (icon != null) ...<Widget>[
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
-                          child: Icon(icon, size: 24, color: iconColor),
+                    children: [
+                      if (icon != null) ...[
+                        SizedBox.square(
+                          dimension: 40.0,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
+                            child: Icon(icon, size: 24.0, color: iconColor),
+                          ),
                         ),
                         SizedBox(height: spacing.md),
                       ],
                       Text(title, style: context.text.titleLarge.copyWith(color: colors.onSurface)),
-                      if (message != null) ...<Widget>[
+                      if (message != null) ...[
                         SizedBox(height: spacing.sm),
-                        Text(message!, style: context.text.bodyMedium.copyWith(color: colors.onSurfaceVariant)),
+                        Text(message, style: context.text.bodyMedium.copyWith(color: colors.onSurfaceVariant)),
                       ],
-                      if (content != null) ...<Widget>[
+                      if (content != null) ...[
                         SizedBox(height: spacing.smd),
                         DefaultTextStyle.merge(
                           style: context.text.bodyMedium.copyWith(color: colors.onSurface),
-                          child: content!,
+                          child: content,
                         ),
                       ],
                       SizedBox(height: spacing.lg),
-                      _GPDialogActions<T>(actions: actions, initialFocus: _initialFocus),
+                      _GPDialogActions(actions: actions, initialFocus: _initialFocus),
                     ],
                   ),
                 ),
@@ -143,33 +147,21 @@ class GPDialog<T> extends StatelessWidget {
 }
 
 /// One action: full width. Two that both fit half the width: side by side, cancel on the left. Otherwise stacked, the answer on top.
-class _GPDialogActions<T> extends StatelessWidget {
+final class _GPDialogActions<T> extends StatelessWidget {
   const _GPDialogActions({required this.actions, required this.initialFocus});
-
-  /// GPButton medium's horizontal padding, both sides.
-  static const double _buttonPadding = 40;
 
   final List<GPDialogAction<T>> actions;
   final int initialFocus;
 
-  Widget _button(BuildContext context, int index) {
-    final action = actions[index];
-    return GPButton(
-      label: action.label,
-      variant: action.variant,
-      expanded: true,
-      autofocus: index == initialFocus,
-      onPressed: () => Navigator.of(context).pop(action.value),
-    );
-  }
+  /// GPButton medium's horizontal padding, both sides.
+  static const _buttonPadding = 40.0;
 
   bool _fitsSideBySide(BuildContext context, double width) {
-    final gap = context.spacing.smd;
-    final half = (width - gap) / 2;
+    final half = (width - context.spacing.smd) / 2;
     final style = context.text.titleMedium.copyWith(fontWeight: FontWeight.w600);
     final scaler = MediaQuery.textScalerOf(context);
 
-    return actions.every((GPDialogAction<T> action) {
+    return actions.every((action) {
       final painter = TextPainter(
         text: TextSpan(text: action.label, style: style),
         textDirection: Directionality.of(context),
@@ -184,30 +176,43 @@ class _GPDialogActions<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (actions.length == 1) return _button(context, 0);
+    if (actions.length == 1) return _GPDialogButton(action: actions.single, isAutofocused: initialFocus == 0);
 
     final gap = context.spacing.smd;
     return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        if (_fitsSideBySide(context, constraints.maxWidth)) {
-          return Row(
-            children: <Widget>[
-              Expanded(child: _button(context, 0)),
-              SizedBox(width: gap),
-              Expanded(child: _button(context, 1)),
-            ],
-          );
-        }
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (final index in List<int>.generate(actions.length, (int i) => i).reversed) ...<Widget>[
-              _button(context, index),
-              if (index != 0) SizedBox(height: gap),
-            ],
-          ],
-        );
-      },
+      builder: (_, constraints) => _fitsSideBySide(context, constraints.maxWidth)
+          ? Row(
+              spacing: gap,
+              children: [
+                for (var index = 0; index < actions.length; index++)
+                  Expanded(
+                    child: _GPDialogButton(action: actions[index], isAutofocused: index == initialFocus),
+                  ),
+              ],
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              spacing: gap,
+              children: [
+                for (var index = actions.length - 1; index >= 0; index--) _GPDialogButton(action: actions[index], isAutofocused: index == initialFocus),
+              ],
+            ),
     );
   }
+}
+
+final class _GPDialogButton<T> extends StatelessWidget {
+  const _GPDialogButton({required this.action, required this.isAutofocused});
+
+  final GPDialogAction<T> action;
+  final bool isAutofocused;
+
+  @override
+  Widget build(BuildContext context) => GPButton(
+    variant: action.variant,
+    label: action.label,
+    autofocus: isAutofocused,
+    expanded: true,
+    onPressed: () => Navigator.of(context).pop(action.value),
+  );
 }

@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghpockit/core/localization/locale.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/core/money/money_formatter.dart';
-import 'package:ghpockit/core/widgets/text_field.dart';
+
+import '../localization/locale.dart';
+import '../localization/localization_scope.dart';
+import '../money/money.dart';
+import '../money/money_formatter.dart';
+import 'text_field.dart';
 
 /// Cash-register entry (ADR-0015): the digits typed are the minor units, so `1250` in USD is `12.50` and nothing is ever parsed from a decimal separator.
 /// Every edit re-renders the whole text; [GPMoneyField] keeps the caret at the end, which is what makes a typed digit an appended one.
-class GPMoneyInputFormatter extends TextInputFormatter {
-  GPMoneyInputFormatter({required this.currencyCode, required GPLocale locale}) : _formatter = GPMoneyFormatter(locale);
+final class GPMoneyInputFormatter extends TextInputFormatter {
+  GPMoneyInputFormatter({required GPLocale locale, required this.currencyCode}) : _formatter = GPMoneyFormatter(locale);
 
-  /// 15 digits stay exact in a JS double and far inside Postgres `bigint` (ADR-0007), and no wallet holds 10^15 dong.
-  static const int maxDigits = 15;
-
-  final String currencyCode;
   final GPMoneyFormatter _formatter;
+  final String currencyCode;
 
   /// Null for an empty field, which is "nothing typed", not zero.
   static int? minorUnitsOf(String text) {
@@ -23,7 +21,14 @@ class GPMoneyInputFormatter extends TextInputFormatter {
     return digits.isEmpty ? null : int.parse(digits);
   }
 
-  String format(int minorUnits) => _formatter.format(Money(minorUnits, currencyCode), withSymbol: false);
+  /// Leading zeros dropped, so `0` then `5` reads 5 rather than growing a `05`.
+  static String _digitsOf(String text) => text.replaceAll(_nonDigits, '').replaceFirst(_leadingZeros, '');
+
+  /// 15 digits stay exact in a JS double and far inside Postgres `bigint` (ADR-0007), and no wallet holds 10^15 dong.
+  static const maxDigits = 15;
+
+  static final _nonDigits = RegExp('[^0-9]');
+  static final _leadingZeros = RegExp('^0+');
 
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
@@ -38,50 +43,47 @@ class GPMoneyInputFormatter extends TextInputFormatter {
     );
   }
 
-  /// Leading zeros dropped, so `0` then `5` reads 5 rather than growing a `05`.
-  static String _digitsOf(String text) => text.replaceAll(_nonDigits, '').replaceFirst(_leadingZeros, '');
-
-  static final RegExp _nonDigits = RegExp('[^0-9]');
-  static final RegExp _leadingZeros = RegExp('^0+');
+  String format(int minorUnits) => _formatter.format(Money(minorUnits, currencyCode), withSymbol: false);
 }
 
 /// A magnitude only: the caller owns the sign (a transaction's type, an account's "owed" switch).
-class GPMoneyField extends StatefulWidget {
-  const GPMoneyField({required this.currencyCode, required this.onChanged, this.initialMinorUnits, this.label, this.errorText, this.autofocus = false, this.focusNode, super.key});
+final class GPMoneyField extends StatefulWidget {
+  const GPMoneyField({
+    super.key,
+    this.focusNode,
+    required this.currencyCode,
+    this.errorText,
+    this.label,
+    this.initialMinorUnits,
+    this.autofocus = false,
+    required this.onChanged,
+  });
 
+  final FocusNode? focusNode;
   final String currencyCode;
+  final String? errorText;
+  final String? label;
+  final int? initialMinorUnits;
+  final bool autofocus;
 
   /// Null while the field is empty.
-  final ValueChanged<int?> onChanged;
-
-  final int? initialMinorUnits;
-  final String? label;
-  final String? errorText;
-  final bool autofocus;
-  final FocusNode? focusNode;
+  final void Function(int? minorUnits) onChanged;
 
   @override
   State<GPMoneyField> createState() => _GPMoneyFieldState();
 }
 
-class _GPMoneyFieldState extends State<GPMoneyField> {
-  final TextEditingController _controller = TextEditingController();
+final class _GPMoneyFieldState extends State<GPMoneyField> {
+  final _controller = TextEditingController();
+
   GPLocale? _locale;
+
+  GPMoneyInputFormatter get _formatter => GPMoneyInputFormatter(locale: _locale!, currencyCode: widget.currencyCode);
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_keepCaretAtEnd);
-  }
-
-  /// A caret left mid-number would take the next digit there, and the formatter, which only sees text, cannot tell: `12.500` with the caret after the 5,
-  /// backspace, then 8, would save 12,008. Selection-only changes never reach a formatter, so this listens to the controller instead.
-  void _keepCaretAtEnd() {
-    final end = _controller.text.length;
-    final selection = _controller.selection;
-    if (selection.isCollapsed && selection.baseOffset == end) return;
-
-    _controller.selection = TextSelection.collapsed(offset: end);
+    _controller.addListener(_handleControllerChange);
   }
 
   @override
@@ -108,12 +110,22 @@ class _GPMoneyFieldState extends State<GPMoneyField> {
   @override
   void dispose() {
     _controller
-      ..removeListener(_keepCaretAtEnd)
+      ..removeListener(_handleControllerChange)
       ..dispose();
     super.dispose();
   }
 
-  GPMoneyInputFormatter get _formatter => GPMoneyInputFormatter(currencyCode: widget.currencyCode, locale: _locale!);
+  /// A caret left mid-number would take the next digit there, and the formatter, which only sees text, cannot tell: `12.500` with the caret after the 5,
+  /// backspace, then 8, would save 12,008. Selection-only changes never reach a formatter, so this listens to the controller instead.
+  void _handleControllerChange() {
+    final end = _controller.text.length;
+    final selection = _controller.selection;
+    if (selection.isCollapsed && selection.baseOffset == end) return;
+
+    _controller.selection = TextSelection.collapsed(offset: end);
+  }
+
+  void _handleTextChange(String text) => widget.onChanged.call(GPMoneyInputFormatter.minorUnitsOf(text));
 
   void _render(int? minorUnits) {
     final text = minorUnits == null ? '' : _formatter.format(minorUnits);
@@ -127,24 +139,26 @@ class _GPMoneyFieldState extends State<GPMoneyField> {
   Widget build(BuildContext context) {
     final formatter = _formatter;
     final affixes = GPMoneyFormatter(_locale!).symbolAffixes(widget.currencyCode);
+    // The field spaces the symbol itself; the formatter's no-break space would double the gap.
+    final prefix = affixes.prefix.trim();
+    final suffix = affixes.suffix.trim();
 
     return GPTextField(
+      inputFormatters: [formatter],
       controller: _controller,
       focusNode: widget.focusNode,
-      autofocus: widget.autofocus,
-      label: widget.label,
-      hintText: formatter.format(0),
-      errorText: widget.errorText,
       keyboardType: TextInputType.number,
-      inputFormatters: <TextInputFormatter>[formatter],
+      textAlign: TextAlign.end,
+      errorText: widget.errorText,
+      hintText: formatter.format(0),
+      label: widget.label,
+      prefixText: prefix.isEmpty ? null : prefix,
+      suffixText: suffix.isEmpty ? null : suffix,
+      autofocus: widget.autofocus,
       // No tap-to-place caret, no selection handles, no paste menu: there is nowhere but the end to put a digit.
       enableInteractiveSelection: false,
-      textAlign: TextAlign.end,
       tabularFigures: true,
-      // The field spaces the symbol itself; the formatter's no-break space would double the gap.
-      prefixText: affixes.prefix.trim().isEmpty ? null : affixes.prefix.trim(),
-      suffixText: affixes.suffix.trim().isEmpty ? null : affixes.suffix.trim(),
-      onChanged: (String text) => widget.onChanged(GPMoneyInputFormatter.minorUnitsOf(text)),
+      onChanged: _handleTextChange,
     );
   }
 }

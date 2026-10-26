@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
+
+import '../theme/theme_context.dart';
 
 /// A save that was refused, above the submit button. Announced as it appears, since focus stays on the button.
-class GPFormFailureBanner extends StatelessWidget {
-  const GPFormFailureBanner({required this.message, super.key});
+final class GPFormFailureBanner extends StatelessWidget {
+  const GPFormFailureBanner({super.key, required this.message});
 
   final String message;
 
@@ -19,9 +20,9 @@ class GPFormFailureBanner extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: spacing.md, vertical: spacing.smd),
           child: Row(
-            children: <Widget>[
-              Icon(Icons.error_outline, size: 20, color: colors.onDanger),
-              SizedBox(width: spacing.smd),
+            spacing: spacing.smd,
+            children: [
+              Icon(Icons.error_outline, size: 20.0, color: colors.onDanger),
               Expanded(
                 child: Text(message, style: context.text.bodyMedium.copyWith(color: colors.onDanger)),
               ),

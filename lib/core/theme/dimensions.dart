@@ -1,11 +1,12 @@
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/tokens/dimensions.dart';
+import 'tokens/dimensions.dart';
 
 /// A `ThemeExtension`, not constants, so a density setting can hand down another scale without touching a widget (ADR-0005).
 @immutable
-class GPSpacing extends ThemeExtension<GPSpacing> {
+// Fields in scale order, not by name: the order is the scale.
+final class GPSpacing extends ThemeExtension<GPSpacing> {
   const GPSpacing({required this.xxs, required this.xs, required this.sm, required this.smd, required this.md, required this.lg, required this.xl, required this.xxl});
 
   const GPSpacing.standard()
@@ -57,7 +58,8 @@ class GPSpacing extends ThemeExtension<GPSpacing> {
 }
 
 @immutable
-class GPRadii extends ThemeExtension<GPRadii> {
+// Fields in scale order, not by name.
+final class GPRadii extends ThemeExtension<GPRadii> {
   const GPRadii({required this.sm, required this.md, required this.lg, required this.xl, required this.full});
 
   const GPRadii.standard() : sm = GPRadiusTokens.sm, md = GPRadiusTokens.md, lg = GPRadiusTokens.lg, xl = GPRadiusTokens.xl, full = GPRadiusTokens.full;

@@ -1,93 +1,96 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/widgets/field.dart';
-import 'package:ghpockit/core/widgets/utf16_length_limit.dart';
 
-class GPTextField extends StatefulWidget {
+import '../localization/localization_scope.dart';
+import '../theme/theme_context.dart';
+import 'field.dart';
+import 'utf16_length_limit.dart';
+
+final class GPTextField extends StatefulWidget {
   const GPTextField({
+    super.key,
+    this.inputFormatters,
     this.controller,
+    this.focusNode,
+    this.keyboardType,
+    this.leading,
+    this.textAlign = TextAlign.start,
+    this.textCapitalization = TextCapitalization.none,
+    this.textInputAction,
+    this.errorText,
+    this.helperText,
+    this.hintText,
     this.initialValue,
     this.label,
-    this.hintText,
-    this.helperText,
-    this.errorText,
-    this.leading,
     this.prefixText,
     this.suffixText,
     this.maxLength,
+    this.maxLines = 1,
+    this.autofocus = false,
     this.clearable = false,
     this.enabled = true,
-    this.autofocus = false,
-    this.focusNode,
-    this.keyboardType,
-    this.textInputAction,
-    this.textCapitalization = TextCapitalization.none,
-    this.inputFormatters,
-    this.textAlign = TextAlign.start,
-    this.tabularFigures = false,
-    this.maxLines = 1,
     this.enableInteractiveSelection = true,
+    this.tabularFigures = false,
     this.onChanged,
     this.onSubmitted,
-    super.key,
   }) : assert(controller == null || initialValue == null, 'Pass a controller or an initialValue, not both.');
 
+  final List<TextInputFormatter>? inputFormatters;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final TextInputType? keyboardType;
+  final IconData? leading;
+  final TextAlign textAlign;
+  final TextCapitalization textCapitalization;
+  final TextInputAction? textInputAction;
+  final String? errorText;
+  final String? helperText;
+  final String? hintText;
 
   /// Read once, when the field builds its own controller.
   final String? initialValue;
 
   final String? label;
-  final String? hintText;
-  final String? helperText;
-  final String? errorText;
-  final IconData? leading;
 
   /// Before and after the text, in the hint color: a currency symbol, a unit.
   final String? prefixText;
+
   final String? suffixText;
 
   /// In UTF-16 code units, the unit the entities count in; also turns on the counter.
   final int? maxLength;
 
+  /// Null grows with the text.
+  final int? maxLines;
+
+  final bool autofocus;
+
   /// Shows a clear button while focused and not empty.
   final bool clearable;
 
   final bool enabled;
-  final bool autofocus;
-  final FocusNode? focusNode;
-  final TextInputType? keyboardType;
-  final TextInputAction? textInputAction;
-  final TextCapitalization textCapitalization;
-  final List<TextInputFormatter>? inputFormatters;
-  final TextAlign textAlign;
-  final bool tabularFigures;
-
-  /// Null grows with the text.
-  final int? maxLines;
-
   final bool enableInteractiveSelection;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
+  final bool tabularFigures;
+  final void Function(String text)? onChanged;
+  final void Function(String text)? onSubmitted;
 
   @override
   State<GPTextField> createState() => _GPTextFieldState();
 }
 
-class _GPTextFieldState extends State<GPTextField> {
+final class _GPTextFieldState extends State<GPTextField> {
   TextEditingController? _ownController;
   FocusNode? _ownFocusNode;
 
   TextEditingController get _controller => widget.controller ?? (_ownController ??= TextEditingController(text: widget.initialValue));
+
   FocusNode get _focusNode => widget.focusNode ?? (_ownFocusNode ??= FocusNode());
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_rebuild);
-    _focusNode.addListener(_rebuild);
+    _controller.addListener(_handleChange);
+    _focusNode.addListener(_handleChange);
   }
 
   @override
@@ -95,27 +98,27 @@ class _GPTextFieldState extends State<GPTextField> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.controller != widget.controller) {
-      (oldWidget.controller ?? _ownController)?.removeListener(_rebuild);
-      _controller.addListener(_rebuild);
+      (oldWidget.controller ?? _ownController)?.removeListener(_handleChange);
+      _controller.addListener(_handleChange);
     }
     if (oldWidget.focusNode != widget.focusNode) {
-      (oldWidget.focusNode ?? _ownFocusNode)?.removeListener(_rebuild);
-      _focusNode.addListener(_rebuild);
+      (oldWidget.focusNode ?? _ownFocusNode)?.removeListener(_handleChange);
+      _focusNode.addListener(_handleChange);
     }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_rebuild);
-    _focusNode.removeListener(_rebuild);
+    _controller.removeListener(_handleChange);
+    _focusNode.removeListener(_handleChange);
     _ownController?.dispose();
     _ownFocusNode?.dispose();
     super.dispose();
   }
 
-  void _rebuild() => setState(() {});
+  void _handleChange() => setState(() {});
 
-  void _clear() {
+  void _handleClear() {
     _controller.clear();
     widget.onChanged?.call('');
   }
@@ -125,6 +128,10 @@ class _GPTextFieldState extends State<GPTextField> {
     final colors = context.colors;
     final text = context.text;
     final enabled = widget.enabled;
+    final leading = widget.leading;
+    final prefixText = widget.prefixText;
+    final suffixText = widget.suffixText;
+    final maxLength = widget.maxLength;
     final state = !enabled
         ? GPFieldState.disabled
         : widget.errorText != null
@@ -132,18 +139,14 @@ class _GPTextFieldState extends State<GPTextField> {
         : _focusNode.hasFocus
         ? GPFieldState.active
         : GPFieldState.idle;
-    final showClear = widget.clearable && enabled && _focusNode.hasFocus && _controller.text.isNotEmpty;
-    final maxLength = widget.maxLength;
-    final style = text.bodyLarge.copyWith(
-      color: enabled ? colors.onSurface : colors.onSurfaceVariant,
-      fontFeatures: widget.tabularFigures ? const <FontFeature>[FontFeature.tabularFigures()] : null,
-    );
+    final showsClear = widget.clearable && enabled && _focusNode.hasFocus && _controller.text.isNotEmpty;
+    final affixStyle = text.bodyLarge.copyWith(color: colors.onSurfaceVariant);
 
     return GPField(
-      label: widget.label,
-      helperText: widget.helperText,
-      errorText: widget.errorText,
       counterText: maxLength == null ? null : '${_controller.text.length}/$maxLength',
+      errorText: widget.errorText,
+      helperText: widget.helperText,
+      label: widget.label,
       mergeSemantics: true,
       child: GestureDetector(
         // The box is taller than the line of text; a tap on its padding still lands in the field.
@@ -151,13 +154,13 @@ class _GPTextFieldState extends State<GPTextField> {
         child: GPFieldBox(
           state: state,
           child: Row(
-            children: <Widget>[
-              if (widget.leading != null) ...<Widget>[
-                Icon(widget.leading, size: 20, color: colors.onSurfaceVariant),
+            children: [
+              if (leading != null) ...[
+                Icon(leading, size: 20.0, color: colors.onSurfaceVariant),
                 SizedBox(width: context.spacing.smd),
               ],
-              if (widget.prefixText != null) ...<Widget>[
-                Text(widget.prefixText!, style: text.bodyLarge.copyWith(color: colors.onSurfaceVariant)),
+              if (prefixText != null) ...[
+                Text(prefixText, style: affixStyle),
                 SizedBox(width: context.spacing.xs),
               ],
               Expanded(
@@ -172,33 +175,36 @@ class _GPTextFieldState extends State<GPTextField> {
                   textAlign: widget.textAlign,
                   maxLines: widget.maxLines,
                   enableInteractiveSelection: widget.enableInteractiveSelection,
-                  inputFormatters: <TextInputFormatter>[...?widget.inputFormatters, if (maxLength != null) GPUtf16LengthLimitingFormatter(maxLength)],
-                  style: style,
+                  inputFormatters: [...?widget.inputFormatters, if (maxLength != null) GPUtf16LengthLimitingFormatter(maxLength)],
+                  style: text.bodyLarge.copyWith(
+                    color: enabled ? colors.onSurface : colors.onSurfaceVariant,
+                    fontFeatures: widget.tabularFigures ? const [FontFeature.tabularFigures()] : null,
+                  ),
                   cursorColor: colors.accentInk,
                   onTapOutside: (_) => _focusNode.unfocus(),
                   onChanged: widget.onChanged,
                   onSubmitted: widget.onSubmitted,
+                  // 52 of content plus a 2px edge on each side is the box's 56, so the active edge does not grow it.
                   decoration: InputDecoration.collapsed(
                     hintText: widget.hintText,
-                    hintStyle: text.bodyLarge.copyWith(color: colors.onSurfaceVariant),
-                    // 52 of content plus a 2px edge on each side is the box's 56, so the active edge does not grow it.
-                  ).copyWith(isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 14)),
+                    hintStyle: affixStyle,
+                  ).copyWith(isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 14.0)),
                 ),
               ),
-              if (widget.suffixText != null) ...<Widget>[
+              if (suffixText != null) ...[
                 SizedBox(width: context.spacing.smd),
-                Text(widget.suffixText!, style: text.bodyLarge.copyWith(color: colors.onSurfaceVariant)),
+                Text(suffixText, style: affixStyle),
               ],
-              if (showClear)
+              if (showsClear)
                 Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 4),
+                  padding: const EdgeInsetsDirectional.only(start: 4.0),
                   child: SizedBox.square(
-                    dimension: 40,
+                    dimension: 40.0,
                     child: IconButton(
-                      onPressed: _clear,
+                      onPressed: _handleClear,
                       tooltip: context.l10n.widgets.clearText,
                       padding: EdgeInsets.zero,
-                      iconSize: 20,
+                      iconSize: 20.0,
                       color: colors.onSurfaceVariant,
                       icon: const Icon(Icons.cancel_outlined),
                     ),

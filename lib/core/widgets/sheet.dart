@@ -1,30 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
+
+import '../localization/localization_scope.dart';
+import '../theme/theme_context.dart';
 
 /// In Pockit a sheet is for picking and a dialog for deciding. A swipe down, the scrim or Back closes it with null: the caller keeps its old value.
-Future<T?> showGPSheet<T>({required BuildContext context, required WidgetBuilder builder, String? title}) => showModalBottomSheet<T>(
+Future<T?> showGPSheet<T>({required BuildContext context, String? title, required WidgetBuilder builder}) => showModalBottomSheet<T>(
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
   backgroundColor: Colors.transparent,
-  elevation: 0,
+  elevation: 0.0,
   barrierColor: context.colors.scrim,
   barrierLabel: context.l10n.widgets.dismiss,
-  builder: (BuildContext context) => GPSheet(title: title, child: builder(context)),
+  builder: (context) => GPSheet(title: title, child: builder.call(context)),
 );
 
-/// The sheet's own chrome: surface, top corners xl, a drag handle and an optional title. Light lifts it with a shadow; dark edges it in outline.
-class GPSheet extends StatelessWidget {
-  const GPSheet({required this.child, this.title, super.key});
+/// Light lifts it with a shadow; dark edges it in outline.
+final class GPSheet extends StatelessWidget {
+  const GPSheet({super.key, this.title, required this.child});
 
-  final Widget child;
   final String? title;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final spacing = context.spacing;
     final radius = Radius.circular(context.radii.xl);
+    final title = this.title;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -32,32 +35,32 @@ class GPSheet extends StatelessWidget {
         borderRadius: BorderRadius.vertical(top: radius),
         border: context.isDark ? Border.all(color: colors.outline) : null,
         // extraLarge cast upward, off the bottom edge it sits on. Dark's list is empty.
-        boxShadow: <BoxShadow>[
+        boxShadow: [
           for (final shadow in context.shadows.extraLarge) BoxShadow(color: shadow.color, blurRadius: shadow.blurRadius, spreadRadius: shadow.spreadRadius, offset: -shadow.offset),
         ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(context.spacing.sm, context.spacing.sm, context.spacing.sm, context.spacing.lg),
+          padding: EdgeInsets.fromLTRB(spacing.sm, spacing.sm, spacing.sm, spacing.lg),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
+            children: [
               Center(
                 child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: EdgeInsets.only(top: context.spacing.xs, bottom: context.spacing.smd),
+                  width: 36.0,
+                  height: 4.0,
+                  margin: EdgeInsets.only(top: spacing.xs, bottom: spacing.smd),
                   decoration: BoxDecoration(color: colors.outline, borderRadius: context.radii.borderFull),
                 ),
               ),
               if (title != null)
                 Padding(
-                  padding: EdgeInsets.fromLTRB(context.spacing.md, context.spacing.xs, context.spacing.md, context.spacing.smd),
+                  padding: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, spacing.smd),
                   child: Semantics(
                     header: true,
-                    child: Text(title!, style: context.text.titleLarge.copyWith(color: colors.onSurface)),
+                    child: Text(title, style: context.text.titleLarge.copyWith(color: colors.onSurface)),
                   ),
                 ),
               Flexible(child: child),

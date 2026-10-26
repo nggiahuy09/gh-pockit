@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/tokens/shadows.dart';
+import 'tokens/shadows.dart';
 
 @immutable
-class GPShadows extends ThemeExtension<GPShadows> {
+// Fields in scale order, not by name.
+final class GPShadows extends ThemeExtension<GPShadows> {
   const GPShadows({required this.small, required this.medium, required this.large, required this.extraLarge});
 
   const GPShadows.light() : small = GPShadowTokens.small, medium = GPShadowTokens.medium, large = GPShadowTokens.large, extraLarge = GPShadowTokens.extraLarge;

@@ -13,7 +13,7 @@ void main() {
   setUp(() async => en = await localizationFor(GPLocale.en));
 
   group('GPSwitch', () {
-    testWidgets('a tap reports the opposite value', (WidgetTester tester) async {
+    testWidgets('a tap reports the opposite value', (tester) async {
       final changes = <bool>[];
       await pumpOnPhone(
         tester,
@@ -23,20 +23,20 @@ void main() {
 
       await tester.tap(find.byType(GPSwitch));
 
-      expect(changes, <bool>[true]);
+      expect(changes, [true]);
     });
 
-    testWidgets('is 52×32', (WidgetTester tester) async {
+    testWidgets('is 52×32', (tester) async {
       await pumpOnPhone(
         tester,
         localization: en,
         child: Center(child: GPSwitch(value: true, onChanged: (_) {})),
       );
 
-      expect(tester.getSize(find.byType(GPSwitchTrack)), const Size(52, 32));
+      expect(tester.getSize(find.byType(GPSwitchTrack)), const Size(52.0, 32.0));
     });
 
-    testWidgets('ignores taps when disabled', (WidgetTester tester) async {
+    testWidgets('ignores taps when disabled', (tester) async {
       await pumpOnPhone(tester, localization: en, child: const GPSwitch(value: false, onChanged: null));
 
       await tester.tap(find.byType(GPSwitch));
@@ -47,21 +47,21 @@ void main() {
   });
 
   group('GPSwitchRow', () {
-    testWidgets('a tap anywhere on the row toggles, not just on the switch', (WidgetTester tester) async {
+    testWidgets('a tap anywhere on the row toggles, not just on the switch', (tester) async {
       final changes = <bool>[];
       await pumpOnPhone(
         tester,
         localization: en,
-        child: GPSwitchRow(title: 'This is a debt', subtitle: 'Credit card, loan', value: true, onChanged: changes.add),
+        child: GPSwitchRow(subtitle: 'Credit card, loan', title: 'This is a debt', value: true, onChanged: changes.add),
       );
 
       await tester.tap(find.text('Credit card, loan'));
 
-      expect(changes, <bool>[false]);
-      expect(tester.getSize(find.byType(GPSwitchRow)).height, greaterThanOrEqualTo(56));
+      expect(changes, [false]);
+      expect(tester.getSize(find.byType(GPSwitchRow)).height, greaterThanOrEqualTo(56.0));
     });
 
-    testWidgets('is one switch to a screen reader, named by its title', (WidgetTester tester) async {
+    testWidgets('is one switch to a screen reader, named by its title', (tester) async {
       final semantics = tester.ensureSemantics();
       await pumpOnPhone(
         tester,

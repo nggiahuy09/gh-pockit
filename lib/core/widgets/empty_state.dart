@@ -1,34 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/widgets/button.dart';
+
+import '../theme/theme_context.dart';
+import 'button.dart';
 
 /// Also the error state: pass the failure's message as [message] and a retry as [onAction].
-class GPEmptyState extends StatelessWidget {
-  const GPEmptyState({required this.icon, required this.title, this.message, this.actionLabel, this.onAction, super.key})
-    : assert(
-        (actionLabel == null) == (onAction == null),
-        'GPEmptyState needs both actionLabel and onAction, or neither — a labelled button that does nothing is worse than no button.',
-      );
+final class GPEmptyState extends StatelessWidget {
+  const GPEmptyState({super.key, required this.icon, this.actionLabel, this.message, required this.title, this.onAction})
+    : assert((actionLabel == null) == (onAction == null), 'GPEmptyState needs both actionLabel and onAction, or neither: a labelled button that does nothing is worse than none.');
 
   final Widget icon;
-  final String title;
-  final String? message;
   final String? actionLabel;
-  final VoidCallback? onAction;
+  final String? message;
+  final String title;
+  final void Function()? onAction;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
+    final actionLabel = this.actionLabel;
+    final message = this.message;
 
     return Center(
       child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: spacing.xl, vertical: spacing.lg),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
+          children: [
             IconTheme.merge(
-              data: IconThemeData(size: 40, color: colors.onSurfaceVariant),
+              data: IconThemeData(size: 40.0, color: colors.onSurfaceVariant),
               child: icon,
             ),
             SizedBox(height: spacing.md),
@@ -37,17 +37,17 @@ class GPEmptyState extends StatelessWidget {
               style: context.text.titleLarge.copyWith(color: colors.onBackground),
               textAlign: TextAlign.center,
             ),
-            if (message != null) ...<Widget>[
+            if (message != null) ...[
               SizedBox(height: spacing.sm),
               Text(
-                message!,
+                message,
                 style: context.text.bodyMedium.copyWith(color: colors.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
             ],
-            if (onAction != null) ...<Widget>[
+            if (actionLabel != null) ...[
               SizedBox(height: spacing.lg),
-              GPButton(label: actionLabel!, onPressed: onAction, variant: GPButtonVariant.tonal),
+              GPButton(variant: GPButtonVariant.tonal, label: actionLabel, onPressed: onAction),
             ],
           ],
         ),
