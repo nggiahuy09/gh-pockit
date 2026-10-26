@@ -1,14 +1,22 @@
-import 'package:ghpockit/core/localization/locale.dart';
-import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
+import '../locale.dart';
+import '../locale_base/locale_base.dart';
 
 part 'locale_en_root.dart';
+
 part 'locale_en_home.dart';
+
 part 'locale_en_accounts.dart';
+
 part 'locale_en_transactions.dart';
+
 part 'locale_en_budgets.dart';
+
 part 'locale_en_categories.dart';
+
 part 'locale_en_settings.dart';
+
 part 'locale_en_error.dart';
+
 part 'locale_en_widgets.dart';
 
 final class GPLocaleEn implements GPLocaleBase {

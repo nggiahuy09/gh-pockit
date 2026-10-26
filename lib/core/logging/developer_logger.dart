@@ -1,20 +1,12 @@
 import 'dart:developer' as developer;
 
-import 'package:ghpockit/core/logging/app_logger.dart';
+import 'app_logger.dart';
 
 /// `developer.log`'s shape, injectable because a test cannot read the developer log back.
-typedef GPLogSink =
-    void Function(
-      String message, {
-      DateTime? time,
-      String name,
-      int level,
-      Object? error,
-      StackTrace? stackTrace,
-    });
+typedef GPLogSink = void Function(String message, {DateTime? time, String name, int level, Object? error, StackTrace? stackTrace});
 
-class GPDeveloperLogger extends GPAppLogger {
-  const GPDeveloperLogger({required super.clock, this.minLevel = GPLogLevel.info, GPLogSink sink = developer.log}) : _sink = sink;
+final class GPDeveloperLogger extends GPAppLogger {
+  const GPDeveloperLogger(super.clock, {this.minLevel = GPLogLevel.info, GPLogSink sink = developer.log}) : _sink = sink;
 
   /// The default behaves like release; DI lowers it to `debug` in debug builds.
   final GPLogLevel minLevel;
@@ -25,7 +17,7 @@ class GPDeveloperLogger extends GPAppLogger {
   void write(GPLogRecord record) {
     if (!record.level.isAtLeast(minLevel)) return;
 
-    _sink(
+    _sink.call(
       record.fields.isEmpty ? record.message : '${record.message} ${record.fields}',
       time: record.timestamp,
       name: 'pockit.${record.level.name}',

@@ -20,13 +20,11 @@ void main() {
   setUp(() {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
     clock = FakeClock();
-    logger = RecordingLogger(clock: clock);
-    store = GPDriftLocaleStore(database: db, clock: clock, logger: logger);
+    logger = RecordingLogger(clock);
+    store = GPDriftLocaleStore(clock: clock, database: db, logger: logger);
   });
 
-  tearDown(() async {
-    await db.close();
-  });
+  tearDown(() => db.close());
 
   test('returns null when the user has never chosen', () async {
     expect(await store.read(), isNull);
@@ -36,7 +34,7 @@ void main() {
     await store.write(GPLocale.vi);
 
     // A second instance stands in for the next launch: nothing is cached in the object.
-    final afterRestart = GPDriftLocaleStore(database: db, clock: clock, logger: logger);
+    final afterRestart = GPDriftLocaleStore(clock: clock, database: db, logger: logger);
 
     expect(await afterRestart.read(), GPLocale.vi);
   });
@@ -72,10 +70,8 @@ void main() {
   test('GPLocalization boots into the stored language rather than the device one', () async {
     await store.write(GPLocale.vi);
 
-    final localization = GPLocalization(
-      store: GPDriftLocaleStore(database: db, clock: clock, logger: logger),
-    );
-    await localization.init(deviceLocale: const Locale('en'));
+    final localization = GPLocalization(GPDriftLocaleStore(clock: clock, database: db, logger: logger));
+    await localization.init(const Locale('en'));
 
     expect(localization.locale, GPLocale.vi);
     expect(localization.isExplicit, isTrue);

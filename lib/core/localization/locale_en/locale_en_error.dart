@@ -67,5 +67,5 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get routeNotFoundTitle => 'Page not found';
 
   @override
-  String get routeNotFoundMessage => 'That link does not point anywhere in Pockit.';
+  String get routeNotFoundBody => 'That link does not point anywhere in Pockit.';
 }

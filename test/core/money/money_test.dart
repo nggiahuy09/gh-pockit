@@ -90,13 +90,13 @@ void main() {
     });
 
     test('the mismatch error is an Error, not an Exception', () {
-      expect(MoneyCurrencyMismatchError('VND', 'USD'), isA<Error>());
-      expect(MoneyCurrencyMismatchError('VND', 'USD'), isNot(isA<Exception>()));
+      expect(MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD'), isA<Error>());
+      expect(MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD'), isNot(isA<Exception>()));
     });
 
     test('the mismatch error names both currencies and no amounts', () {
       // Golden rule 9: printable, so no amounts.
-      final error = MoneyCurrencyMismatchError('VND', 'USD').toString();
+      final error = MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD').toString();
 
       expect(error, contains('VND'));
       expect(error, contains('USD'));

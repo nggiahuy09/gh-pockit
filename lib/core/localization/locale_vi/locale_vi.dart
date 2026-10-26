@@ -1,14 +1,22 @@
-import 'package:ghpockit/core/localization/locale.dart';
-import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
+import '../locale.dart';
+import '../locale_base/locale_base.dart';
 
 part 'locale_vi_root.dart';
+
 part 'locale_vi_home.dart';
+
 part 'locale_vi_accounts.dart';
+
 part 'locale_vi_transactions.dart';
+
 part 'locale_vi_budgets.dart';
+
 part 'locale_vi_categories.dart';
+
 part 'locale_vi_settings.dart';
+
 part 'locale_vi_error.dart';
+
 part 'locale_vi_widgets.dart';
 
 final class GPLocaleVi implements GPLocaleBase {

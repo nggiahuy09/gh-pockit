@@ -1,18 +1,14 @@
 part of 'locale_base.dart';
 
-/// Strings owned by the shared widgets in `core/widgets/`, not by any feature.
 abstract class GPLocaleBaseWidgets {
   const GPLocaleBaseWidgets();
 
   GPLocaleBaseWidgetsDatePicker get datePicker;
 
-  /// The text field's clear button.
   String get clearText;
 
-  /// The scrim behind a sheet, read out as a button.
   String get dismiss;
 
-  /// The remove button on a filter chip.
   String removeFilter(String label);
 }
 
@@ -40,12 +36,11 @@ abstract class GPLocaleBaseWidgetsDatePicker {
 
   /// [month] is 1–12.
   String monthName(int month);
-  String monthYear(int month, int year);
+  String monthYear({required int month, required int year});
 
-  /// The month button's label for a screen reader, in the day grid and in the month grid.
-  String chooseMonth(int month, int year);
+  String chooseMonth({required int month, required int year});
   String backToDays(int year);
 
   /// Both ends are local dates; the start's year is left out, as the field only ever shows recent ranges.
-  String range(DateTime start, DateTime end);
+  String range({required DateTime end, required DateTime start});
 }

@@ -4,45 +4,64 @@ abstract class GPLocaleBaseTransactions {
   const GPLocaleBaseTransactions();
 
   String get title;
+
   String get typeExpense;
+
   String get typeIncome;
+
   String get typeTransfer;
+
   String get today;
+
   String get yesterday;
+
   String get add;
+
   String get edit;
+
   String get emptyTitle;
-  String get emptyMessage;
-  String get errorMessage;
-  String unreadable(int count);
+
+  String get emptyBody;
+
+  String get errorBody;
+
   String get loading;
+
   String get loadingMore;
+
   String get fieldType;
+
   String get fieldAmount;
+
   String get fieldAccount;
 
-  /// A transfer's two accounts; [noDestinationMessage] when no account can be the second.
   String get fieldFromAccount;
+
   String get fieldToAccount;
+
   String get noDestinationMessage;
+
   String get fieldCategory;
+
   String get fieldDate;
+
   String get fieldNote;
 
-  /// A transaction with no category, or one whose category was deleted (ADR-0010).
   String get uncategorised;
 
   String get save;
+
   String get delete;
 
-  /// Asked before a swipe deletes; the body names the row (ADR-0017).
   String get deleteConfirmTitle;
 
-  /// The snackbar after a delete; [undo] is its action (ADR-0017).
   String get deleted;
+
   String get undo;
 
-  /// The form's empty state: nothing to write to until an account exists.
   String get noAccountsTitle;
-  String get noAccountsMessage;
+
+  String get noAccountsBody;
+
+  String unreadable(int count);
 }

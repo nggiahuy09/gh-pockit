@@ -7,16 +7,13 @@ final class GPLocaleViAccounts implements GPLocaleBaseAccounts {
   String get title => 'Tài khoản';
 
   @override
-  String count(int count) => '$count tài khoản';
-
-  @override
   String get balanceColumn => 'Số dư';
 
   @override
   String get loading => 'Đang tải tài khoản';
 
   @override
-  String get errorMessage => 'Danh sách sẽ tự hiện lại ở lần ghi dữ liệu tiếp theo.';
+  String get errorBody => 'Danh sách sẽ tự hiện lại ở lần ghi dữ liệu tiếp theo.';
 
   @override
   String get typeCash => 'Tiền mặt';
@@ -37,7 +34,7 @@ final class GPLocaleViAccounts implements GPLocaleBaseAccounts {
   String get emptyTitle => 'Chưa có tài khoản nào';
 
   @override
-  String get emptyMessage => 'Tiền mặt, tài khoản ngân hàng, ví điện tử và thẻ của bạn sẽ hiện ở đây.';
+  String get emptyBody => 'Tiền mặt, tài khoản ngân hàng, ví điện tử và thẻ của bạn sẽ hiện ở đây.';
 
   @override
   String get add => 'Thêm tài khoản';
@@ -65,4 +62,7 @@ final class GPLocaleViAccounts implements GPLocaleBaseAccounts {
 
   @override
   String get save => 'Lưu';
+
+  @override
+  String count(int count) => '$count tài khoản';
 }

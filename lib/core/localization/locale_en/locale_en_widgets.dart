@@ -19,7 +19,7 @@ final class GPLocaleEnWidgets implements GPLocaleBaseWidgets {
 final class GPLocaleEnWidgetsDatePicker implements GPLocaleBaseWidgetsDatePicker {
   const GPLocaleEnWidgetsDatePicker();
 
-  static const List<String> _months = <String>['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  static const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   @override
   String get title => 'Pick a date';
@@ -67,22 +67,22 @@ final class GPLocaleEnWidgetsDatePicker implements GPLocaleBaseWidgetsDatePicker
   String get rangeEndHint => 'Pick an end day';
 
   @override
-  List<String> get weekdaysShort => const <String>['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+  List<String> get weekdaysShort => const ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
   @override
   String monthName(int month) => _months[month - 1];
 
   @override
-  String monthYear(int month, int year) => '${monthName(month)} $year';
+  String monthYear({required int month, required int year}) => '${monthName(month)} $year';
 
   @override
-  String chooseMonth(int month, int year) => '${monthYear(month, year)}, choose another month';
+  String chooseMonth({required int month, required int year}) => '${monthYear(month: month, year: year)}, choose another month';
 
   @override
   String backToDays(int year) => '$year, back to days';
 
   @override
-  String range(DateTime start, DateTime end) {
+  String range({required DateTime end, required DateTime start}) {
     if (start.year == end.year && start.month == end.month) return '${monthName(end.month)} ${start.day} – ${end.day}';
     return '${start.month}/${start.day} – ${end.month}/${end.day}';
   }

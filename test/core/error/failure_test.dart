@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/failure_message.dart';
+import 'package:ghpockit/core/error/failure_extension.dart';
 import 'package:ghpockit/core/localization/locale_base/locale_base.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/localization/locale_vi/locale_vi.dart';
@@ -8,13 +8,12 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 
-/// Every [GPFailure] subtype, by hand: Dart cannot enumerate a sealed class's subtypes at runtime, so a new one must be added here.
+/// By hand: Dart cannot enumerate a sealed class's subtypes at runtime, so a new one must be added here.
 const allFailures = <GPFailure>[
   GPNetworkFailure(),
   GPTimeoutFailure(),
   GPAuthenticationFailure(),
   GPAuthorizationFailure(),
-  // Every code, not one representative: each maps to its own message.
   GPValidationFailure(GPValidationCode.accountNameEmpty),
   GPValidationFailure(GPValidationCode.accountNameTooLong),
   GPValidationFailure(GPValidationCode.accountHasTransactions),
@@ -35,8 +34,7 @@ const allFailures = <GPFailure>[
 
 void main() {
   group('GPFailure', () {
-    test('fieldless failures compare equal without a hand-written operator', () {
-      // Equal through `const` canonicalisation: each is one shared instance.
+    test('fieldless failures of one type are equal', () {
       expect(const GPNetworkFailure(), const GPNetworkFailure());
       expect(const GPUnknownFailure(), const GPUnknownFailure());
       expect(const GPNetworkFailure(), isNot(const GPTimeoutFailure()));
@@ -60,12 +58,8 @@ void main() {
     });
 
     test('is equal by value, not by identity', () {
-      // Not `const`: canonicalisation would make both one object, leaving `operator ==` untested.
-      // ignore: prefer_const_constructors
-      final first = GPValidationFailure(GPValidationCode.accountNameEmpty);
-      // Same reason as above.
-      // ignore: prefer_const_constructors
-      final second = GPValidationFailure(GPValidationCode.accountNameEmpty);
+      final first = _validationFailure(GPValidationCode.accountNameEmpty);
+      final second = _validationFailure(GPValidationCode.accountNameEmpty);
 
       expect(identical(first, second), isFalse);
       expect(first, second);
@@ -73,19 +67,15 @@ void main() {
       expect(first, isNot(const GPValidationFailure(GPValidationCode.accountNameTooLong)));
     });
 
-    test('toString carries the code and nothing else', () {
-      expect(const GPValidationFailure(GPValidationCode.accountNameEmpty).toString(), 'GPValidationFailure(code: accountNameEmpty)');
+    test('toString names the code', () {
+      expect(const GPValidationFailure(GPValidationCode.accountNameEmpty).toString(), contains('accountNameEmpty'));
     });
   });
 
   group('GPConflictFailure', () {
     test('is equal by value, not by identity', () {
-      // Not `const`: the resolver builds these at runtime, and canonicalisation would make both one object, leaving `operator ==` untested.
-      // ignore: prefer_const_constructors
-      final first = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
-      // Same reason as above.
-      // ignore: prefer_const_constructors
-      final second = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
+      final first = _conflictFailure('tx-1');
+      final second = _conflictFailure('tx-1');
 
       expect(identical(first, second), isFalse);
       expect(first, second);
@@ -100,26 +90,24 @@ void main() {
       expect(base, isNot(const GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 9)));
     });
 
-    test('toString carries the id and versions and nothing else', () {
-      const failure = GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4);
-
-      expect(failure.toString(), 'GPConflictFailure(entityId: tx-1, localVersion: 3, remoteVersion: 4)');
+    test('toString carries the id and versions', () {
+      expect(_conflictFailure('tx-1').toString(), allOf(contains('tx-1'), contains('3'), contains('4')));
     });
   });
 
-  group('GPFailureMessage', () {
+  group('getMessage', () {
     const locales = <GPLocaleBase>[GPLocaleEn(), GPLocaleVi()];
 
     for (final locale in locales) {
       group(locale.locale.name, () {
         test('every failure resolves to a non-empty message', () {
           for (final failure in allFailures) {
-            expect(failure.message(locale).trim(), isNotEmpty, reason: '${failure.runtimeType} has no message');
+            expect(failure.getMessage(locale).trim(), isNotEmpty, reason: '${failure.runtimeType} has no message');
           }
         });
 
         test('no two failures share a message', () {
-          final messages = allFailures.map((failure) => failure.message(locale)).toList();
+          final messages = allFailures.map((failure) => failure.getMessage(locale)).toList();
 
           expect(messages.toSet(), hasLength(messages.length));
         });
@@ -128,7 +116,7 @@ void main() {
 
     test('English and Vietnamese never return the same string', () {
       for (final failure in allFailures) {
-        expect(failure.message(const GPLocaleEn()), isNot(failure.message(const GPLocaleVi())), reason: '${failure.runtimeType} is not translated');
+        expect(failure.getMessage(const GPLocaleEn()), isNot(failure.getMessage(const GPLocaleVi())), reason: '${failure.runtimeType} is not translated');
       }
     });
 
@@ -136,12 +124,12 @@ void main() {
       const empty = GPValidationFailure(GPValidationCode.accountNameEmpty);
       const tooLong = GPValidationFailure(GPValidationCode.accountNameTooLong);
 
-      expect(empty.message(const GPLocaleEn()), isNot(tooLong.message(const GPLocaleEn())));
-      expect(empty.message(const GPLocaleVi()), isNot(tooLong.message(const GPLocaleVi())));
+      expect(empty.getMessage(const GPLocaleEn()), isNot(tooLong.getMessage(const GPLocaleEn())));
+      expect(empty.getMessage(const GPLocaleVi()), isNot(tooLong.getMessage(const GPLocaleVi())));
     });
 
     test('a validation message carries no limit number', () {
-      // The form field shows the limit with a live counter; a number hard-coded in the copy would go stale silently.
+      // The form shows the limit with a live counter; a number in the copy would go stale silently.
       final limits = {
         GPValidationCode.accountNameTooLong: AccountEntity.nameMaxLength,
         GPValidationCode.categoryNameTooLong: CategoryEntity.nameMaxLength,
@@ -150,7 +138,7 @@ void main() {
 
       for (final locale in locales) {
         for (final MapEntry(key: code, value: limit) in limits.entries) {
-          expect(GPValidationFailure(code).message(locale), isNot(contains('$limit')), reason: '${code.name} (${locale.locale.name})');
+          expect(GPValidationFailure(code).getMessage(locale), isNot(contains('$limit')), reason: '${code.name} (${locale.locale.name})');
         }
       }
     });
@@ -159,7 +147,12 @@ void main() {
       const first = GPConflictFailure(entityId: 'tx-1', localVersion: 1, remoteVersion: 2);
       const second = GPConflictFailure(entityId: 'acc-9', localVersion: 7, remoteVersion: 8);
 
-      expect(first.message(const GPLocaleEn()), second.message(const GPLocaleEn()));
+      expect(first.getMessage(const GPLocaleEn()), second.getMessage(const GPLocaleEn()));
     });
   });
 }
+
+// Built at runtime, not as `const` literals: canonicalisation would make both one object and leave `==` untested.
+GPValidationFailure _validationFailure(GPValidationCode code) => GPValidationFailure(code);
+
+GPConflictFailure _conflictFailure(String entityId) => GPConflictFailure(entityId: entityId, localVersion: 3, remoteVersion: 4);

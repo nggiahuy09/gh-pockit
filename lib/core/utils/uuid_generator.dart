@@ -1,9 +1,10 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:ghpockit/core/utils/clock.dart';
 import 'package:uuid/data.dart';
 import 'package:uuid/uuid.dart';
+
+import 'clock.dart';
 
 abstract class GPUuidGenerator {
   const GPUuidGenerator();
@@ -19,20 +20,19 @@ abstract class GPUuidGenerator {
 }
 
 /// Must be a singleton: [v7]'s counter lives in the instance, so two instances would interleave ids out of order.
-class GPUuidGeneratorImpl extends GPUuidGenerator {
+final class GPUuidGeneratorImpl extends GPUuidGenerator {
   GPUuidGeneratorImpl({required GPClock clock, Uuid uuid = const Uuid(), Random? random}) : _clock = clock, _uuid = uuid, _random = random ?? Random.secure();
-
-  static const int _maxCounter = 0xFFF;
 
   final GPClock _clock;
   final Uuid _uuid;
   final Random _random;
 
-  int _lastMillis = 0;
-  int _counter = 0;
-
   /// Frozen: changing it changes every derived id, which after a release is a data migration.
-  static const String namespace = '6f3c1e6a-2f5f-4f4e-9f2a-0e2c9a8b7d41';
+  static const namespace = '6f3c1e6a-2f5f-4f4e-9f2a-0e2c9a8b7d41';
+  static const _maxCounter = 0xFFF;
+
+  var _lastMillis = 0;
+  var _counter = 0;
 
   @override
   String v4() => _uuid.v4();

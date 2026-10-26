@@ -1,13 +1,21 @@
-import 'package:ghpockit/core/localization/locale.dart';
+import '../locale.dart';
 
 part 'locale_base_root.dart';
+
 part 'locale_base_home.dart';
+
 part 'locale_base_accounts.dart';
+
 part 'locale_base_transactions.dart';
+
 part 'locale_base_budgets.dart';
+
 part 'locale_base_categories.dart';
+
 part 'locale_base_settings.dart';
+
 part 'locale_base_error.dart';
+
 part 'locale_base_widgets.dart';
 
 /// Hand-written, not ARB (ADR-0004): keep every getter abstract, so a new string does not compile until both languages implement it.

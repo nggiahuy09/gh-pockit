@@ -1,9 +1,11 @@
-import 'package:ghpockit/core/error/failure.dart';
+import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
+
+import 'failure.dart';
 
 /// For outcomes a correct program with a correct user can hit; bugs still throw (ADR-0006).
 @immutable
-sealed class GPResult<T> {
+sealed class GPResult<T> with Equatable {
   const GPResult();
 }
 
@@ -13,13 +15,7 @@ final class GPOk<T> extends GPResult<T> {
   final T value;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is GPOk<T> && other.value == value;
-
-  @override
-  int get hashCode => Object.hash(GPOk<T>, value);
-
-  @override
-  String toString() => 'GPOk<$T>($value)';
+  List<Object?> get props => [value];
 }
 
 final class GPErr<T> extends GPResult<T> {
@@ -28,11 +24,5 @@ final class GPErr<T> extends GPResult<T> {
   final GPFailure failure;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is GPErr<T> && other.failure == failure;
-
-  @override
-  int get hashCode => Object.hash(GPErr<T>, failure);
-
-  @override
-  String toString() => 'GPErr<$T>($failure)';
+  List<Object?> get props => [failure];
 }

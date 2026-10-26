@@ -2,8 +2,9 @@ import 'dart:ui' show Locale;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/localization/locale.dart';
-import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/localization/localization.dart';
+
+import '../../helpers/in_memory_locale_store.dart';
 
 void main() {
   group('GPLocale', () {
@@ -31,41 +32,41 @@ void main() {
 
   group('GPLocalization.init', () {
     test('prefers a stored choice over the device language', () async {
-      final localization = GPLocalization(store: GPInMemoryLocaleStore(initial: GPLocale.vi));
+      final localization = GPLocalization(InMemoryLocaleStore(GPLocale.vi));
 
-      await localization.init(deviceLocale: const Locale('en'));
+      await localization.init(const Locale('en'));
 
       expect(localization.locale, GPLocale.vi);
       expect(localization.isExplicit, isTrue);
     });
 
     test('follows the device when nothing is stored', () async {
-      final localization = GPLocalization(store: GPInMemoryLocaleStore());
+      final localization = GPLocalization(InMemoryLocaleStore());
 
-      await localization.init(deviceLocale: const Locale('vi'));
+      await localization.init(const Locale('vi'));
 
       expect(localization.locale, GPLocale.vi);
       expect(localization.isExplicit, isFalse, reason: 'following the device is not the same as the user choosing Vietnamese');
     });
 
     test('falls back when the device language is not shipped', () async {
-      final localization = GPLocalization(store: GPInMemoryLocaleStore());
+      final localization = GPLocalization(InMemoryLocaleStore());
 
-      await localization.init(deviceLocale: const Locale('ja'));
+      await localization.init(const Locale('ja'));
 
       expect(localization.locale, GPLocale.fallback);
     });
 
     test('has usable strings before init runs', () {
-      expect(GPLocalization(store: GPInMemoryLocaleStore()).current.root.bottomNav.home, isNotEmpty);
+      expect(GPLocalization(InMemoryLocaleStore()).current.root.bottomNav.home, isNotEmpty);
     });
   });
 
   group('GPLocalization.changeLocale', () {
     test('swaps the strings, notifies, and persists', () async {
-      final store = GPInMemoryLocaleStore();
-      final localization = GPLocalization(store: store);
-      await localization.init(deviceLocale: const Locale('en'));
+      final store = InMemoryLocaleStore();
+      final localization = GPLocalization(store);
+      await localization.init(const Locale('en'));
 
       var notifications = 0;
       localization.addListener(() => notifications++);
@@ -78,7 +79,7 @@ void main() {
     });
 
     test('re-picking the language already chosen does not notify', () async {
-      final localization = GPLocalization(store: GPInMemoryLocaleStore(initial: GPLocale.vi));
+      final localization = GPLocalization(InMemoryLocaleStore(GPLocale.vi));
       await localization.init();
 
       var notifications = 0;
@@ -90,9 +91,9 @@ void main() {
     });
 
     test('choosing the device language explicitly still notifies', () async {
-      final store = GPInMemoryLocaleStore();
-      final localization = GPLocalization(store: store);
-      await localization.init(deviceLocale: const Locale('vi'));
+      final store = InMemoryLocaleStore();
+      final localization = GPLocalization(store);
+      await localization.init(const Locale('vi'));
 
       var notifications = 0;
       localization.addListener(() => notifications++);

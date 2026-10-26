@@ -1,6 +1,5 @@
 part of 'locale_base.dart';
 
-/// Seeded default categories only, mapped from `name_key` in the categories feature. A user's own category keeps the name they typed.
 abstract class GPLocaleBaseCategories {
   const GPLocaleBaseCategories();
 

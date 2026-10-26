@@ -31,13 +31,10 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get emptyTitle => 'Chưa có giao dịch nào';
 
   @override
-  String get emptyMessage => 'Các khoản chi, thu và chuyển khoản của bạn sẽ hiện ở đây.';
+  String get emptyBody => 'Các khoản chi, thu và chuyển khoản của bạn sẽ hiện ở đây.';
 
   @override
-  String get errorMessage => 'Danh sách sẽ tự hiện lại ở lần ghi dữ liệu tiếp theo.';
-
-  @override
-  String unreadable(int count) => '$count giao dịch không hiển thị được';
+  String get errorBody => 'Danh sách sẽ tự hiện lại ở lần ghi dữ liệu tiếp theo.';
 
   @override
   String get loading => 'Đang tải giao dịch';
@@ -94,5 +91,8 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get noAccountsTitle => 'Hãy thêm một tài khoản trước';
 
   @override
-  String get noAccountsMessage => 'Giao dịch cần một tài khoản để chi ra hoặc nhận vào.';
+  String get noAccountsBody => 'Giao dịch cần một tài khoản để chi ra hoặc nhận vào.';
+
+  @override
+  String unreadable(int count) => '$count giao dịch không hiển thị được';
 }
