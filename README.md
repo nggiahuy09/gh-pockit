@@ -53,7 +53,7 @@ hardcodes the version a second time.
 `build` is a debug APK with no flavor. It joined the gate before the dev/prod
 flavors did, because the reason for waiting stopped holding at W2: the app now
 bundles a native SQLite, a subset font and icon assets, which are what break on
-a clean machine. The flavors land at W10 with the Supabase env. The job keeps
+a clean machine. The flavors land at W11 with the Supabase env. The job keeps
 the name `format → analyze → test`, since that is the status check the rulesets
 below require.
 

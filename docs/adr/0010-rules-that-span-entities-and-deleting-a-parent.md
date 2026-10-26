@@ -24,7 +24,7 @@ another entity's row, so the entity cannot check them:
    `SUM` that never goes through `Money`: a USD row on a VND account is added as
    if it were dong, silently.
 3. An expense is filed under an expense category and an income under an income
-   one. Otherwise W7's category breakdown counts income as spending.
+   one. Otherwise W8's category breakdown counts income as spending.
 
 Then the reverse direction: deleting an account or a category that already has
 transactions.
@@ -118,10 +118,10 @@ same thing.
 **Every reader tolerates a soft-deleted parent**, because sync produces one
 whatever the rules above do:
 
-- joins do not filter the parent's `deleted_at` (W7 T5) — the tombstone still
+- joins do not filter the parent's `deleted_at` (W8 T5) — the tombstone still
   carries its name, so a list can still say which account a transaction was on;
 - a deleted account's transfers keep counting on the account at the other end;
-- a deleted category's spending shows as "Uncategorised" in analytics (W7) and
+- a deleted category's spending shows as "Uncategorised" in analytics (W8) and
   in budgets (W24).
 
 **A use case exists only when it owns a rule** _(superseded by ADR-0013)_. Hence
@@ -180,7 +180,7 @@ Closes what this ADR left open: an account's currency and a category's type were
 both editable, and either edit strands every transaction already under the row —
 rule 2 or rule 3 broken after the fact, with no write left to refuse. A changed
 currency made every later edit of those transactions fail in the repository; a
-flipped category would have made W7's breakdown count them under the wrong kind.
+flipped category would have made W8's breakdown count them under the wrong kind.
 
 **Both are frozen outright, not only once the row has transactions.** The
 conditional freeze needs a "has live transactions" question per parent kind,
@@ -208,4 +208,4 @@ Consequences: the edit forms W6 adds show currency and type on create only.
 since still needs the tolerance — but the flipped-category case it also covered
 is gone, and its test with it. When sync arrives (P4), the server must refuse
 the same two changes, or a second client could still make them; that belongs in
-the W10 schema.
+the W11 schema.

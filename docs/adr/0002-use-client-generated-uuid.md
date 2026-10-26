@@ -116,7 +116,7 @@ that did not exist yet; this section is where it should have been written.
 offline and independently. Minted ids would give them two "Food" categories, and
 by the first sync each copy may already carry transactions, so no automatic
 merge is safe. A derived id makes both devices write the same primary key, and
-the pull at W14 reconciles by key instead of duplicating.
+the pull at W15 reconciles by key instead of duplicating.
 
 **An exception to golden rule 4, not a breach of it.** The rule protects "an id
 exists the moment the row does, and nothing waits for a server to hand one
@@ -145,7 +145,7 @@ Positive:
 Negative:
 
 - A derived id is predictable from its inputs. Harmless behind the RLS policy of
-  W10, but a v5 id must never be treated as unguessable.
+  W11, but a v5 id must never be treated as unguessable.
 - v5 ids carry no time, so seeded rows do not get v7's append-only index
   inserts. Eleven rows per owner; it does not register.
 

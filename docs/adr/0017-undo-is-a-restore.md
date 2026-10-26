@@ -63,8 +63,8 @@ the table (the user chose on 2026-10-13):
 **Sync, decided now for P4.** Each write is a mutation: the delete an
 `operation: delete`, the restore an update clearing `deleted_at`. When the
 restore is enqueued before the delete was pushed, the two cancel out and
-nothing goes up (coalescing, W12). Otherwise the server must accept clearing
-`deleted_at` on a tombstone (W10's schema and RLS). A tombstone is not final
+nothing goes up (coalescing, W13). Otherwise the server must accept clearing
+`deleted_at` on a tombstone (W11's schema and RLS). A tombstone is not final
 until it is garbage-collected (blueprint §27, 30 days), and an undo comes
 seconds after its delete. The restore moves `updated_at`, so other devices'
 pulls see the row come back.
@@ -95,7 +95,7 @@ Negative:
   could land another device's delete of the same row between ours and the
   undo, and the undo would bring it back. Accepted, because the user asked for
   that row. Guarding on the delete's own `deleted_at` needs the delete to hand
-  its stamp back; revisit at W12.
+  its stamp back; revisit at W13.
 
 ## Alternatives rejected
 

@@ -10,7 +10,7 @@ later is a table rebuild. Implemented by W4 T2 (`TransactionEntity`) and W4 T3
 ## Context
 
 `transactions` is the table every number in the app is computed from: balances
-(W6 T6), monthly summaries and category breakdowns (W7), budgets (W24). The
+(W6 T6), monthly summaries and category breakdowns (W8), budgets (W24). The
 `accounts` and `categories` slices each had one real modelling question. This
 table has several, and they interact:
 
@@ -90,8 +90,8 @@ one foreign-key property that cannot change later without a rebuild.
 **5. `sync_status` is `TEXT NOT NULL`, no default, two values.** `pending`: a
 local write the server has not acknowledged. `synced`: the server has this
 version. Every local write — insert, update, soft delete — sets `pending`; only
-the sync engine writes `synced`, from W13. It stays off `TransactionEntity`
-until the badge of W12 flex needs it.
+the sync engine writes `synced`, from W14. It stays off `TransactionEntity`
+until the badge of W13 flex needs it.
 
 **6. `occurred_at` is an instant**, epoch millis UTC like every timestamp here
 (§6). A day or a month is computed in the device's current zone when it is
@@ -105,7 +105,7 @@ account, destination account and category — each followed by `occurred_at` and
 `id`, so `ORDER BY occurred_at DESC, id DESC LIMIT n` is read straight off the
 index by a backward scan (asserted with `EXPLAIN QUERY PLAN` in the table test).
 `(sync_status)` waits for the P4 query that filters on it, `(updated_at)` for a
-local query that needs one, if one ever does. W7 T2 becomes an
+local query that needs one, if one ever does. W8 T2 becomes an
 `EXPLAIN QUERY PLAN` audit of the new aggregates instead of a bulk add.
 `CLAUDE.md` §6 lists the same indexes and now says when each one lands; it also
 gained `destination_account_id`, which it lacked and the balance needs.
@@ -114,7 +114,7 @@ _Settled at W4 T3:_ the four are not partial (`WHERE deleted_at IS NULL`), thoug
 every list query filters on exactly that. SQLite only picks a partial index when
 the query repeats its condition, so a forgotten filter becomes a silent full
 scan, and tombstones are rare in a personal ledger. Changing an index is a drop
-and a create, not a rebuild, so this waits for W8's numbers. The same test showed
+and a create, not a rebuild, so this waits for W9's numbers. The same test showed
 what the indexes cannot do: no index serves an account's history on **either**
 side of a transfer (`account_id = ? OR destination_account_id = ?`) in order.
 Measured without an owner condition, that is a multi-index OR followed by a sort
@@ -123,10 +123,10 @@ has one, SQLite walks the owner index and filters instead — no sort, but it re
 as far back as it must to fill the window. The pick is a cost decision that can
 differ between SQLite versions, so `transaction_dao_test.dart` accepts both
 plans and forbids a scan; a `UNION ALL` of the two sides is the fix, measured at
-W8.
+W9.
 
-**8. `receipt_id` is not in v4.** W9 T3 adds it with a real `ADD COLUMN` on a
-table that already holds data — the migration W9 is built around.
+**8. `receipt_id` is not in v4.** W10 T3 adds it with a real `ADD COLUMN` on a
+table that already holds data — the migration W10 is built around.
 
 ## Alternatives
 
@@ -164,7 +164,7 @@ Positive:
 
 - A transfer is atomic in storage and in sync: one row, one mutation, one
   conflict.
-- Every aggregate — W6, W7, W24 — sums positive integers filtered by `type`,
+- Every aggregate — W6, W8, W24 — sums positive integers filtered by `type`,
   which is the shape blueprint §37 and §38 already sketch.
 - A row that breaks the transfer shape cannot be stored by any path: companion
   insert, raw SQL, migration or pull.
@@ -177,11 +177,11 @@ Negative:
   (W37+); ADR-0010 refuses it.
 - A refund cannot reduce an expense category's spending.
 - Moving time zones re-buckets history by day.
-- Foreign keys fix an order. The W14 pull applies parents before children —
+- Foreign keys fix an order. The W15 pull applies parents before children —
   the check runs at COMMIT at the latest, `DEFERRABLE` or not, so a transaction
-  whose account arrives on a later page fails its page. W11 T6's logout wipe
+  whose account arrives on a later page fails its page. W12 T6's logout wipe
   deletes children first, or drops the file.
-- `sync_status` duplicates the outbox's state. From W12 T5 the entity, its
-  mutation and its status change in one transaction, and W13 deletes the
-  mutation and sets `synced` in one. Every row written before W12 is `pending`
-  with no mutation behind it, so W12 owes a backfill.
+- `sync_status` duplicates the outbox's state. From W13 T5 the entity, its
+  mutation and its status change in one transaction, and W14 deletes the
+  mutation and sets `synced` in one. Every row written before W13 is `pending`
+  with no mutation behind it, so W13 owes a backfill.
