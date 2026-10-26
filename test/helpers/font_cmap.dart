@@ -9,15 +9,15 @@ Set<int> mappedCodepoints(ByteData font) {
   final subtableCount = font.getUint16(cmap + 2);
   for (var i = 0; i < subtableCount; i++) {
     final record = cmap + 4 + i * 8;
-    if (!_isUnicode(platformId: font.getUint16(record), encodingId: font.getUint16(record + 2))) continue;
+    if (!_isUnicode(encodingId: font.getUint16(record + 2), platformId: font.getUint16(record))) continue;
 
     final subtable = cmap + font.getUint32(record + 4);
     final format = font.getUint16(subtable);
     switch (format) {
       case 4:
-        _readFormat4(font, subtable, codepoints);
+        _readFormat4(codepoints, font, subtable);
       case 12:
-        _readFormat12(font, subtable, codepoints);
+        _readFormat12(codepoints, font, subtable);
       case 14:
         // Variation sequences: they map no codepoint on their own.
         break;
@@ -43,10 +43,10 @@ int _tableOffset(ByteData font, int tag) {
 }
 
 /// Platform 0 is Unicode in every encoding; on platform 3 (Windows) encoding 1 is the BMP and 10 is every plane. The other encodings are not Unicode.
-bool _isUnicode({required int platformId, required int encodingId}) => platformId == 0 || (platformId == 3 && (encodingId == 1 || encodingId == 10));
+bool _isUnicode({required int encodingId, required int platformId}) => platformId == 0 || (platformId == 3 && (encodingId == 1 || encodingId == 10));
 
 /// Format 4: the BMP as segments. A non-zero `idRangeOffset` addresses the glyph array relative to that `idRangeOffset` entry itself.
-void _readFormat4(ByteData font, int table, Set<int> into) {
+void _readFormat4(Set<int> into, ByteData font, int table) {
   final segmentCount = font.getUint16(table + 6) ~/ 2;
   final endCodes = table + 14;
   final startCodes = endCodes + segmentCount * 2 + 2; // + reservedPad
@@ -75,7 +75,7 @@ void _readFormat4(ByteData font, int table, Set<int> into) {
 }
 
 /// Format 12: every plane, as groups of consecutive codepoints mapped to consecutive glyphs.
-void _readFormat12(ByteData font, int table, Set<int> into) {
+void _readFormat12(Set<int> into, ByteData font, int table) {
   final groupCount = font.getUint32(table + 12);
   for (var g = 0; g < groupCount; g++) {
     final record = table + 16 + g * 12;

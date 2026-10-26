@@ -4,15 +4,17 @@ import 'package:ghpockit/features/categories/domain/entities/category_type.dart'
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 
 /// Every watch is a fresh one-empty-list stream. Writes throw.
-class FakeCategoryRepository implements CategoryRepository {
+final class FakeCategoryRepository extends CategoryRepository {
+  const FakeCategoryRepository();
+
   @override
-  Stream<List<CategoryEntity>> watchCategories({CategoryType? type}) => Stream<List<CategoryEntity>>.value(const <CategoryEntity>[]);
+  Stream<List<CategoryEntity>> watchCategories([CategoryType? type]) => Stream.value(const []);
 
   @override
   Stream<CategoryEntity?> watchCategory(String id) => throw UnimplementedError();
 
   @override
-  Future<GPResult<CategoryEntity>> createCategory({required String name, required CategoryType type, String? iconKey, String? colorKey}) => throw UnimplementedError();
+  Future<GPResult<CategoryEntity>> createCategory({required CategoryType type, String? colorKey, String? iconKey, required String name}) => throw UnimplementedError();
 
   @override
   Future<GPResult<CategoryEntity>> updateCategory(CategoryEntity category) => throw UnimplementedError();

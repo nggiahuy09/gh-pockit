@@ -1,15 +1,16 @@
 import 'package:ghpockit/core/utils/uuid_generator.dart';
 
 /// Predictable ids, so a test can name the id a write is about to mint. [v5] stays derived from the name, as the category seeder relies on.
-class FakeUuidGenerator extends GPUuidGenerator {
-  FakeUuidGenerator({this.prefix = 'id'});
+final class FakeUuidGenerator extends GPUuidGenerator {
+  FakeUuidGenerator([this.prefix = 'id']);
 
+  final List<String> _issuedV7 = [];
   final String prefix;
 
-  int _v7Count = 0;
-  int _v4Count = 0;
+  var _v4Count = 0;
+  var _v7Count = 0;
 
-  final List<String> issuedV7 = <String>[];
+  List<String> get issuedV7 => List.unmodifiable(_issuedV7);
 
   @override
   String v4() => '$prefix-v4-${++_v4Count}';
@@ -20,7 +21,7 @@ class FakeUuidGenerator extends GPUuidGenerator {
   @override
   String v7() {
     final id = '$prefix-v7-${++_v7Count}';
-    issuedV7.add(id);
+    _issuedV7.add(id);
 
     return id;
   }

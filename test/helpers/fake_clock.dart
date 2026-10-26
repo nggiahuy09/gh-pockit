@@ -1,6 +1,6 @@
 import 'package:ghpockit/core/utils/clock.dart';
 
-class FakeClock extends GPClock {
+final class FakeClock extends GPClock {
   FakeClock([DateTime? start]) : _now = (start ?? DateTime.utc(2026, 9, 9, 12)).toUtc();
 
   DateTime _now;
