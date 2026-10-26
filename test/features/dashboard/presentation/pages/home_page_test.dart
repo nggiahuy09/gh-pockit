@@ -3,62 +3,62 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
+import 'package:ghpockit/features/dashboard/presentation/pages/home_view.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/in_memory_repositories.dart';
 import '../../../../helpers/localization_harness.dart';
+import '../../../../helpers/results.dart';
+
+late InMemoryRepositories _repositories;
+
+Future<void> _pumpApp(WidgetTester tester) async {
+  await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _seedAccount(AccountType type, String name) => _repositories.accounts.createAccount(initialBalance: Money(0, 'VND'), type: type, name: name);
 
 /// The whole app over the real repository: Home reads the same rows the accounts list does, live.
 void main() {
-  late InMemoryRepositories repositories;
-
   setUp(() {
-    repositories = InMemoryRepositories();
+    _repositories = InMemoryRepositories();
     getIt
-      ..registerSingleton<AccountRepository>(repositories.accounts)
-      ..registerSingleton<TransactionRepository>(repositories.transactions);
+      ..registerSingleton<AccountRepository>(_repositories.accounts)
+      ..registerSingleton<TransactionRepository>(_repositories.transactions);
   });
 
   tearDown(() async {
     await getIt.reset();
-    await repositories.close();
+    await _repositories.close();
   });
 
-  Future<void> pumpApp(WidgetTester tester) async {
-    await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> seedAccount(String name, AccountType type) => repositories.accounts.createAccount(name: name, type: type, initialBalance: Money(0, 'VND'));
-
-  testWidgets('with no account, offers to add one', (WidgetTester tester) async {
-    await pumpApp(tester);
+  testWidgets('with no account, offers to add one', (tester) async {
+    await _pumpApp(tester);
 
     expect(find.byType(HomePage), findsOneWidget);
     expect(find.text('Add account'), findsOneWidget);
   });
 
-  testWidgets('lists the first accounts with their type, and "See all" opens the Accounts tab', (WidgetTester tester) async {
-    await seedAccount('Cash wallet', AccountType.cash);
-    await seedAccount('Salary', AccountType.bank);
-    await seedAccount('E-wallet', AccountType.eWallet);
-    await seedAccount('Card', AccountType.creditCard);
-    await pumpApp(tester);
+  testWidgets('lists the first accounts with their type, and "See all" opens the Accounts tab', (tester) async {
+    await _seedAccount(AccountType.cash, 'Cash wallet');
+    await _seedAccount(AccountType.bank, 'Salary');
+    await _seedAccount(AccountType.eWallet, 'E-wallet');
+    await _seedAccount(AccountType.creditCard, 'Card');
+    await _pumpApp(tester);
 
-    final shown = <String>['Cash wallet', 'Salary', 'E-wallet', 'Card'].where((String name) => find.text(name).evaluate().isNotEmpty);
-    expect(shown, hasLength(HomePage.accountsShown));
+    final shown = ['Cash wallet', 'Salary', 'E-wallet', 'Card'].where((name) => find.text(name).evaluate().isNotEmpty);
+    expect(shown, hasLength(HomeView.accountsShown));
     expect(find.text('Bank'), findsOneWidget);
     expect(find.byIcon(Icons.account_balance_outlined), findsOneWidget);
 
@@ -68,18 +68,18 @@ void main() {
     expect(find.byType(AccountsPage), findsOneWidget);
   });
 
-  testWidgets('an account added elsewhere shows up with no refresh', (WidgetTester tester) async {
-    await pumpApp(tester);
+  testWidgets('an account added elsewhere shows up with no refresh', (tester) async {
+    await _pumpApp(tester);
 
-    await seedAccount('Cash wallet', AccountType.cash);
+    await _seedAccount(AccountType.cash, 'Cash wallet');
     await tester.pumpAndSettle();
 
     expect(find.text('Cash wallet'), findsOneWidget);
   });
 
-  testWidgets('a row opens that account in the form', (WidgetTester tester) async {
-    await seedAccount('Cash wallet', AccountType.cash);
-    await pumpApp(tester);
+  testWidgets('a row opens that account in the form', (tester) async {
+    await _seedAccount(AccountType.cash, 'Cash wallet');
+    await _pumpApp(tester);
 
     await tester.tap(find.text('Cash wallet'));
     await tester.pump();
@@ -90,21 +90,21 @@ void main() {
     expect(find.text('Edit account'), findsOneWidget);
   });
 
-  testWidgets('each account shows its balance, the same the Accounts tab shows, and follows a new transaction', (WidgetTester tester) async {
-    final cash = (await repositories.accounts.createAccount(name: 'Cash wallet', type: AccountType.cash, initialBalance: Money(500000, 'VND')) as GPOk<AccountEntity>).value;
-    await pumpApp(tester);
+  testWidgets('each account shows its balance, the same the Accounts tab shows, and follows a new transaction', (tester) async {
+    final cash = okValue(await _repositories.accounts.createAccount(initialBalance: Money(500000, 'VND'), type: AccountType.cash, name: 'Cash wallet'));
+    await _pumpApp(tester);
     expect(find.text('₫500,000'), findsOneWidget);
 
-    await repositories.transactions.createTransaction(type: TransactionType.expense, accountId: cash.id, amount: Money(45000, 'VND'), occurredAt: DateTime.utc(2026, 10, 15));
+    await _repositories.transactions.createTransaction(amount: Money(45000, 'VND'), type: TransactionType.expense, occurredAt: DateTime.utc(2026, 10, 15), accountId: cash.id);
     await tester.pumpAndSettle();
 
     expect(find.text('₫455,000'), findsOneWidget);
   });
 
-  testWidgets('accounts that cannot be read show the failure, not an endless spinner', (WidgetTester tester) async {
+  testWidgets('accounts that cannot be read show the failure, not an endless spinner', (tester) async {
     await getIt.unregister<TransactionRepository>();
-    getIt.registerSingleton<TransactionRepository>(FakeTransactionRepository(balances: Stream<List<AccountBalance>>.error(const GPDatabaseFailure())));
-    await pumpApp(tester);
+    getIt.registerSingleton<TransactionRepository>(FakeTransactionRepository(Stream<List<AccountBalance>>.error(const GPDatabaseFailure())));
+    await _pumpApp(tester);
 
     expect(find.text('Could not read local data.'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
