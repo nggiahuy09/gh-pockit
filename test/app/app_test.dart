@@ -13,7 +13,7 @@ void main() {
   setUp(registerShellFakes);
   tearDown(getIt.reset);
 
-  testWidgets('GPApp builds the router shell', (WidgetTester tester) async {
+  testWidgets('GPApp builds the router shell', (tester) async {
     await tester.pumpWidget(GPApp(localization: await localizationFor(GPLocale.en)));
     await tester.pumpAndSettle();
 

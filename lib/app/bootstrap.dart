@@ -1,16 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:ghpockit/app/di/injector.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/localization/localization.dart';
-import 'package:ghpockit/core/logging/app_logger.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
-import 'package:ghpockit/features/settings/presentation/debug/sample_data.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/seed_sample_data_use_case.dart';
 import 'package:intl/date_symbol_data_local.dart';
+
+import '../core/error/result.dart';
+import '../core/localization/localization.dart';
+import '../core/logging/app_logger.dart';
+import '../core/utils/clock.dart';
+import '../features/accounts/domain/repositories/account_repository.dart';
+import '../features/categories/data/seed/category_seeder.dart';
+import '../features/settings/presentation/debug/sample_data.dart';
+import '../features/transactions/domain/repositories/transaction_repository.dart';
+import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
+import 'di/injector.dart';
 
 /// No `runZonedGuarded` on purpose: `PlatformDispatcher.onError` catches uncaught async errors without forcing every error through one zone.
 Future<void> bootstrap(Widget Function() builder) async {
@@ -20,20 +21,15 @@ Future<void> bootstrap(Widget Function() builder) async {
   configureAccountsDependencies();
   configureCategoriesDependencies();
   configureTransactionsDependencies();
-  final logger = getIt<GPAppLogger>();
+  final logger = getIt.get<GPAppLogger>();
 
   final previousOnError = FlutterError.onError;
-  FlutterError.onError = (FlutterErrorDetails details) {
-    logger.error(
-      'uncaught flutter error',
-      fields: {'library': details.library},
-      error: details.exception,
-      stackTrace: details.stack,
-    );
+  FlutterError.onError = (details) {
+    logger.error('uncaught flutter error', fields: {'library': details.library}, error: details.exception, stackTrace: details.stack);
     previousOnError?.call(details);
   };
 
-  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+  PlatformDispatcher.instance.onError = (error, stack) {
     logger.error('uncaught async error', error: error, stackTrace: stack);
     // `true` = handled; `false` would re-report it to the platform and duplicate every line once Sentry is wired.
     return true;
@@ -43,31 +39,24 @@ Future<void> bootstrap(Widget Function() builder) async {
   await initializeDateFormatting();
 
   // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
-  await getIt<GPLocalization>().init(deviceLocale: PlatformDispatcher.instance.locale);
+  await getIt.get<GPLocalization>().init(PlatformDispatcher.instance.locale);
 
-  // Every launch: idempotent (derived ids + `INSERT OR IGNORE`), so one missed run cannot leave the categories empty for good. Awaited so the first
-  // frame never shows an empty picker. Not in `onUpgrade`: a migration has no owner or clock, and would resurrect categories the user deleted.
-  final seeded = await getIt<CategorySeeder>().seedDefaults();
-  if (seeded > 0) {
-    // Count only: a renamed category's name is user data (golden rule 9).
-    logger.info('seeded default categories', fields: {'count': seeded});
-  }
+  // Every launch, and idempotent, so one missed run cannot leave the categories empty for good. Not in `onUpgrade`: a migration has no owner or
+  // clock, and would resurrect categories the user deleted.
+  final seeded = await getIt.get<CategorySeeder>().seedDefaults();
+  if (seeded > 0) logger.info('seeded default categories', fields: {'count': seeded});
 
   // `--dart-define=SAMPLE_DATA=true`: a debug run starts with the sample dataset. Only into an empty database, so a restart does not double it.
   if (kDebugMode && const bool.fromEnvironment('SAMPLE_DATA')) {
-    final sample = await SeedSampleDataUseCase(
-      accountRepository: getIt<AccountRepository>(),
-      transactionRepository: getIt<TransactionRepository>(),
-      clock: getIt<GPClock>(),
-    )(accounts: sampleAccounts, transactions: sampleTransactions, onlyIfEmpty: true);
-    switch (sample) {
-      case GPOk<int>(:final value):
+    final seedSampleData = SeedSampleDataUseCase(getIt.get<AccountRepository>(), getIt.get<GPClock>(), getIt.get<TransactionRepository>());
+    switch (await seedSampleData.execute(const SeedSampleDataInput(accounts: sampleAccounts, transactions: sampleTransactions, onlyIfEmpty: true))) {
+      case GPOk(:final value):
         logger.info('seeded sample data', fields: {'count': value});
-      case GPErr<int>(:final failure):
+      case GPErr(:final failure):
         logger.error('sample data seed failed', fields: {'failure': failure.runtimeType.toString()});
     }
   }
 
   logger.info('app bootstrapped');
-  runApp(builder());
+  runApp(builder.call());
 }

@@ -1,30 +1,30 @@
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/database/owner_id.dart';
-import 'package:ghpockit/core/localization/drift_locale_store.dart';
-import 'package:ghpockit/core/localization/locale_store.dart';
-import 'package:ghpockit/core/localization/localization.dart';
-import 'package:ghpockit/core/logging/app_logger.dart';
-import 'package:ghpockit/core/logging/developer_logger.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/core/utils/uuid_generator.dart';
-import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
-import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
-import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
-import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
-import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
-import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
-import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import '../../core/database/database.dart';
+import '../../core/database/owner_id.dart';
+import '../../core/localization/drift_locale_store.dart';
+import '../../core/localization/locale_store.dart';
+import '../../core/localization/localization.dart';
+import '../../core/logging/app_logger.dart';
+import '../../core/logging/developer_logger.dart';
+import '../../core/utils/clock.dart';
+import '../../core/utils/uuid_generator.dart';
+import '../../features/accounts/data/daos/account_dao.dart';
+import '../../features/accounts/data/repositories/account_repository_impl.dart';
+import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/categories/data/daos/category_dao.dart';
+import '../../features/categories/data/repositories/category_repository_impl.dart';
+import '../../features/categories/data/seed/category_seeder.dart';
+import '../../features/categories/domain/repositories/category_repository.dart';
+import '../../features/transactions/data/daos/transaction_dao.dart';
+import '../../features/transactions/data/repositories/transaction_repository_impl.dart';
+import '../../features/transactions/domain/repositories/transaction_repository.dart';
 
-/// Use cases are never registered here: BLoCs build them from repositories resolved through this (ADR-0013).
+/// Use cases are never registered here: blocs build them from repositories resolved through this (ADR-0013).
 final GetIt getIt = GetIt.instance;
 
-/// [container] lets a test register into a fresh `GetIt()` instead of the global one. Every other module resolves from this one.
-void configureCoreDependencies({GetIt? container}) {
+/// [container] lets a test register into a fresh `GetIt()` instead of the global one.
+void configureCoreDependencies([GetIt? container]) {
   final c = container ?? getIt;
 
   c
@@ -32,62 +32,62 @@ void configureCoreDependencies({GetIt? container}) {
     ..registerLazySingleton<GPAppDatabase>(GPAppDatabase.new, dispose: (db) => db.close())
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
-    ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c<GPClock>()))
+    ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c.get<GPClock>()))
     ..registerLazySingleton<GPAppLogger>(
-      () => GPDeveloperLogger(clock: c<GPClock>(), minLevel: kReleaseMode ? GPLogLevel.info : GPLogLevel.debug),
+      () => GPDeveloperLogger(c.get<GPClock>(), minLevel: kReleaseMode ? GPLogLevel.info : GPLogLevel.debug),
     )
-    ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(database: c<GPAppDatabase>(), clock: c<GPClock>(), logger: c<GPAppLogger>()))
+    ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()))
     // Must stay a singleton: it holds the active language, and a second instance would leave part of the tree in the old one.
-    ..registerLazySingleton<GPLocalization>(() => GPLocalization(store: c<GPLocaleStore>()));
+    ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()));
 }
 
-void configureAccountsDependencies({GetIt? container}) {
+void configureAccountsDependencies([GetIt? container]) {
   final c = container ?? getIt;
 
   c
-    ..registerLazySingleton<AccountDao>(() => AccountDao(c<GPAppDatabase>()))
+    ..registerLazySingleton<AccountDao>(() => AccountDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<AccountRepository>(
       () => AccountRepositoryImpl(
-        dao: c<AccountDao>(),
-        clock: c<GPClock>(),
-        uuidGenerator: c<GPUuidGenerator>(),
-        logger: c<GPAppLogger>(),
-        // The sentinel owner until auth (W10). Passed, never defaulted, so every site is greppable.
+        clock: c.get<GPClock>(),
+        dao: c.get<AccountDao>(),
+        logger: c.get<GPAppLogger>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+        // The sentinel owner until auth. Passed, never defaulted, so every site is greppable.
         ownerId: localOwnerId,
       ),
     );
 }
 
-void configureCategoriesDependencies({GetIt? container}) {
+void configureCategoriesDependencies([GetIt? container]) {
   final c = container ?? getIt;
 
   c
-    ..registerLazySingleton<CategoryDao>(() => CategoryDao(c<GPAppDatabase>()))
+    ..registerLazySingleton<CategoryDao>(() => CategoryDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<CategorySeeder>(
-      () => CategorySeeder(dao: c<CategoryDao>(), clock: c<GPClock>(), uuidGenerator: c<GPUuidGenerator>(), ownerId: localOwnerId),
+      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), uuidGenerator: c.get<GPUuidGenerator>(), ownerId: localOwnerId),
     )
     ..registerLazySingleton<CategoryRepository>(
       () => CategoryRepositoryImpl(
-        dao: c<CategoryDao>(),
-        clock: c<GPClock>(),
-        uuidGenerator: c<GPUuidGenerator>(),
-        logger: c<GPAppLogger>(),
+        clock: c.get<GPClock>(),
+        dao: c.get<CategoryDao>(),
+        logger: c.get<GPAppLogger>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
         ownerId: localOwnerId,
       ),
     );
 }
 
-void configureTransactionsDependencies({GetIt? container}) {
+void configureTransactionsDependencies([GetIt? container]) {
   final c = container ?? getIt;
 
   c
-    ..registerLazySingleton<TransactionDao>(() => TransactionDao(c<GPAppDatabase>()))
+    ..registerLazySingleton<TransactionDao>(() => TransactionDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<TransactionRepository>(
       () => TransactionRepositoryImpl(
-        dao: c<TransactionDao>(),
-        clock: c<GPClock>(),
-        uuidGenerator: c<GPUuidGenerator>(),
-        logger: c<GPAppLogger>(),
+        clock: c.get<GPClock>(),
+        dao: c.get<TransactionDao>(),
+        logger: c.get<GPAppLogger>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
         ownerId: localOwnerId,
       ),
     );
