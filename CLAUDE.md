@@ -266,9 +266,9 @@ dart run drift_dev schema generate drift_schemas/ test/core/database/generated/
 # benchmark
 flutter test test/benchmark --dart-define=DATASET=50k
 
-# run — until the dev/prod flavors land at W10, with the Supabase env (there is no `env/` yet)
+# run — until the dev/prod flavors land at W11, with the Supabase env (there is no `env/` yet)
 fvm flutter run
-# from W10
+# from W11
 flutter run --flavor dev --dart-define-from-file=env/dev.json
 ```
 
@@ -330,7 +330,7 @@ Two consequences to keep in mind rather than rediscover:
 
 - Commit: Conventional Commits (`feat(sync): add durable outbox`)
 - Every PR must have: **What / Why / Architecture impact / Screenshots / Testing / Risks**
-- CI gate: format → analyze → test → build (a debug APK, flavor-less until W10). Runs on every PR into `main` / `dev` and on every
+- CI gate: format → analyze → test → build (a debug APK, flavor-less until W11). Runs on every PR into `main` / `dev` and on every
   push to them (`.github/workflows/ci.yml`) — and **nowhere else**, see the PR cadence above.
 - Branch protection required on **both** `main` and `dev`: require a PR, require the
   `format → analyze → test` check, no force push, no deletion.
@@ -394,8 +394,8 @@ A feature is Done only when **all** of these hold:
 
 | Field                | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase        | **Between P1 and P2 — W7 Review + refactor** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                                                                                                                                          |
-| Week                 | **W7 in progress** (19/10) — W6 merged into `dev`. Review + refactor week inserted 20/10, ROADMAP W8–W16 shifted one week (year-end buffer burnt). W8 T2 done early: `EXPLAIN QUERY PLAN` audit, no missing index, schema stays v4 (ADR-0019 amended). Next: W7 T3, map the codebase + one transaction end to end. Week pointers outside ROADMAP still use the old numbering — a W7 item                                                                                                       |
+| Current phase        | **P2 — Database quality** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                                                                                                                                                             |
+| Week                 | **W8 next** (26/10) — W7 Review + refactor done: the coding style (`docs/coding-style-flutter.md`, ADR-0020) applied to every slice, review notes in `docs/review/2026-10-codebase-review.md`, week pointers renumbered; PR `task/W7` → `dev` open. W8 T2 was done early (20/10: no missing index, schema v4). Next: W8 T3, the monthly aggregate in SQL                                                                                                                                       |
 | Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                                                                                                                                                                   |
 | Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                                                                                                                                                                                                                                                                                                                                              |

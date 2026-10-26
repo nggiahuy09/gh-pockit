@@ -745,38 +745,40 @@ khi đã có row, nên các trạng thái chồng lên nhau
 **Luật của tuần:**
 
 - **Không đổi hành vi.** Không feature mới, không đổi schema (vẫn v4), không thêm dependency, không đổi public contract của domain trừ khi có ADR.
+  Ngoại lệ đã chốt 24/10: `equatable` 2.1.0 vào cùng style guide (ADR-0020).
 - **Style viết ra trước, sửa code sau.** Refactor theo một luật chưa viết là xáo trộn, không phải refactor.
 - **Test xanh sau mỗi commit**; mỗi khu vực một commit `refactor(<scope>): …` để diff đọc được. Test chỉ được sửa khi đổi tên/cấu trúc, không sửa
   assertion — một assertion phải đổi nghĩa là hành vi đã đổi.
 - **Timebox.** Hết tuần thì dừng; phần chưa refactor ghi vào danh sách, sửa dần khi chạm vào file đó (không mở tuần thứ hai).
 
-| Ngày | Task                                                                                                                                                                                                                              |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | (19/10) Slot đã dùng cho audit index — giờ là **W8 T2**, ✅ Done sớm                                                                                                                                                              |
-| T3   | **Bản đồ + luồng dọc.** Đếm LOC theo feature/layer. Lần một transaction đi hết vòng: form → BLoC → use case → repository → DAO → stream → `TransactionListBloc` → list, đối chiếu CLAUDE.md §2–§3 và ADR-0006/0009/0010/0011/0013 |
-| T4   | **Đọc data layer**: tables, DAO, mapper, repository impl của `transactions` / `accounts` / `categories` cùng test của chúng. Ghi mọi chỗ muốn viết khác vào ghi chú review                                                        |
-| T5   | **Đọc domain + presentation**: entity / value object, use case, BLoC / Cubit, page, widget. `core/` (~6k dòng, phần lớn widget / theme / l10n) chỉ đọc lướt: `database`, `error`, `logging`, `utils`                              |
-| T6   | **Chốt style.** Cái lint bắt được → `analysis_options.yaml`; còn lại → CLAUDE.md (mục _Code style_ mới, §3/§13); đổi cách làm (vd. khuôn BLoC) → ADR. Xếp danh sách refactor theo thứ tự ưu tiên                                  |
-| Flex | **Refactor khuôn mẫu**: slice `transactions` trước (DAO → repository → use case → BLoC → page), rồi `accounts`; `categories` / `settings` / `dashboard` / `core` chỉ sửa chỗ vi phạm style mới                                    |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | (19/10) Slot đã dùng cho audit index — giờ là **W8 T2**, ✅ Done sớm                                                                                                                                                                                                                                                                                                            |
+| T3   | **Bản đồ + luồng dọc.** Đếm LOC theo feature/layer. Lần một transaction đi hết vòng: form → BLoC → use case → repository → DAO → stream → `TransactionListBloc` → list, đối chiếu CLAUDE.md §2–§3 và ADR-0006/0009/0010/0011/0013 ✅ Done (26/10) — `docs/review/2026-10-codebase-review.md` §1–§2: LOC theo feature/layer, một transaction đi từ form tới list với `file:line` |
+| T4   | **Đọc data layer**: tables, DAO, mapper, repository impl của `transactions` / `accounts` / `categories` cùng test của chúng. Ghi mọi chỗ muốn viết khác vào ghi chú review ✅ Done (24–26/10) — ghi chú review §3, đọc trong lúc refactor                                                                                                                                       |
+| T5   | **Đọc domain + presentation**: entity / value object, use case, BLoC / Cubit, page, widget. `core/` (~6k dòng, phần lớn widget / theme / l10n) chỉ đọc lướt: `database`, `error`, `logging`, `utils` ✅ Done (24–26/10) — ghi chú review §3                                                                                                                                     |
+| T6   | **Chốt style.** Cái lint bắt được → `analysis_options.yaml`; còn lại → CLAUDE.md (mục _Code style_ mới, §3/§13); đổi cách làm (vd. khuôn BLoC) → ADR. Xếp danh sách refactor theo thứ tự ưu tiên ✅ Done (24/10) — `docs/coding-style-flutter.md` + 4 override trong `analysis_options.yaml` + CLAUDE.md §3/§13 + ADR-0020                                                      |
+| Flex | **Refactor khuôn mẫu**: slice `transactions` trước (DAO → repository → use case → BLoC → page), rồi `accounts`; `categories` / `settings` / `dashboard` / `core` chỉ sửa chỗ vi phạm style mới ✅ Done (24–26/10) — mọi slice theo style mới, không chỉ `transactions`/`accounts`: Cubit → Bloc, `GPUseCase` + input, Page/View; 931 test                                       |
 
 **Ghi chú review:** một file `docs/review/2026-10-codebase-review.md` — mỗi mục: file / chỗ, thấy gì, muốn thế nào, vì sao, sửa ở đâu (W7 / khi chạm vào /
 không sửa). Đây vừa là input cho style guide, vừa là phần "học được gì" của luật 5.
 
 **Đã biết, đưa vào danh sách:**
 
-- [ ] Comment trong `lib/`, `test/`, ADR, docs, README, CLAUDE.md và `ci.yml` còn trỏ số tuần **theo đánh số cũ** (trước khi chèn W7) — ~80 chỗ / ~27 file;
+- [x] Comment trong `lib/`, `test/`, ADR, docs, README, CLAUDE.md và `ci.yml` còn trỏ số tuần **theo đánh số cũ** (trước khi chèn W7) — ~80 chỗ / ~27 file;
       chỉ ROADMAP đã đánh lại. CLAUDE.md §13 vốn cấm week/task provenance trong code: trong `lib/` / `test/` thì **xoá** pointer (giữ `ADR-00xx` nếu cần),
-      còn lại cộng 1 (W7–W16 cũ → W8–W17).
-- [ ] `lib/core/database/database.g.dart` lệch với nguồn: doc comment trong file generate (các pointer tuần cũ) không còn trong table hiện tại → chạy lại
-      `build_runner` + `dart format`, kiểm tra diff chỉ là comment.
+      còn lại cộng 1 (W7–W16 cũ → W8–W17). ✅ 26/10 — 5 chỗ trong `lib/`/`test/` xoá, 60 dòng ở 14 file docs/ADR/README/CLAUDE.md/`ci.yml` cộng 1.
+- [x] `lib/core/database/database.g.dart` lệch với nguồn: doc comment trong file generate (các pointer tuần cũ) không còn trong table hiện tại → chạy lại
+      `build_runner` + `dart format`, kiểm tra diff chỉ là comment. ✅ 26/10 — diff chỉ có doc comment và dòng trống.
 
 **Done khi:**
 
-- [ ] Ghi chú review viết xong, mỗi mục có quyết định
-- [ ] Style nằm trong lint + CLAUDE.md (và ADR nếu có), không chỉ trong đầu
-- [ ] Slice `transactions` và `accounts` theo style mới
-- [ ] `fvm dart format --set-exit-if-changed .`, `fvm dart analyze --fatal-infos`, `fvm flutter test` đều xanh; số test không giảm (925+)
-- [ ] Schema vẫn v4, không dependency mới
+- [x] Ghi chú review viết xong, mỗi mục có quyết định — 23 mục
+- [x] Style nằm trong lint + CLAUDE.md (và ADR nếu có), không chỉ trong đầu
+- [x] Slice `transactions` và `accounts` theo style mới
+- [x] `fvm dart format --set-exit-if-changed .`, `fvm dart analyze --fatal-infos`, `fvm flutter test` đều xanh; số test không giảm (925+) — 931, APK debug build được.
+      Lệch luật "test xanh sau mỗi commit": API đổi xuyên tầng nên 12 commit refactor chỉ xanh ở commit cuối (ghi chú review §4)
+- [x] Schema vẫn v4, không dependency mới — trừ `equatable` (ngoại lệ đã chốt, ADR-0020)
 
 ---
 
@@ -1113,5 +1115,5 @@ W3  [x]   W10 [ ]   W17 [ ]   W24 [ ]
 W4  [x]   W11 [ ]   W18 [ ]   W25 [ ]
 W5  [x]   W12 [ ]   W19 [ ]   W26 [ ]
 W6  [x]   W13 [ ]   W20 [ ]   W27 [ ]
-W7  [ ]   W14 [ ]   W21 [ ]   W28 [ ]
+W7  [x]   W14 [ ]   W21 [ ]   W28 [ ]
 ```
