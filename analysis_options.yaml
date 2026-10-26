@@ -39,3 +39,12 @@ linter:
 
     # Single-method interfaces (`GPClock`, repositories) are deliberate seams for fakes and get_it.
     one_member_abstracts: false
+
+    # The coding style wins over very_good_analysis here: relative imports in lib/, doubles written as `16.0`,
+    # and parameters in field order rather than required-first.
+    always_use_package_imports: false
+    prefer_relative_imports: true
+    prefer_int_literals: false
+    always_put_required_named_parameters_first: false
+    # A single parameter is positional, bools included.
+    avoid_positional_boolean_parameters: false

@@ -14,6 +14,8 @@ dependencies:
 
   drift_flutter: 0.2.8
 
+  equatable: 2.1.0
+
   flutter:
     sdk: flutter
 
