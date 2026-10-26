@@ -1,57 +1,51 @@
 import 'dart:async';
 
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/logging/app_logger.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/core/utils/uuid_generator.dart';
-import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
-import 'package:ghpockit/features/categories/data/mapper/category_mapper.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
-import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
+import '../../../../core/database/database.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/logging/app_logger.dart';
+import '../../../../core/utils/clock.dart';
+import '../../../../core/utils/uuid_generator.dart';
+import '../../domain/entities/category_entity.dart';
+import '../../domain/entities/category_type.dart';
+import '../../domain/repositories/category_repository.dart';
+import '../daos/category_dao.dart';
+import '../mapper/category_mapper.dart';
 
-class CategoryRepositoryImpl implements CategoryRepository {
+final class CategoryRepositoryImpl implements CategoryRepository {
   const CategoryRepositoryImpl({
-    required CategoryDao dao,
     required GPClock clock,
-    required GPUuidGenerator uuidGenerator,
+    required CategoryDao dao,
     required GPAppLogger logger,
+    required GPUuidGenerator uuidGenerator,
     required String ownerId,
-    CategoryMapper mapper = const CategoryMapper(),
-  }) : _dao = dao,
-       _clock = clock,
-       _uuidGenerator = uuidGenerator,
+  }) : _clock = clock,
+       _dao = dao,
        _logger = logger,
-       _ownerId = ownerId,
-       _mapper = mapper;
+       _uuidGenerator = uuidGenerator,
+       _ownerId = ownerId;
 
-  final CategoryDao _dao;
   final GPClock _clock;
-  final GPUuidGenerator _uuidGenerator;
+  final CategoryDao _dao;
   final GPAppLogger _logger;
-  final CategoryMapper _mapper;
-
-  /// `localOwnerId` today; the signed-in uid from W10.
+  final GPUuidGenerator _uuidGenerator;
   final String _ownerId;
 
   @override
-  Stream<List<CategoryEntity>> watchCategories({CategoryType? type}) {
+  Stream<List<CategoryEntity>> watchCategories([CategoryType? type]) {
     return _dao
-        .watchCategories(_ownerId, type: type?.storageValue)
+        .watchCategories(ownerId: _ownerId, type: type?.storageValue)
         .transform(
           StreamTransformer<List<CategoryRow>, List<CategoryEntity>>.fromHandlers(
             handleData: (rows, sink) {
               final entities = <CategoryEntity>[];
-
               for (final row in rows) {
-                switch (_mapper.toEntity(row)) {
+                switch (row.toDomain()) {
                   case MappedCategory(:final category):
                     entities.add(category);
                   case UnmappableCategoryRow(:final reason, :final failure):
-                    // One bad row fails the whole list, unlike transactions (ADR-0006, ADR-0011): a picker silently missing a category is worse.
-                    _logRejectedRow(row.id, reason);
+                    // One bad row fails the whole list, unlike transactions (ADR-0011): a picker silently missing a category is worse.
+                    _logRejectedRow(reason, row.id);
                     sink.addError(failure);
                     return;
                 }
@@ -59,7 +53,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
 
               sink.add(entities);
             },
-            handleError: (error, stackTrace, sink) => _reportQueryError('category list read failed', error, stackTrace, sink),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'category list read failed'),
           ),
         );
   }
@@ -67,7 +61,7 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Stream<CategoryEntity?> watchCategory(String id) {
     return _dao
-        .watchCategory(_ownerId, id)
+        .watchCategory(id: id, ownerId: _ownerId)
         .transform(
           StreamTransformer<CategoryRow?, CategoryEntity?>.fromHandlers(
             handleData: (row, sink) {
@@ -76,34 +70,33 @@ class CategoryRepositoryImpl implements CategoryRepository {
                 return;
               }
 
-              switch (_mapper.toEntity(row)) {
+              switch (row.toDomain()) {
                 case MappedCategory(:final category):
                   sink.add(category);
                 case UnmappableCategoryRow(:final reason, :final failure):
-                  _logRejectedRow(row.id, reason);
+                  _logRejectedRow(reason, row.id);
                   sink.addError(failure);
               }
             },
-            handleError: (error, stackTrace, sink) => _reportQueryError('category read failed', error, stackTrace, sink, id: id),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, id: id, message: 'category read failed'),
           ),
         );
   }
 
   @override
-  Future<GPResult<CategoryEntity>> createCategory({required String name, required CategoryType type, String? iconKey, String? colorKey}) async {
+  Future<GPResult<CategoryEntity>> createCategory({required CategoryType type, String? colorKey, String? iconKey, required String name}) async {
     final now = _clock.nowUtc();
-    final created = CategoryEntity.create(id: _uuidGenerator.v7(), name: name, type: type, iconKey: iconKey, colorKey: colorKey, createdAt: now, updatedAt: now);
+    final created = CategoryEntity.create(type: type, createdAt: now, updatedAt: now, colorKey: colorKey, iconKey: iconKey, id: _uuidGenerator.v7(), name: name);
 
     switch (created) {
-      case GPErr<CategoryEntity>():
+      case GPErr():
         return created;
-      case GPOk<CategoryEntity>(:final value):
+      case GPOk(:final value):
         try {
-          await _dao.insertCategory(_mapper.toInsert(value, ownerId: _ownerId));
-
-          return GPOk<CategoryEntity>(value);
+          await _dao.insertCategory(value.toInsert(_ownerId));
+          return GPOk(value);
         } on Exception catch (error, stackTrace) {
-          return _databaseFailure<CategoryEntity>('category insert failed', value.id, error, stackTrace);
+          return _databaseFailure(error: error, stackTrace: stackTrace, id: value.id, message: 'category insert failed');
         }
     }
   }
@@ -111,29 +104,21 @@ class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<GPResult<CategoryEntity>> updateCategory(CategoryEntity category) async {
     final now = _clock.nowUtc();
-    // No validation branch: a `CategoryEntity` is valid by construction.
-    final stamped = category.stampedAt(now);
+    final stamped = category.withUpdatedAt(now);
 
     try {
       return await _dao.transaction(() async {
-        final written = await _dao.updateCategory(
-          stamped.id,
-          baseVersion: category.version,
-          patch: _mapper.toPatch(stamped),
-          now: now.millisecondsSinceEpoch,
-        );
-
-        if (written == 1) return GPOk<CategoryEntity>(stamped);
+        final written = await _dao.updateCategory(stamped.id, patch: stamped.toPatch(), baseVersion: category.version, now: now.millisecondsSinceEpoch);
+        if (written == 1) return GPOk(stamped);
 
         // Zero rows: missing, deleted or stale. Asked inside the transaction so a concurrent delete cannot pass for a conflict.
         final current = await _dao.findById(stamped.id);
+        if (current == null || current.deletedAt != null) return const GPErr(GPNotFoundFailure());
 
-        if (current == null || current.deletedAt != null) return const GPErr<CategoryEntity>(GPNotFoundFailure());
-
-        return GPErr<CategoryEntity>(GPConflictFailure(entityId: stamped.id, localVersion: category.version, remoteVersion: current.version));
+        return GPErr(GPConflictFailure(entityId: stamped.id, localVersion: category.version, remoteVersion: current.version));
       });
     } on Exception catch (error, stackTrace) {
-      return _databaseFailure<CategoryEntity>('category update failed', stamped.id, error, stackTrace);
+      return _databaseFailure(error: error, stackTrace: stackTrace, id: stamped.id, message: 'category update failed');
     }
   }
 
@@ -142,29 +127,26 @@ class CategoryRepositoryImpl implements CategoryRepository {
     try {
       // Not version-guarded: a delete has nothing to merge, so a rename that landed first must not block it.
       final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
+      if (written == 0) return const GPErr(GPNotFoundFailure());
 
-      if (written == 0) return const GPErr<void>(GPNotFoundFailure());
-
-      return const GPOk<void>(null);
+      return const GPOk(null);
     } on Exception catch (error, stackTrace) {
-      return _databaseFailure<void>('category delete failed', id, error, stackTrace);
+      return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: 'category delete failed');
     }
   }
 
-  /// Id, entity type and reason code only, never the name (golden rule 9).
-  void _logRejectedRow(String id, CategoryMapperReason reason) =>
+  void _logRejectedRow(CategoryMapperReason reason, String id) =>
       _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': id, 'reason': reason.name});
 
-  /// Callers catch `on Exception` only: an `Error` is a bug, not "could not read local data" (ADR-0006).
-  GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace) {
+  /// For `on Exception` catches only: an `Error` is a bug, not "could not read local data" (ADR-0006).
+  GPResult<T> _databaseFailure<T>({required Object error, required StackTrace stackTrace, required String id, required String message}) {
     _logger.error(message, fields: {'entity': 'category', 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
   }
 
-  /// The stream side of [_databaseFailure]: an [Exception] (in the app, a `DriftRemoteException` from the database isolate) is logged and becomes
-  /// [GPDatabaseFailure]; anything else is a bug, forwarded unlogged so the crash reporter sees it once.
-  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id}) {
+  /// Anything but an [Exception] is a bug, forwarded unlogged so the crash reporter sees it once.
+  void _reportQueryError<T>({required Object error, required EventSink<T> sink, required StackTrace stackTrace, String? id, required String message}) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);
       return;

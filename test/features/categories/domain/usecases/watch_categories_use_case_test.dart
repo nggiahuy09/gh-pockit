@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
+import 'package:ghpockit/core/domain/use_case.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/domain/usecases/watch_categories_use_case.dart';
 
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/results.dart';
 
 void main() {
   late InMemoryRepositories repositories;
@@ -12,22 +12,21 @@ void main() {
   setUp(() => repositories = InMemoryRepositories());
   tearDown(() => repositories.close());
 
-  test('passes the type filter through, and watches both kinds without one', () async {
-    await repositories.categories.createCategory(name: 'Cà phê', type: CategoryType.expense);
-    await repositories.categories.createCategory(name: 'Thưởng', type: CategoryType.income);
-    final watch = WatchCategoriesUseCase(categoryRepository: repositories.categories);
+  test('watches both kinds, in the repository order', () async {
+    await repositories.categories.createCategory(type: CategoryType.expense, name: 'Cà phê');
+    await repositories.categories.createCategory(type: CategoryType.income, name: 'Thưởng');
 
-    expect((await watch().first).map((CategoryEntity c) => c.name), <String>['Cà phê', 'Thưởng']);
-    expect((await watch(type: CategoryType.income).first).map((CategoryEntity c) => c.name), <String>['Thưởng']);
+    final categories = await WatchCategoriesUseCase(repositories.categories).execute(const GPNoInput()).first;
+
+    expect(categories.map((category) => category.name), ['Cà phê', 'Thưởng']);
   });
 
   test('is the repository stream, so a later write reaches it', () async {
-    final watch = WatchCategoriesUseCase(categoryRepository: repositories.categories);
-    final emissions = watch().map((List<CategoryEntity> list) => list.length).take(2).toList();
+    final emissions = WatchCategoriesUseCase(repositories.categories).execute(const GPNoInput()).map((categories) => categories.length).take(2).toList();
 
     await pumpEventQueue();
-    expect(await repositories.categories.createCategory(name: 'Trà', type: CategoryType.expense), isA<GPOk<CategoryEntity>>());
+    okValue(await repositories.categories.createCategory(type: CategoryType.expense, name: 'Trà'));
 
-    expect(await emissions, <int>[0, 1]);
+    expect(await emissions, [0, 1]);
   });
 }
