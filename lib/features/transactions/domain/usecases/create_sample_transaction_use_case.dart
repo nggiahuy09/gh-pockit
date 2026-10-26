@@ -1,55 +1,67 @@
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:meta/meta.dart';
+
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../../../../core/utils/clock.dart';
+import '../../../accounts/domain/entities/account_entity.dart';
+import '../../../accounts/domain/entities/account_type.dart';
+import '../../../accounts/domain/repositories/account_repository.dart';
+import '../entities/transaction_entity.dart';
+import '../entities/transaction_type.dart';
+import '../repositories/transaction_repository.dart';
 
 /// Debug builds only: one expense in the oldest account, creating a cash account first when there is none.
-class CreateSampleTransactionUseCase {
-  const CreateSampleTransactionUseCase({required AccountRepository accountRepository, required TransactionRepository transactionRepository, required GPClock clock})
-    : _accounts = accountRepository,
-      _transactions = transactionRepository,
-      _clock = clock;
+final class CreateSampleTransactionUseCase with GPUseCase<CreateSampleTransactionInput, TransactionEntity> {
+  const CreateSampleTransactionUseCase(this._accountRepository, this._clock, this._transactionRepository);
 
-  static const int sampleAmountMinorUnits = 45000;
-  static const String sampleCurrencyCode = 'VND';
-
-  final AccountRepository _accounts;
-  final TransactionRepository _transactions;
+  final AccountRepository _accountRepository;
   final GPClock _clock;
+  final TransactionRepository _transactionRepository;
 
-  Future<GPResult<TransactionEntity>> call({required String accountName, required String note}) async {
+  static const sampleCurrencyCode = 'VND';
+  static const sampleAmountMinorUnits = 45000;
+
+  @override
+  Future<GPResult<TransactionEntity>> execute(CreateSampleTransactionInput input) async {
     final List<AccountEntity> existing;
     try {
-      existing = await _accounts.watchAccounts().first;
+      existing = await _accountRepository.watchAccounts().first;
     } on GPFailure catch (failure) {
-      return GPErr<TransactionEntity>(failure);
+      return GPErr(failure);
     }
 
     final AccountEntity account;
     if (existing.isNotEmpty) {
       account = existing.first;
     } else {
-      final created = await _accounts.createAccount(name: accountName, type: AccountType.cash, initialBalance: Money.zero(sampleCurrencyCode));
-      switch (created) {
-        case GPOk<AccountEntity>(:final value):
+      switch (await _accountRepository.createAccount(initialBalance: Money.zero(sampleCurrencyCode), type: AccountType.cash, name: input.accountName)) {
+        case GPOk(:final value):
           account = value;
-        case GPErr<AccountEntity>(:final failure):
-          return GPErr<TransactionEntity>(failure);
+        case GPErr(:final failure):
+          return GPErr(failure);
       }
     }
 
-    return _transactions.createTransaction(
-      type: TransactionType.expense,
-      accountId: account.id,
+    return _transactionRepository.createTransaction(
       amount: Money(sampleAmountMinorUnits, account.initialBalance.currencyCode),
+      type: TransactionType.expense,
       occurredAt: _clock.nowUtc(),
-      note: note,
+      accountId: account.id,
+      note: input.note,
     );
   }
+}
+
+@immutable
+final class CreateSampleTransactionInput implements GPLoggable {
+  const CreateSampleTransactionInput({required this.accountName, required this.note});
+
+  final String accountName;
+  final String note;
+
+  @override
+  Map<String, Object?> toLog() => const {};
 }

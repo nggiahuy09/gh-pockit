@@ -1,12 +1,14 @@
 import 'package:ghpockit/core/logging/app_logger.dart';
 
-class RecordingLogger extends GPAppLogger {
-  RecordingLogger({required super.clock});
+final class RecordingLogger extends GPAppLogger {
+  RecordingLogger(super.clock);
 
-  final List<GPLogRecord> records = <GPLogRecord>[];
+  final List<GPLogRecord> _records = [];
 
-  GPLogRecord get last => records.last;
+  List<GPLogRecord> get records => List.unmodifiable(_records);
+
+  GPLogRecord get last => _records.last;
 
   @override
-  void write(GPLogRecord record) => records.add(record);
+  void write(GPLogRecord record) => _records.add(record);
 }

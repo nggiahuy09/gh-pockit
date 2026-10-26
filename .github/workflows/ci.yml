@@ -60,6 +60,6 @@ jobs:
       - name: Test
         run: flutter test --reporter expanded
 
-      # No flavor until W10 adds dev/prod; debug needs no signing config.
+      # No flavor until W11 adds dev/prod; debug needs no signing config.
       - name: Build (debug APK)
         run: flutter build apk --debug

@@ -25,11 +25,11 @@ Future<void> openSettings(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// The tab routes resolve from the global locator (see `createRouter`). The transactions watch never emits, so that tab stays on its skeleton.
+/// The tab pages resolve from the global locator. The transactions watch never emits, so that tab stays on its skeleton.
 void registerShellFakes() {
   getIt
-    ..registerSingleton<AccountRepository>(FakeAccountRepository())
-    ..registerSingleton<CategoryRepository>(FakeCategoryRepository())
+    ..registerSingleton<AccountRepository>(const FakeAccountRepository())
+    ..registerSingleton<CategoryRepository>(const FakeCategoryRepository())
     ..registerSingleton<TransactionRepository>(FakeTransactionRepository())
     ..registerSingleton<GPClock>(FakeClock());
 }

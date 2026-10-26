@@ -21,514 +21,328 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
+import '../../../../helpers/results.dart';
+
+const int _page = TransactionListBloc.pageSize;
 
 void main() {
-  const page = TransactionListBloc.pageSize;
-
   late FakeTransactionRepository repository;
 
   setUp(() => getIt.registerSingleton<TransactionRepository>(repository = FakeTransactionRepository()));
   tearDown(getIt.reset);
 
-  TransactionEntity transaction(int n) {
-    final created = TransactionEntity.create(
-      id: 'tx-$n',
-      type: TransactionType.expense,
-      accountId: 'acc-cash',
-      amount: Money(125000, 'VND'),
-      occurredAt: DateTime.utc(2026, 10, 4, 5, 30),
-      createdAt: DateTime.utc(2026, 10, 4, 6),
-      updatedAt: DateTime.utc(2026, 10, 4, 6),
-      note: 'Phở bò',
-    );
-
-    return (created as GPOk<TransactionEntity>).value;
-  }
-
-  /// `hasMore` exactly as the repository sets it, so every seeded state is one it can produce.
-  TransactionListSnapshot snapshotOf({required int limit, required int rows, int unreadable = 0}) {
-    assert(rows + unreadable <= limit, 'a window never returns more rows than its limit');
-
-    return TransactionListSnapshot(transactions: [for (var i = 0; i < rows; i++) transaction(i)], unreadableCount: unreadable, hasMore: rows + unreadable == limit);
-  }
-
-  TransactionListBloc fresh() {
-    final bloc = TransactionListBloc();
-    addTearDown(bloc.close);
-    return bloc;
-  }
-
-  TransactionListBloc seeded(TransactionListState seed) {
-    final bloc = _SeededTransactionListBloc(seed);
-    addTearDown(bloc.close);
-    return bloc;
-  }
-
-  /// Reads states off `bloc.stream` by hand: `bloc_test` does not resolve on this SDK (see `pubspec.yaml`).
-  Future<List<TransactionListState>> statesDuring(TransactionListBloc bloc, void Function() act) async {
-    final states = <TransactionListState>[];
-    final subscription = bloc.stream.listen(states.add);
-
-    act();
-    await pumpEventQueue();
-
-    await subscription.cancel();
-    return states;
-  }
-
-  Future<List<TransactionListState>> statesAfter(TransactionListBloc bloc, List<TransactionListEvent> events) => statesDuring(bloc, () => events.forEach(bloc.add));
-
   group('TransactionListState', () {
-    test('before Started: nothing watched, and loading — the first frame is a progress indicator, not a blank', () {
-      const state = TransactionListState();
+    test('starts with nothing watched and nothing to show', () {
+      final bloc = _fresh();
 
-      expect(state.query, isNull);
-      expect(state.isLoading, isTrue);
-      expect(state.hasMore, isFalse);
-      expect(state.isLoadingMore, isFalse);
-    });
-
-    test('a failure before any row arrived is the error state, not loading', () {
-      final state = TransactionListState(
-        query: TransactionQuery(limit: page),
-        failure: const GPDatabaseFailure(),
-      );
-
-      expect(state.isLoading, isFalse);
-      expect(state.isLoadingMore, isFalse);
+      expect(bloc.state, const TransactionListInitState());
+      expect(bloc.state.query, isNull);
+      expect(bloc.state.hasMore, isFalse);
     });
 
     test('with rows on screen, hasMore is the window having come back full', () {
-      final query = TransactionQuery(limit: page);
-      final full = TransactionListState(
-        query: query,
-        snapshot: snapshotOf(limit: page, rows: page),
-      );
-      final short = TransactionListState(
-        query: query,
-        snapshot: snapshotOf(limit: page, rows: 3),
-      );
+      final query = TransactionQuery(limit: _page);
 
-      expect(full.isLoading, isFalse);
-      expect(full.hasMore, isTrue);
-      expect(short.hasMore, isFalse);
-      expect(full.isLoadingMore, isFalse);
-    });
-
-    group('isLoadingMore', () {
-      final grown = TransactionQuery(limit: 2 * page);
-
-      test('while the rows on screen came back full from a smaller window than the one watched', () {
-        expect(
-          TransactionListState(
-            query: grown,
-            snapshot: snapshotOf(limit: page, rows: page),
-          ).isLoadingMore,
-          isTrue,
-        );
-      });
-
-      test('ends with the first emission of the larger window, whether it fills it or comes back short', () {
-        expect(
-          TransactionListState(
-            query: grown,
-            snapshot: snapshotOf(limit: 2 * page, rows: 2 * page),
-          ).isLoadingMore,
-          isFalse,
-        );
-        expect(
-          TransactionListState(
-            query: grown,
-            snapshot: snapshotOf(limit: 2 * page, rows: page + 7),
-          ).isLoadingMore,
-          isFalse,
-        );
-        // Exactly one window's worth of rows in the table: the larger window returns the same rows, and this time they do not fill it.
-        expect(
-          TransactionListState(
-            query: grown,
-            snapshot: snapshotOf(limit: 2 * page, rows: page),
-          ).isLoadingMore,
-          isFalse,
-        );
-      });
-
-      test('ends with a failure, which is the larger window answering', () {
-        final failed = TransactionListState(
-          query: grown,
-          snapshot: snapshotOf(limit: page, rows: page),
-          failure: const GPDatabaseFailure(),
-        );
-
-        expect(failed.isLoadingMore, isFalse);
-        expect(failed.snapshot, isNotNull);
-      });
+      expect(TransactionListLoadedState(query, _snapshotOf(limit: _page, rows: _page)).hasMore, isTrue);
+      expect(TransactionListLoadedState(query, _snapshotOf(limit: _page, rows: 3)).hasMore, isFalse);
     });
 
     group('equality', () {
-      TransactionListState state({Set<String> accountIds = const {'acc-cash', 'acc-bank'}, int rows = 2, GPFailure? failure = const GPDatabaseFailure()}) => TransactionListState(
-        query: TransactionQuery(limit: page, accountIds: accountIds),
-        snapshot: snapshotOf(limit: page, rows: rows),
-        failure: failure,
-      );
-
       test('is by value: the same filter in another order, fresh instances of the same rows', () {
-        expect(state(), state(accountIds: {'acc-bank', 'acc-cash'}));
-        expect(state().hashCode, state(accountIds: {'acc-bank', 'acc-cash'}).hashCode);
+        expect(_errorState(), _errorState(accountIds: {'acc-bank', 'acc-cash'}));
+        expect(_errorState().hashCode, _errorState(accountIds: {'acc-bank', 'acc-cash'}).hashCode);
       });
 
       test('differs when the query, the rows or the failure differs', () {
-        expect(state(), isNot(state(accountIds: {'acc-cash'})));
-        expect(state(), isNot(state(rows: 3)));
-        expect(state(), isNot(state(failure: null)));
-        expect(state(), isNot(state(failure: const GPNotFoundFailure())));
+        expect(_errorState(), isNot(_errorState(accountIds: {'acc-cash'})));
+        expect(_errorState(), isNot(_errorState(rows: 3)));
+        expect(_errorState(), isNot(_errorState(failure: const GPNotFoundFailure())));
+        expect(_errorState(), isNot(TransactionListLoadedState(TransactionQuery(accountIds: const {'acc-cash', 'acc-bank'}, limit: _page), _snapshotOf(limit: _page, rows: 2))));
       });
     });
 
     test('prints ids and counts, never an amount or a note (golden rule 9)', () {
-      final printed = TransactionListState(
-        query: TransactionQuery(limit: page),
-        snapshot: snapshotOf(limit: page, rows: 2),
-      ).toString();
+      final printed = TransactionListLoadedState(TransactionQuery(limit: _page), _snapshotOf(limit: _page, rows: 2)).toString();
 
       expect(printed, isNot(contains('Phở')));
       expect(printed, isNot(contains('125000')));
     });
   });
 
-  group('TransactionListStarted', () {
-    test('watches every transaction, newest first, one page deep', () async {
-      expect(await statesAfter(fresh(), [const TransactionListStarted()]), [TransactionListState(query: TransactionQuery(limit: page))]);
-    });
+  group('starting', () {
+    test('watches every transaction, newest first, one page deep, as soon as it is built', () async {
+      final bloc = _fresh();
 
-    test('a second one does not start a scrolled list over', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: 2 * page),
-          snapshot: snapshotOf(limit: 2 * page, rows: 2 * page),
-        ),
-      );
-
-      expect(await statesAfter(bloc, [const TransactionListStarted()]), isEmpty);
+      expect(await _statesDuring(bloc, () {}), [TransactionListLoadingState(TransactionQuery(limit: _page), null)]);
+      expect(repository.watches.single.query, TransactionQuery(limit: _page));
     });
   });
 
-  group('TransactionListFilterChanged', () {
-    test('is ignored before Started: there is nothing to filter yet', () async {
-      expect(
-        await statesAfter(fresh(), [
-          const TransactionListFilterChanged(types: {TransactionType.income}),
-        ]),
-        isEmpty,
-      );
+  group('TransactionListFilterChangeEvent', () {
+    test('sent right after the bloc is built, applies once the first page has started', () async {
+      final bloc = _fresh();
+
+      final states = await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.income}),
+      ], bloc);
+
+      expect(states, [
+        TransactionListLoadingState(TransactionQuery(limit: _page), null),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.income}, limit: _page), null),
+      ]);
     });
 
     test('starts the new filter over at one page, with neither the rows nor the failure of the old one', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: 3 * page, types: const {TransactionType.expense}),
-          snapshot: snapshotOf(limit: 3 * page, rows: 3 * page),
-          failure: const GPDatabaseFailure(),
-        ),
-      );
+      final bloc = await _started();
+      await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.expense}),
+      ], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.emit(_snapshotOf(limit: _page, rows: _page)));
+      await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.emit(_snapshotOf(limit: 2 * _page, rows: 2 * _page)));
+      await _statesDuring(bloc, () => repository.watches.last.fail(const GPDatabaseFailure()));
+      expect(bloc.state, isA<TransactionListLoadErrorState>());
 
-      final states = await statesAfter(bloc, [
-        const TransactionListFilterChanged(types: {TransactionType.income}),
-      ]);
+      final states = await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.income}),
+      ], bloc);
 
       expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
-        ),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.income}, limit: _page), null),
       ]);
-      expect(states.single.isLoading, isTrue);
     });
 
     test('replaces the whole filter rather than patching the old one', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page, accountIds: const {'acc-cash'}, types: const {TransactionType.expense}),
-        ),
-      );
+      final bloc = await _started();
+      await _statesAfter([
+        const TransactionListFilterChangeEvent(accountIds: {'acc-cash'}, types: {TransactionType.expense}),
+      ], bloc);
 
-      final states = await statesAfter(bloc, [
-        const TransactionListFilterChanged(types: {TransactionType.expense}),
-      ]);
+      final states = await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.expense}),
+      ], bloc);
 
       expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.expense}),
-        ),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.expense}, limit: _page), null),
       ]);
     });
 
     test('the filter it already has changes nothing: not the window, not the rows', () async {
       final from = DateTime.utc(2026, 9, 30, 17);
       final to = DateTime.utc(2026, 10, 31, 17);
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: 2 * page, accountIds: const {'acc-cash', 'acc-bank'}, from: from, to: to),
-          snapshot: snapshotOf(limit: 2 * page, rows: 2 * page),
-        ),
-      );
+      final bloc = await _started();
+      await _statesAfter([
+        TransactionListFilterChangeEvent(accountIds: const {'acc-cash', 'acc-bank'}, from: from, to: to),
+      ], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.emit(_snapshotOf(limit: _page, rows: _page)));
+      await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.emit(_snapshotOf(limit: 2 * _page, rows: 2 * _page)));
 
       // Another set order, and an empty set — which `TransactionQuery` reads as no filter, like null: still the filter in force.
-      final states = await statesAfter(bloc, [
-        TransactionListFilterChanged(accountIds: const {'acc-bank', 'acc-cash'}, categoryIds: const {}, from: from, to: to),
-      ]);
+      final states = await _statesAfter([
+        TransactionListFilterChangeEvent(accountIds: const {'acc-bank', 'acc-cash'}, categoryIds: const {}, from: from, to: to),
+      ], bloc);
 
       expect(states, isEmpty);
+      expect(bloc.state.query?.limit, 2 * _page);
     });
 
     test('a range that ends before it starts is a bug, and it is not swallowed', () async {
       final errors = <Object>[];
       // A handler's error is rethrown into the zone the bloc was created in.
-      final bloc = runZonedGuarded(TransactionListBloc.new, (Object error, StackTrace _) => errors.add(error))!;
+      final bloc = runZonedGuarded(TransactionListBloc.new, (error, _) => errors.add(error))!;
       addTearDown(bloc.close);
 
-      final states = await statesAfter(bloc, [
-        const TransactionListStarted(),
-        TransactionListFilterChanged(from: DateTime.utc(2026, 10, 5), to: DateTime.utc(2026, 10, 4)),
-      ]);
+      final states = await _statesAfter([
+        TransactionListFilterChangeEvent(from: DateTime.utc(2026, 10, 5), to: DateTime.utc(2026, 10, 4)),
+      ], bloc);
 
       expect(errors, [isA<ArgumentError>()]);
-      expect(states, [TransactionListState(query: TransactionQuery(limit: page))]);
+      expect(states, [TransactionListLoadingState(TransactionQuery(limit: _page), null)]);
     });
   });
 
-  group('TransactionListLoadMoreRequested', () {
+  group('TransactionListLoadMoreEvent', () {
     test('grows a full window by one page, keeping its filter and its rows on screen meanwhile', () async {
-      final rows = snapshotOf(limit: page, rows: page);
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.expense}),
-          snapshot: rows,
-        ),
-      );
+      final rows = _snapshotOf(limit: _page, rows: _page);
+      final bloc = await _started();
+      await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.expense}),
+      ], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.emit(rows));
 
-      final states = await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+      final states = await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
 
       expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: 2 * page, types: const {TransactionType.expense}),
-          snapshot: rows,
-        ),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.expense}, limit: 2 * _page), rows),
       ]);
-      expect(states.single.isLoadingMore, isTrue);
     });
 
     test('asks once, however often a scroll listener sends it', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page),
-          snapshot: snapshotOf(limit: page, rows: page),
-        ),
-      );
+      final bloc = await _loaded(repository, _snapshotOf(limit: _page, rows: _page));
 
-      final states = await statesAfter(bloc, List.filled(5, const TransactionListLoadMoreRequested()));
+      final states = await _statesAfter(List.filled(5, const TransactionListLoadMoreEvent()), bloc);
 
       expect(states, hasLength(1));
-      expect(states.single.query?.limit, 2 * page);
+      expect(states.single.query?.limit, 2 * _page);
     });
 
     test('counts the rows it could not read toward the window', () async {
       // 48 mapped + 2 unreadable fill the window; counting the mapped rows alone would ask for 98.
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page),
-          snapshot: snapshotOf(limit: page, rows: page - 2, unreadable: 2),
-        ),
-      );
+      final bloc = await _loaded(repository, _snapshotOf(limit: _page, rows: _page - 2, unreadable: 2));
 
-      final states = await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+      final states = await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
 
-      expect(states.single.query?.limit, 2 * page);
+      expect(states.single.query?.limit, 2 * _page);
     });
 
     test('is ignored when the window came back short: the list has ended', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page),
-          snapshot: snapshotOf(limit: page, rows: page - 1),
-        ),
-      );
+      final bloc = await _loaded(repository, _snapshotOf(limit: _page, rows: _page - 1));
 
-      expect(await statesAfter(bloc, [const TransactionListLoadMoreRequested()]), isEmpty);
+      expect(await _statesAfter([const TransactionListLoadMoreEvent()], bloc), isEmpty);
     });
 
     test('is ignored before the first rows arrive', () async {
-      final states = await statesAfter(fresh(), [const TransactionListStarted(), const TransactionListLoadMoreRequested()]);
+      final bloc = await _started();
 
-      expect(states, [TransactionListState(query: TransactionQuery(limit: page))]);
+      expect(await _statesAfter([const TransactionListLoadMoreEvent()], bloc), isEmpty);
     });
 
     test('drops the failure, which belonged to the watch the larger window replaces', () async {
-      final rows = snapshotOf(limit: page, rows: page);
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: page),
-          snapshot: rows,
-          failure: const GPDatabaseFailure(),
-        ),
-      );
+      final rows = _snapshotOf(limit: _page, rows: _page);
+      final bloc = await _loaded(repository, rows);
+      await _statesDuring(bloc, () => repository.watches.single.fail(const GPDatabaseFailure()));
 
-      final states = await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+      final states = await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
 
-      expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: 2 * page),
-          snapshot: rows,
-        ),
-      ]);
+      expect(states, [TransactionListLoadingState(TransactionQuery(limit: 2 * _page), rows)]);
     });
 
     test('does not grow past a larger window whose watch failed', () async {
-      final bloc = seeded(
-        TransactionListState(
-          query: TransactionQuery(limit: 2 * page),
-          snapshot: snapshotOf(limit: page, rows: page),
-          failure: const GPDatabaseFailure(),
-        ),
-      );
+      final rows = _snapshotOf(limit: _page, rows: _page);
+      final bloc = await _loaded(repository, rows);
+      await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
+      await _statesDuring(bloc, () => repository.watches.last.fail(const GPDatabaseFailure()));
+      expect(bloc.state, TransactionListLoadErrorState(TransactionQuery(limit: 2 * _page), rows, const GPDatabaseFailure()));
 
-      expect(await statesAfter(bloc, [const TransactionListLoadMoreRequested()]), isEmpty);
+      expect(await _statesAfter([const TransactionListLoadMoreEvent()], bloc), isEmpty);
     });
   });
 
   group('watching', () {
-    Future<TransactionListBloc> started() async {
-      final bloc = fresh();
-      await statesAfter(bloc, [const TransactionListStarted()]);
-      return bloc;
-    }
+    test('the first page opens one watch, and what it emits is what the list shows', () async {
+      final bloc = await _started();
+      final rows = _snapshotOf(limit: _page, rows: 3);
 
-    test('Started opens one watch on the first page, and what it emits is what the list shows', () async {
-      final bloc = await started();
-      final rows = snapshotOf(limit: page, rows: 3);
+      final states = await _statesDuring(bloc, () => repository.watches.single.emit(rows));
 
-      final states = await statesDuring(bloc, () => repository.watches.single.emit(rows));
+      expect(states, [TransactionListLoadedState(TransactionQuery(limit: _page), rows)]);
+    });
 
-      expect(repository.watches.single.query, TransactionQuery(limit: page));
-      expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: page),
-          snapshot: rows,
-        ),
-      ]);
+    test('a failure before any row arrived is the error state, with nothing on screen', () async {
+      final bloc = await _started();
+
+      final states = await _statesDuring(bloc, () => repository.watches.single.fail(const GPDatabaseFailure()));
+
+      expect(states, [TransactionListLoadErrorState(TransactionQuery(limit: _page), null, const GPDatabaseFailure())]);
     });
 
     test('a new filter cancels the old watch before the new one starts', () async {
-      final bloc = await started();
+      final bloc = await _started();
 
-      await statesAfter(bloc, [
-        const TransactionListFilterChanged(types: {TransactionType.income}),
-      ]);
+      await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.income}),
+      ], bloc);
 
       expect(repository.log, ['listen #0', 'cancel #0', 'listen #1']);
-      expect(repository.watches.last.query, TransactionQuery(limit: page, types: const {TransactionType.income}));
+      expect(repository.watches.last.query, TransactionQuery(types: const {TransactionType.income}, limit: _page));
     });
 
     test('an emission of the old filter that lands after the change never reaches the screen', () async {
-      final bloc = await started();
+      final bloc = await _started();
 
-      final states = await statesDuring(bloc, () {
-        bloc.add(const TransactionListFilterChanged(types: {TransactionType.income}));
+      final states = await _statesDuring(bloc, () {
+        bloc.add(const TransactionListFilterChangeEvent(types: {TransactionType.income}));
         // Delivered after the filter change and before `restartable` cancels the old watch.
-        repository.watches.first.emit(snapshotOf(limit: page, rows: 3));
+        repository.watches.first.emit(_snapshotOf(limit: _page, rows: 3));
       });
 
       expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
-        ),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.income}, limit: _page), null),
       ]);
     });
 
     test('a failure of the old filter that lands after the change never reaches the screen', () async {
-      final bloc = await started();
+      final bloc = await _started();
 
-      final states = await statesDuring(bloc, () {
-        bloc.add(const TransactionListFilterChanged(types: {TransactionType.income}));
+      final states = await _statesDuring(bloc, () {
+        bloc.add(const TransactionListFilterChangeEvent(types: {TransactionType.income}));
         repository.watches.first.fail(const GPDatabaseFailure());
       });
 
       expect(states, [
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
-        ),
+        TransactionListLoadingState(TransactionQuery(types: const {TransactionType.income}, limit: _page), null),
       ]);
     });
 
     test('a filter change while a larger window loads drops both the old rows and that window', () async {
-      final bloc = await started();
-      await statesDuring(bloc, () => repository.watches.first.emit(snapshotOf(limit: page, rows: page)));
-      await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+      final bloc = await _loaded(repository, _snapshotOf(limit: _page, rows: _page));
+      await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
 
-      await statesAfter(bloc, [
-        const TransactionListFilterChanged(types: {TransactionType.income}),
-      ]);
+      await _statesAfter([
+        const TransactionListFilterChangeEvent(types: {TransactionType.income}),
+      ], bloc);
 
-      expect(
-        bloc.state,
-        TransactionListState(
-          query: TransactionQuery(limit: page, types: const {TransactionType.income}),
-        ),
-      );
+      expect(bloc.state, TransactionListLoadingState(TransactionQuery(types: const {TransactionType.income}, limit: _page), null));
       expect(repository.log, ['listen #0', 'cancel #0', 'listen #1', 'cancel #1', 'listen #2']);
     });
 
     test('load more keeps the rows on screen until the larger window answers on its own watch', () async {
-      final bloc = await started();
-      final firstPage = snapshotOf(limit: page, rows: page);
-      await statesDuring(bloc, () => repository.watches.first.emit(firstPage));
+      final firstPage = _snapshotOf(limit: _page, rows: _page);
+      final bloc = await _loaded(repository, firstPage);
 
-      await statesAfter(bloc, [const TransactionListLoadMoreRequested()]);
+      await _statesAfter([const TransactionListLoadMoreEvent()], bloc);
 
-      expect(bloc.state.snapshot, firstPage);
-      expect(bloc.state.isLoadingMore, isTrue);
+      expect(bloc.state, TransactionListLoadingState(TransactionQuery(limit: 2 * _page), firstPage));
       expect(repository.log, ['listen #0', 'cancel #0', 'listen #1']);
-      expect(repository.watches.last.query.limit, 2 * page);
+      expect(repository.watches.last.query.limit, 2 * _page);
 
-      final twoPages = snapshotOf(limit: 2 * page, rows: 2 * page);
-      await statesDuring(bloc, () => repository.watches.last.emit(twoPages));
+      final twoPages = _snapshotOf(limit: 2 * _page, rows: 2 * _page);
+      await _statesDuring(bloc, () => repository.watches.last.emit(twoPages));
 
-      expect(bloc.state.snapshot, twoPages);
-      expect(bloc.state.isLoadingMore, isFalse);
+      expect(bloc.state, TransactionListLoadedState(TransactionQuery(limit: 2 * _page), twoPages));
     });
 
     test('five load-more requests open one more watch, not five', () async {
-      final bloc = await started();
-      await statesDuring(bloc, () => repository.watches.first.emit(snapshotOf(limit: page, rows: page)));
+      final bloc = await _loaded(repository, _snapshotOf(limit: _page, rows: _page));
 
-      await statesAfter(bloc, List.filled(5, const TransactionListLoadMoreRequested()));
+      await _statesAfter(List.filled(5, const TransactionListLoadMoreEvent()), bloc);
 
       expect(repository.watches, hasLength(2));
     });
 
     test('a failure keeps the rows, and the next emission of the same watch clears it', () async {
-      final bloc = await started();
+      final rows = _snapshotOf(limit: _page, rows: 3);
+      final bloc = await _loaded(repository, rows);
       final watch = repository.watches.single;
-      final rows = snapshotOf(limit: page, rows: 3);
-      await statesDuring(bloc, () => watch.emit(rows));
 
-      await statesDuring(bloc, () => watch.fail(const GPDatabaseFailure()));
+      await _statesDuring(bloc, () => watch.fail(const GPDatabaseFailure()));
 
-      expect(bloc.state.failure, const GPDatabaseFailure());
-      expect(bloc.state.snapshot, rows);
+      expect(bloc.state, TransactionListLoadErrorState(TransactionQuery(limit: _page), rows, const GPDatabaseFailure()));
 
-      await statesDuring(bloc, () => watch.emit(rows));
+      await _statesDuring(bloc, () => watch.emit(rows));
 
-      expect(bloc.state.failure, isNull);
+      expect(bloc.state, TransactionListLoadedState(TransactionQuery(limit: _page), rows));
       expect(watch.isListened, isTrue);
     });
 
     test('an error that is not a GPFailure is a bug, and it is not swallowed', () async {
       final errors = <Object>[];
-      final bloc = runZonedGuarded(TransactionListBloc.new, (Object error, StackTrace _) => errors.add(error))!;
+      final bloc = runZonedGuarded(TransactionListBloc.new, (error, _) => errors.add(error))!;
       addTearDown(bloc.close);
-      await statesAfter(bloc, [const TransactionListStarted()]);
+      await pumpEventQueue();
 
-      final states = await statesDuring(bloc, () => repository.watches.single.fail(StateError('bug')));
+      final states = await _statesDuring(bloc, () => repository.watches.single.fail(StateError('bug')));
 
       expect(errors, [isA<StateError>()]);
       expect(states, isEmpty);
@@ -536,7 +350,7 @@ void main() {
 
     test('close cancels the running watch', () async {
       final bloc = TransactionListBloc();
-      await statesAfter(bloc, [const TransactionListStarted()]);
+      await pumpEventQueue();
 
       await bloc.close();
 
@@ -550,10 +364,10 @@ void main() {
       addTearDown(db.close);
       final clock = FakeClock(DateTime.utc(2026, 10, 6, 9));
       final transactions = TransactionRepositoryImpl(
-        dao: TransactionDao(db),
         clock: clock,
+        dao: TransactionDao(db),
+        logger: RecordingLogger(clock),
         uuidGenerator: FakeUuidGenerator(),
-        logger: RecordingLogger(clock: clock),
         ownerId: localOwnerId,
       );
       await db
@@ -572,20 +386,18 @@ void main() {
               version: 1,
             ),
           );
-
       await getIt.unregister<TransactionRepository>();
       getIt.registerSingleton<TransactionRepository>(transactions);
 
-      final bloc = TransactionListBloc()..add(const TransactionListStarted());
-      addTearDown(bloc.close);
+      final bloc = _fresh();
       await expectLater(bloc.stream, emitsThrough(predicate<TransactionListState>((state) => state.snapshot?.transactions.isEmpty ?? false)));
 
       final updated = expectLater(bloc.stream, emitsThrough(predicate<TransactionListState>((state) => state.snapshot?.transactions.length == 1)));
       final created = await transactions.createTransaction(
-        type: TransactionType.expense,
-        accountId: 'acc-cash',
         amount: Money(45000, 'VND'),
+        type: TransactionType.expense,
         occurredAt: DateTime.utc(2026, 10, 6, 8),
+        accountId: 'acc-cash',
       );
 
       expect(created, isA<GPOk<TransactionEntity>>());
@@ -594,9 +406,58 @@ void main() {
   });
 }
 
-/// `bloc_test`'s `seed`: starts from a state without driving a watch to it. `emit` is protected, so only a subclass may call it.
-class _SeededTransactionListBloc extends TransactionListBloc {
-  _SeededTransactionListBloc(TransactionListState seed) {
-    emit(seed);
-  }
+TransactionListState _errorState({Set<String> accountIds = const {'acc-cash', 'acc-bank'}, GPFailure failure = const GPDatabaseFailure(), int rows = 2}) =>
+    TransactionListLoadErrorState(TransactionQuery(accountIds: accountIds, limit: _page), _snapshotOf(limit: _page, rows: rows), failure);
+
+TransactionEntity _transaction(int n) => okValue(
+  TransactionEntity.create(
+    amount: Money(125000, 'VND'),
+    type: TransactionType.expense,
+    createdAt: DateTime.utc(2026, 10, 4, 6),
+    occurredAt: DateTime.utc(2026, 10, 4, 5, 30),
+    updatedAt: DateTime.utc(2026, 10, 4, 6),
+    accountId: 'acc-cash',
+    id: 'tx-$n',
+    note: 'Phở bò',
+  ),
+);
+
+/// `hasMore` exactly as the repository sets it, so every state a test reaches is one it can produce.
+TransactionListSnapshot _snapshotOf({required int limit, required int rows, int unreadable = 0}) {
+  assert(rows + unreadable <= limit, 'a window never returns more rows than its limit');
+
+  return TransactionListSnapshot(transactions: [for (var i = 0; i < rows; i++) _transaction(i)], unreadableCount: unreadable, hasMore: rows + unreadable == limit);
 }
+
+TransactionListBloc _fresh() {
+  final bloc = TransactionListBloc();
+  addTearDown(bloc.close);
+  return bloc;
+}
+
+/// The first page is watched and has not answered yet.
+Future<TransactionListBloc> _started() async {
+  final bloc = _fresh();
+  await pumpEventQueue();
+  return bloc;
+}
+
+/// The first page has answered with [snapshot].
+Future<TransactionListBloc> _loaded(FakeTransactionRepository repository, TransactionListSnapshot snapshot) async {
+  final bloc = await _started();
+  await _statesDuring(bloc, () => repository.watches.single.emit(snapshot));
+  return bloc;
+}
+
+Future<List<TransactionListState>> _statesDuring(TransactionListBloc bloc, void Function() act) async {
+  final states = <TransactionListState>[];
+  final subscription = bloc.stream.listen(states.add);
+
+  act.call();
+  await pumpEventQueue();
+
+  await subscription.cancel();
+  return states;
+}
+
+Future<List<TransactionListState>> _statesAfter(List<TransactionListEvent> events, TransactionListBloc bloc) => _statesDuring(bloc, () => events.forEach(bloc.add));

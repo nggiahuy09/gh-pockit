@@ -11,8 +11,7 @@ void main() {
     });
 
     test('carries void for an operation with nothing to return', () {
-      // `const GPOk<void>(null)` looks like it should not compile; `archiveAccount` and friends rely on it.
-      const GPResult<void> result = GPOk<void>(null);
+      const result = GPOk<void>(null);
 
       expect(result, isA<GPOk<void>>());
     });
@@ -46,8 +45,8 @@ void main() {
     final described = results
         .map(
           (result) => switch (result) {
-            GPOk<int>(:final value) => 'ok:$value',
-            GPErr<int>(:final failure) => 'err:${failure.runtimeType}',
+            GPOk(:final value) => 'ok:$value',
+            GPErr(:final failure) => 'err:${failure.runtimeType}',
           },
         )
         .toList();

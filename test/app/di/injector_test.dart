@@ -25,23 +25,22 @@ void main() {
     late GetIt container;
 
     setUp(() {
-      // A private container, never `GetIt.instance`: registrations in the global locator would leak into the next test.
       container = GetIt.asNewInstance();
-      configureCoreDependencies(container: container);
+      configureCoreDependencies(container);
     });
 
     tearDown(() => container.reset());
 
     test('registers the three core abstractions', () {
-      expect(container<GPClock>(), isA<GPSystemClock>());
-      expect(container<GPUuidGenerator>(), isA<GPUuidGeneratorImpl>());
-      expect(container<GPAppLogger>(), isA<GPDeveloperLogger>());
+      expect(container.get<GPClock>(), isA<GPSystemClock>());
+      expect(container.get<GPUuidGenerator>(), isA<GPUuidGeneratorImpl>());
+      expect(container.get<GPAppLogger>(), isA<GPDeveloperLogger>());
     });
 
     test('resolves each one as a singleton', () {
-      expect(container<GPClock>(), same(container<GPClock>()));
-      expect(container<GPUuidGenerator>(), same(container<GPUuidGenerator>()));
-      expect(container<GPAppLogger>(), same(container<GPAppLogger>()));
+      expect(container.get<GPClock>(), same(container.get<GPClock>()));
+      expect(container.get<GPUuidGenerator>(), same(container.get<GPUuidGenerator>()));
+      expect(container.get<GPAppLogger>(), same(container.get<GPAppLogger>()));
     });
 
     test('registers against the interface, not the implementation', () {
@@ -52,37 +51,32 @@ void main() {
     });
 
     test('wires the logger to the registered GPClock', () {
-      // Resolving the logger runs its factory, which resolves `GPClock` from this same container.
-      container<GPAppLogger>().info('probe');
+      container.get<GPAppLogger>().info('probe');
 
-      expect(container<GPClock>(), isA<GPSystemClock>());
+      expect(container.get<GPClock>(), isA<GPSystemClock>());
     });
 
     test('binds the locale store to Drift, not to the in-memory one', () async {
-      // In-memory database first: the production one asks `path_provider` for a path, which a unit test cannot answer. Lazy registration allows the swap.
-      await container.unregister<GPAppDatabase>();
-      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
+      await _useMemoryDatabase(container);
 
-      expect(container<GPLocaleStore>(), isA<GPDriftLocaleStore>());
+      expect(container.get<GPLocaleStore>(), isA<GPDriftLocaleStore>());
       expect(container.isRegistered<GPLocaleStore>(), isTrue);
       expect(container.isRegistered<GPDriftLocaleStore>(), isFalse);
     });
 
     test('a reset container can be configured again', () async {
-      // get_it throws on a duplicate registration, so a reboot (hot restart, an integration test) relies on the reset alone.
+      // get_it throws on a duplicate registration, so a hot restart relies on the reset alone.
       await container.reset();
 
-      expect(() => configureCoreDependencies(container: container), returnsNormally);
-      expect(container<GPClock>(), isA<GPSystemClock>());
+      expect(() => configureCoreDependencies(container), returnsNormally);
+      expect(container.get<GPClock>(), isA<GPSystemClock>());
     });
 
     test('defaults to the global locator when no container is given', () {
       configureCoreDependencies();
-      addTearDown(() async {
-        await getIt.reset();
-      });
+      addTearDown(getIt.reset);
 
-      expect(getIt<GPClock>(), isA<GPSystemClock>());
+      expect(getIt.get<GPClock>(), isA<GPSystemClock>());
     });
   });
 
@@ -91,27 +85,26 @@ void main() {
 
     setUp(() async {
       container = GetIt.asNewInstance();
-      configureCoreDependencies(container: container);
-      await container.unregister<GPAppDatabase>();
-      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
-      configureAccountsDependencies(container: container);
+      configureCoreDependencies(container);
+      await _useMemoryDatabase(container);
+      configureAccountsDependencies(container);
     });
 
     tearDown(() => container.reset());
 
     test('registers the repository against its interface, not the impl', () {
-      expect(container<AccountRepository>(), isA<AccountRepositoryImpl>());
+      expect(container.get<AccountRepository>(), isA<AccountRepositoryImpl>());
       expect(container.isRegistered<AccountRepository>(), isTrue);
       expect(container.isRegistered<AccountRepositoryImpl>(), isFalse);
     });
 
     test('hands out one AccountDao, shared with the repository', () {
-      expect(container<AccountDao>(), same(container<AccountDao>()));
-      expect(container<AccountRepository>(), same(container<AccountRepository>()));
+      expect(container.get<AccountDao>(), same(container.get<AccountDao>()));
+      expect(container.get<AccountRepository>(), same(container.get<AccountRepository>()));
     });
 
     test('binds the DAO to the same database the core module registered', () {
-      expect(container<AccountDao>().attachedDatabase, same(container<GPAppDatabase>()));
+      expect(container.get<AccountDao>().attachedDatabase, same(container.get<GPAppDatabase>()));
     });
   });
 
@@ -120,23 +113,22 @@ void main() {
 
     setUp(() async {
       container = GetIt.asNewInstance();
-      configureCoreDependencies(container: container);
-      await container.unregister<GPAppDatabase>();
-      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
-      configureCategoriesDependencies(container: container);
+      configureCoreDependencies(container);
+      await _useMemoryDatabase(container);
+      configureCategoriesDependencies(container);
     });
 
     tearDown(() => container.reset());
 
     test('registers the repository against its interface, not the impl', () {
-      expect(container<CategoryRepository>(), isA<CategoryRepositoryImpl>());
+      expect(container.get<CategoryRepository>(), isA<CategoryRepositoryImpl>());
       expect(container.isRegistered<CategoryRepositoryImpl>(), isFalse);
     });
 
     test('hands out one CategoryDao, bound to the database the core module registered, and the seeder', () {
-      expect(container<CategoryDao>(), same(container<CategoryDao>()));
-      expect(container<CategoryDao>().attachedDatabase, same(container<GPAppDatabase>()));
-      expect(container<CategorySeeder>(), isA<CategorySeeder>());
+      expect(container.get<CategoryDao>(), same(container.get<CategoryDao>()));
+      expect(container.get<CategoryDao>().attachedDatabase, same(container.get<GPAppDatabase>()));
+      expect(container.get<CategorySeeder>(), isA<CategorySeeder>());
     });
   });
 
@@ -145,22 +137,27 @@ void main() {
 
     setUp(() async {
       container = GetIt.asNewInstance();
-      configureCoreDependencies(container: container);
-      await container.unregister<GPAppDatabase>();
-      container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
-      configureTransactionsDependencies(container: container);
+      configureCoreDependencies(container);
+      await _useMemoryDatabase(container);
+      configureTransactionsDependencies(container);
     });
 
     tearDown(() => container.reset());
 
     test('registers the repository against its interface, not the impl', () {
-      expect(container<TransactionRepository>(), isA<TransactionRepositoryImpl>());
+      expect(container.get<TransactionRepository>(), isA<TransactionRepositoryImpl>());
       expect(container.isRegistered<TransactionRepositoryImpl>(), isFalse);
     });
 
     test('hands out one TransactionDao, bound to the database the core module registered', () {
-      expect(container<TransactionDao>(), same(container<TransactionDao>()));
-      expect(container<TransactionDao>().attachedDatabase, same(container<GPAppDatabase>()));
+      expect(container.get<TransactionDao>(), same(container.get<TransactionDao>()));
+      expect(container.get<TransactionDao>().attachedDatabase, same(container.get<GPAppDatabase>()));
     });
   });
+}
+
+/// The production database asks `path_provider` for a path, which a unit test cannot answer. Lazy registration allows the swap.
+Future<void> _useMemoryDatabase(GetIt container) async {
+  await container.unregister<GPAppDatabase>();
+  container.registerLazySingleton<GPAppDatabase>(() => GPAppDatabase.forTesting(NativeDatabase.memory()), dispose: (db) => db.close());
 }

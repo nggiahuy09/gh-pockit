@@ -1,25 +1,20 @@
 /// What the app can render. `Money` checks only a code's shape, so a well-formed code may still be missing here (ADR-0007).
 enum CurrencyCode {
   /// ISO-4217 gives VND no minor unit: `1500000` is 1.5 million dong.
-  vnd(code: 'VND', exponent: 0, symbol: '₫'),
+  vnd('VND', '₫', 0),
 
-  usd(code: 'USD', exponent: 2, symbol: r'$');
+  usd('USD', r'$', 2);
 
-  const CurrencyCode({required this.code, required this.exponent, required this.symbol});
+  const CurrencyCode(this.code, this.symbol, this.exponent);
 
   final String code;
-
-  /// ISO-4217 minor-unit exponent: how many trailing digits of `Money.minorUnits` are fractional.
-  final int exponent;
 
   /// Placement comes from the locale via `intl`, not from the currency.
   final String symbol;
 
+  /// How many trailing digits of `Money.minorUnits` are fractional.
+  final int exponent;
+
   /// Case-sensitive on purpose: `Money` rejects lowercase, so a `'vnd'` here is a corrupt row to surface, not to forgive.
-  static CurrencyCode? fromCode(String code) {
-    for (final candidate in CurrencyCode.values) {
-      if (candidate.code == code) return candidate;
-    }
-    return null;
-  }
+  static CurrencyCode? fromCode(String code) => values.where((currency) => currency.code == code).firstOrNull;
 }

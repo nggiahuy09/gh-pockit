@@ -13,7 +13,7 @@ void main() {
   setUp(() async => en = await localizationFor(GPLocale.en));
 
   group('GPChip', () {
-    testWidgets('a tap calls onPressed, and the chip is 40 tall', (WidgetTester tester) async {
+    testWidgets('a tap calls onPressed, and the chip is 40 tall', (tester) async {
       var taps = 0;
       await pumpOnPhone(
         tester,
@@ -26,10 +26,10 @@ void main() {
       await tester.tap(find.text('Today'));
 
       expect(taps, 1);
-      expect(tester.getSize(find.byType(AnimatedContainer)).height, 40);
+      expect(tester.getSize(find.byType(AnimatedContainer)).height, 40.0);
     });
 
-    testWidgets('a disabled chip ignores taps', (WidgetTester tester) async {
+    testWidgets('a disabled chip ignores taps', (tester) async {
       var taps = 0;
       await pumpOnPhone(
         tester,
@@ -44,7 +44,7 @@ void main() {
       expect(taps, 0);
     });
 
-    testWidgets('the remove button removes, without also pressing the chip', (WidgetTester tester) async {
+    testWidgets('the remove button removes, without also pressing the chip', (tester) async {
       final semantics = tester.ensureSemantics();
       var presses = 0;
       var removals = 0;
@@ -52,7 +52,7 @@ void main() {
         tester,
         localization: en,
         child: Center(
-          child: GPChip(label: 'E-wallet', selected: true, onPressed: () => presses++, onDeleted: () => removals++),
+          child: GPChip(label: 'E-wallet', selected: true, onDeleted: () => removals++, onPressed: () => presses++),
         ),
       );
 
@@ -67,7 +67,7 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets('tells a screen reader whether it is selected', (WidgetTester tester) async {
+    testWidgets('tells a screen reader whether it is selected', (tester) async {
       final semantics = tester.ensureSemantics();
       await pumpOnPhone(
         tester,

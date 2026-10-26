@@ -90,13 +90,13 @@ void main() {
     });
 
     test('the mismatch error is an Error, not an Exception', () {
-      expect(MoneyCurrencyMismatchError('VND', 'USD'), isA<Error>());
-      expect(MoneyCurrencyMismatchError('VND', 'USD'), isNot(isA<Exception>()));
+      expect(MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD'), isA<Error>());
+      expect(MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD'), isNot(isA<Exception>()));
     });
 
     test('the mismatch error names both currencies and no amounts', () {
       // Golden rule 9: printable, so no amounts.
-      final error = MoneyCurrencyMismatchError('VND', 'USD').toString();
+      final error = MoneyCurrencyMismatchError(currencyCode: 'VND', otherCurrencyCode: 'USD').toString();
 
       expect(error, contains('VND'));
       expect(error, contains('USD'));
@@ -136,7 +136,7 @@ void main() {
     });
 
     test('addition past the ceiling wraps instead of throwing — the documented bound, not a bug', () {
-      // Deliberately unguarded (ROADMAP W3 T3, option A): a throw here would reverse that decision, not fix a bug.
+      // Deliberately unguarded (ADR-0007): a throw here would reverse that decision, not fix a bug.
       expect(Money(ceiling, 'VND') + Money(1, 'VND'), Money(floor, 'VND'));
       expect(Money(floor, 'VND') - Money(1, 'VND'), Money(ceiling, 'VND'));
     });

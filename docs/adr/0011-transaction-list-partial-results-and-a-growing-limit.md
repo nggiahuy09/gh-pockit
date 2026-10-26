@@ -53,7 +53,7 @@ insert anywhere simply appears in the next emission. "There is more" is
 makes the list believe it has reached the end.
 
 _Settled at W5 T2,_ in `TransactionListBloc`: a page is 50 rows — judgement
-until W8 times the list's first frame. "Load more" asks for the rows on screen
+until W9 times the list's first frame. "Load more" asks for the rows on screen
 plus a page, counted in rows like `hasMore`, rather than for the current limit
 plus a page. Asked twice for the same snapshot, that is the same window twice, so
 the second ask is dropped: a scroll listener firing every frame costs one query,
@@ -117,7 +117,7 @@ Negative:
 - `TransactionRepository.watchTransactions` returns a type blueprint §22 does
   not have.
 - Every emission re-maps up to `limit` rows, and deep scrolling re-runs an ever
-  larger query. Cheap with the index of ADR-0009 and measured at W8; if the
+  larger query. Cheap with the index of ADR-0009 and measured at W9; if the
   numbers say otherwise, W26 swaps the inside for keyset without changing what
   the BLoC sends.
 - The notice needs copy in both languages and a UI state at W5.

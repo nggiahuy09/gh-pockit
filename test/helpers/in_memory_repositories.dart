@@ -14,38 +14,20 @@ import 'fake_uuid_generator.dart';
 import 'recording_logger.dart';
 
 /// The real account, category and transaction repositories over one in-memory database. No categories are seeded.
-class InMemoryRepositories {
-  InMemoryRepositories({FakeClock? clock}) : clock = clock ?? FakeClock() {
+final class InMemoryRepositories {
+  InMemoryRepositories([FakeClock? clock]) : clock = clock ?? FakeClock() {
     // Otherwise drift keeps a cancelled stream cached behind `Timer.run`, and a widget test fails on a timer still pending at teardown.
     db = GPAppDatabase.forTesting(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
-    final logger = RecordingLogger(clock: this.clock);
-    accounts = AccountRepositoryImpl(
-      dao: AccountDao(db),
-      clock: this.clock,
-      uuidGenerator: FakeUuidGenerator(prefix: 'acc'),
-      logger: logger,
-      ownerId: localOwnerId,
-    );
-    categories = CategoryRepositoryImpl(
-      dao: CategoryDao(db),
-      clock: this.clock,
-      uuidGenerator: FakeUuidGenerator(prefix: 'cat'),
-      logger: logger,
-      ownerId: localOwnerId,
-    );
-    transactions = TransactionRepositoryImpl(
-      dao: TransactionDao(db),
-      clock: this.clock,
-      uuidGenerator: FakeUuidGenerator(prefix: 'tx'),
-      logger: logger,
-      ownerId: localOwnerId,
-    );
+    final logger = RecordingLogger(this.clock);
+    accounts = AccountRepositoryImpl(clock: this.clock, dao: AccountDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('acc'), ownerId: localOwnerId);
+    categories = CategoryRepositoryImpl(clock: this.clock, dao: CategoryDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('cat'), ownerId: localOwnerId);
+    transactions = TransactionRepositoryImpl(clock: this.clock, dao: TransactionDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('tx'), ownerId: localOwnerId);
   }
 
-  final FakeClock clock;
-  late final GPAppDatabase db;
   late final AccountRepositoryImpl accounts;
   late final CategoryRepositoryImpl categories;
+  final FakeClock clock;
+  late final GPAppDatabase db;
   late final TransactionRepositoryImpl transactions;
 
   Future<void> close() => db.close();

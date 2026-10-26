@@ -1,8 +1,9 @@
-import 'package:ghpockit/core/localization/locale.dart';
-import 'package:ghpockit/core/money/currency_code.dart';
-import 'package:ghpockit/core/money/money.dart';
 import 'package:intl/intl.dart';
 import 'package:meta/meta.dart';
+
+import '../localization/locale.dart';
+import 'currency_code.dart';
+import 'money.dart';
 
 /// Never hands `intl` a `double`: the integer part is formatted as an `int` and the fraction joined as digits (golden rule 2).
 @immutable
@@ -12,12 +13,31 @@ final class GPMoneyFormatter {
   /// Language-only, so `en` gets the en-US patterns `intl` ships as its default.
   final GPLocale locale;
 
+  /// 0 for an unknown currency (a newer build's row): the stored minor units print unchanged rather than behind a guessed decimal point.
+  static int _exponentOf(CurrencyCode? currency) => currency?.exponent ?? 0;
+
+  static NumberFormat _numberFormatFor(GPLocale locale) => _numberFormats.putIfAbsent(locale.languageCode, () => NumberFormat.decimalPattern(locale.languageCode));
+
+  /// Formats a zero and reads what sits either side of it (`₫0` in English, `0 ₫` in Vietnamese). A symbol has no digit, so the zero is the amount.
+  static _CurrencyAffixes _affixesFor(GPLocale locale, String symbol) {
+    return _affixes.putIfAbsent('${locale.languageCode}|$symbol', () {
+      final probe = NumberFormat.currency(locale: locale.languageCode, symbol: symbol, decimalDigits: 0);
+      final skeleton = probe.format(0);
+      final zeroAt = skeleton.indexOf(probe.symbols.ZERO_DIGIT);
+
+      return _CurrencyAffixes(prefix: skeleton.substring(0, zeroAt), suffix: skeleton.substring(zeroAt + 1));
+    });
+  }
+
   /// ISO-4217 exponents run 0–4. A table because `math.pow` returns a `double`.
-  static const List<int> _powersOfTen = <int>[1, 10, 100, 1000, 10000];
+  static const _powersOfTen = [1, 10, 100, 1000, 10000];
 
   /// Static caches: building a `NumberFormat` reads locale data, and this class is constructed inside `build()`.
-  static final Map<String, NumberFormat> _numberFormats = <String, NumberFormat>{};
-  static final Map<String, _CurrencyAffixes> _affixes = <String, _CurrencyAffixes>{};
+  static final _numberFormats = <String, NumberFormat>{};
+  static final _affixes = <String, _CurrencyAffixes>{};
+
+  /// Empty matches: `'12'` has no fraction and is still twelve dollars.
+  static final _digitsOnly = RegExp(r'^[0-9]*$');
 
   /// Never throws: an unknown currency still prints (see [_exponentOf]). With `withSymbol: false` the result is exactly what [parse] reads back.
   String format(Money money, {bool withSymbol = true}) {
@@ -60,7 +80,7 @@ final class GPMoneyFormatter {
 
   /// Null when [text] is not an amount, including more fractional digits than the currency has. Throws [ArgumentError] on a malformed [currencyCode].
   /// Grouping separators are stripped, not validated: `1.500.00` is a half-typed `1.500.000`.
-  Money? parse(String text, {required String currencyCode}) {
+  Money? parse({required String currencyCode, required String text}) {
     // Validates the code up front: checked only once the text parses, the same bug would throw or not depending on what was typed.
     Money.zero(currencyCode);
 
@@ -97,29 +117,10 @@ final class GPMoneyFormatter {
 
     return Money(minorUnits, currencyCode);
   }
-
-  /// Empty matches: `'12'` has no fraction and is still twelve dollars.
-  static final RegExp _digitsOnly = RegExp(r'^[0-9]*$');
-
-  /// 0 for an unknown currency (a newer build's row): the stored minor units print unchanged rather than behind a guessed decimal point.
-  static int _exponentOf(CurrencyCode? currency) => currency?.exponent ?? 0;
-
-  static NumberFormat _numberFormatFor(GPLocale locale) => _numberFormats.putIfAbsent(locale.languageCode, () => NumberFormat.decimalPattern(locale.languageCode));
-
-  /// Formats a zero and reads what sits either side of it (`₫0` in English, `0 ₫` in Vietnamese). A symbol has no digit, so the zero is the amount.
-  static _CurrencyAffixes _affixesFor(GPLocale locale, String symbol) {
-    return _affixes.putIfAbsent('${locale.languageCode}|$symbol', () {
-      final probe = NumberFormat.currency(locale: locale.languageCode, symbol: symbol, decimalDigits: 0);
-      final skeleton = probe.format(0);
-      final zeroAt = skeleton.indexOf(probe.symbols.ZERO_DIGIT);
-
-      return _CurrencyAffixes(prefix: skeleton.substring(0, zeroAt), suffix: skeleton.substring(zeroAt + 1));
-    });
-  }
 }
 
 @immutable
-class _CurrencyAffixes {
+final class _CurrencyAffixes {
   const _CurrencyAffixes({required this.prefix, required this.suffix});
 
   final String prefix;

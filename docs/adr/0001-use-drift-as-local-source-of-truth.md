@@ -46,11 +46,11 @@ rather than to taste:
    data that never syncs. This needs real ACID across tables, not per-box
    atomicity.
 3. **Versioned migrations.** Golden rule 7: never wipe the database on a schema
-   change; every version bump needs a migration and a fixture test (W9 is an
+   change; every version bump needs a migration and a fixture test (W10 is an
    entire week of this).
 4. **Indexed aggregate queries.** §6 forbids storing derived balances and
    requires computing them with an indexed aggregate; §12.8 names hard-stored
-   balances as an anti-pattern; W8 benchmarks all of it at 50 000 rows. This
+   balances as an anti-pattern; W9 benchmarks all of it at 50 000 rows. This
    needs SQL — `GROUP BY`, composite indexes, and `EXPLAIN QUERY PLAN` to prove
    the index is used.
 5. **Execution off the UI isolate.** §6 puts heavy queries on a background
@@ -107,7 +107,7 @@ an OS-keystore concern rather than a data-modelling one.
 
 **Hive / Isar (NoSQL document stores).** Rejected on constraint 4 first: with no
 SQL there is no aggregate, so "spend per category per month over 50k rows"
-becomes load-everything-and-fold-in-Dart — precisely what §6 forbids and W8
+becomes load-everything-and-fold-in-Dart — precisely what §6 forbids and W9
 measures. Constraint 2 finishes it: no transaction spanning two boxes means
 golden rule 3 cannot be enforced at all, only hoped for. Maintenance is a
 secondary concern in both cases and not the deciding one.
@@ -125,7 +125,7 @@ question. It is not a database: no transactions, no queries, and a whole-file
 rewrite per change.
 
 **ObjectBox.** Fast and reactive, but adds a native binary per platform and has
-a weaker story for the fixture-based migration testing W9 is built around.
+a weaker story for the fixture-based migration testing W10 is built around.
 
 **`floor`, `sqlcool`, and similar.** Thinner ecosystems and weaker migration
 tooling, for no advantage over Drift on any of the six constraints.
@@ -140,7 +140,7 @@ tooling, for no advantage over Drift on any of the six constraints.
   anti-pattern takes deliberate effort to commit.
 - `NativeDatabase.memory()` makes every repository test hermetic and fast, which
   is what §8 asks for when it requires repository tests on an in-memory DB.
-- `EXPLAIN QUERY PLAN` is available, which is what turns W8's "480ms → 12ms"
+- `EXPLAIN QUERY PLAN` is available, which is what turns W9's "480ms → 12ms"
   soundbite into a measurement rather than a claim.
 - Migration testing has first-class tooling instead of a hand-rolled harness.
 
@@ -160,7 +160,7 @@ tooling, for no advantage over Drift on any of the six constraints.
   option — so `dart run build_runner build` must be followed by
   `dart format .` or the pre-commit hook fails on a file nobody wrote.
   `CLAUDE.md` §9 chains the two commands for this reason.
-- Migration correctness becomes a permanent responsibility. After W9 no schema
+- Migration correctness becomes a permanent responsibility. After W10 no schema
   change is ever one line again.
 - Drift's API spreads through `data/`. Replacing the store later is a real port,
   not a config swap. Accepted deliberately: the thing that protects the rest of
@@ -184,7 +184,7 @@ instead of racing the UI connection for the write lock ("database is locked"),
 and a stream query in the UI learns about rows a background pull wrote. The
 cost is a small overhead forwarding table updates between isolates, and the
 constraint — nothing unsendable may cross the boundary — now applies to every
-DAO from the first one rather than to four of them at W7.
+DAO from the first one rather than to four of them at W8.
 
 **3. Typed `settings` table or key/value — answered: key/value.** Typed columns
 are the better shape once the columns are known; today they are not, and
@@ -197,19 +197,19 @@ its own table rather than a `switch` on this one.
 ## Settled in W2 T3 (2026-09-15)
 
 **1. `owner_id` before auth exists — answered: a sentinel, and the column is
-`NOT NULL` from the first insert.** Synced rows written before W10 carry
+`NOT NULL` from the first insert.** Synced rows written before W11 carry
 `localOwnerId` (`'local'`, in `core/database/owner_id.dart`). The alternative —
-nullable now, backfilled and tightened at W10 — was rejected on two counts. It
-would make every DAO, query and sync path written between W2 and W9 tolerate a
+nullable now, backfilled and tightened at W11 — was rejected on two counts. It
+would make every DAO, query and sync path written between W2 and W10 tolerate a
 null owner, which is eight weeks of code shaped around a temporary state; and
 tightening a column to `NOT NULL` in SQLite is a full table rebuild, not an
 `ALTER`. It would also leave the local schema disagreeing with the Postgres
-mirror of W10 T3 for exactly the period sync is being designed in.
+mirror of W11 T3 for exactly the period sync is being designed in.
 
 The risk this ADR named is not dissolved, only bounded: `NOT NULL` is enforced
-today, but _a real uid flowing through the column_ is not proven until W10.
+today, but _a real uid flowing through the column_ is not proven until W11.
 
-Worth stating because it changes what W10 owes: claiming these rows is **not** a
+Worth stating because it changes what W11 owes: claiming these rows is **not** a
 schema migration. It needs the uid, which only exists at runtime after a
 sign-in, so it cannot live in an `onUpgrade` step — it belongs in the sign-in
 flow as `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1
@@ -220,10 +220,10 @@ buying a migration on credit; it is naming work that was always required.
 
 **The v1 → v2 bump was taken the expensive way.** Golden rule 7 permits wiping
 the database during Phase 0–1 and `settings` held one language preference, so
-the cheap path was available and was refused. W9 is an entire week of migration
+the cheap path was available and was refused. W10 is an entire week of migration
 work, and that week needs an earlier schema that genuinely exists. Taking the
 exception would have meant the first migration Pockit ever writes being written
-in W9, against a user's database, with no fixture to have practised on. v1
+in W10, against a user's database, with no fixture to have practised on. v1
 survives in `drift_schemas/drift_schema_v1.json` as something to upgrade rather
 than something to delete.
 

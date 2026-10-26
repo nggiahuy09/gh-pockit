@@ -1,23 +1,102 @@
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:meta/meta.dart';
+
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../../../../core/utils/clock.dart';
+import '../../../accounts/domain/entities/account_entity.dart';
+import '../../../accounts/domain/entities/account_type.dart';
+import '../../../accounts/domain/repositories/account_repository.dart';
+import '../entities/transaction_query.dart';
+import '../entities/transaction_type.dart';
+import '../repositories/transaction_repository.dart';
+
+/// Debug builds only. Accounts are matched by name, so seeding twice adds rows but never a second "Cash" account.
+final class SeedSampleDataUseCase with GPUseCase<SeedSampleDataInput, int> {
+  const SeedSampleDataUseCase(this._accountRepository, this._clock, this._transactionRepository);
+
+  final AccountRepository _accountRepository;
+  final GPClock _clock;
+  final TransactionRepository _transactionRepository;
+
+  @override
+  Future<GPResult<int>> execute(SeedSampleDataInput input) async {
+    try {
+      if (input.onlyIfEmpty) {
+        final existing = await _transactionRepository.watchTransactions(TransactionQuery(limit: 1)).first;
+        if (existing.rowCount > 0) return const GPOk(0);
+      }
+
+      final existingAccounts = await _accountRepository.watchAccounts().first;
+      final resolved = <AccountEntity>[];
+      for (final sample in input.accounts) {
+        final match = existingAccounts.where((account) => account.name == sample.name).firstOrNull;
+        if (match != null) {
+          resolved.add(match);
+          continue;
+        }
+
+        final created = await _accountRepository.createAccount(initialBalance: Money(sample.initialBalance, sample.currencyCode), type: sample.type, name: sample.name);
+        switch (created) {
+          case GPOk(:final value):
+            resolved.add(value);
+          case GPErr(:final failure):
+            return GPErr(failure);
+        }
+      }
+
+      final today = _clock.nowUtc().toLocal();
+      for (final sample in input.transactions) {
+        final account = resolved[sample.account];
+        final destination = sample.destination;
+        final (hour, minute) = sample.time;
+        final result = await _transactionRepository.createTransaction(
+          amount: Money(sample.amount, account.initialBalance.currencyCode),
+          type: sample.type,
+          // Through the constructor, not `subtract`: a DST day is not 24 hours long.
+          occurredAt: DateTime(today.year, today.month, today.day - sample.daysAgo, hour, minute).toUtc(),
+          accountId: account.id,
+          destinationAccountId: destination == null ? null : resolved[destination].id,
+          note: sample.note,
+        );
+        if (result case GPErr(:final failure)) return GPErr(failure);
+      }
+
+      return GPOk(input.transactions.length);
+    } on GPFailure catch (failure) {
+      return GPErr(failure);
+    }
+  }
+}
+
+@immutable
+final class SeedSampleDataInput implements GPLoggable {
+  const SeedSampleDataInput({required List<SampleAccount> accounts, required List<SampleTransaction> transactions, this.onlyIfEmpty = false})
+    : _accounts = accounts,
+      _transactions = transactions;
+
+  final List<SampleAccount> _accounts;
+  final List<SampleTransaction> _transactions;
+
+  final bool onlyIfEmpty;
+
+  List<SampleAccount> get accounts => List.unmodifiable(_accounts);
+
+  List<SampleTransaction> get transactions => List.unmodifiable(_transactions);
+
+  @override
+  Map<String, Object?> toLog() => {'accounts': _accounts.length, 'transactions': _transactions.length, 'only_if_empty': onlyIfEmpty};
+}
 
 @immutable
 final class SampleAccount {
-  const SampleAccount(this.name, this.type, {this.currencyCode = 'VND', this.initialBalance = 0});
+  const SampleAccount({required this.type, this.currencyCode = 'VND', required this.name, this.initialBalance = 0});
 
-  final String name;
   final AccountType type;
   final String currencyCode;
+  final String name;
 
   /// Minor units.
   final int initialBalance;
@@ -26,88 +105,21 @@ final class SampleAccount {
 /// Dated relative to the day it is seeded, so "Today" and "Yesterday" always have rows.
 @immutable
 final class SampleTransaction {
-  const SampleTransaction({
-    required this.daysAgo,
-    required this.time,
-    required this.type,
-    required this.amount,
-    required this.account,
-    this.destination,
-    this.note,
-  });
+  const SampleTransaction({required this.type, required this.time, this.note, required this.account, required this.amount, required this.daysAgo, this.destination});
 
-  final int daysAgo;
+  final TransactionType type;
 
   /// Local `(hour, minute)`.
   final (int, int) time;
-  final TransactionType type;
+
+  final String? note;
+
+  /// Index into the seeded account list, as is [destination].
+  final int account;
 
   /// Minor units, in the account's currency.
   final int amount;
 
-  /// Index into the seeded account list.
-  final int account;
+  final int daysAgo;
   final int? destination;
-  final String? note;
-}
-
-/// Debug builds only: writes a whole dataset through the repositories, so the list is fed by the real query.
-class SeedSampleDataUseCase {
-  const SeedSampleDataUseCase({required AccountRepository accountRepository, required TransactionRepository transactionRepository, required GPClock clock})
-    : _accounts = accountRepository,
-      _transactions = transactionRepository,
-      _clock = clock;
-
-  final AccountRepository _accounts;
-  final TransactionRepository _transactions;
-  final GPClock _clock;
-
-  /// Returns how many transactions it wrote. Accounts are matched by name, so seeding twice adds rows but never a second "Cash" account.
-  /// With [onlyIfEmpty], a database that already holds a transaction is left alone.
-  Future<GPResult<int>> call({required List<SampleAccount> accounts, required List<SampleTransaction> transactions, bool onlyIfEmpty = false}) async {
-    try {
-      if (onlyIfEmpty) {
-        final existing = await _transactions.watchTransactions(TransactionQuery(limit: 1)).first;
-        if (existing.rowCount > 0) return const GPOk<int>(0);
-      }
-
-      final existingAccounts = await _accounts.watchAccounts().first;
-      final resolved = <AccountEntity>[];
-      for (final sample in accounts) {
-        final match = existingAccounts.where((AccountEntity a) => a.name == sample.name).firstOrNull;
-        if (match != null) {
-          resolved.add(match);
-          continue;
-        }
-
-        final created = await _accounts.createAccount(name: sample.name, type: sample.type, initialBalance: Money(sample.initialBalance, sample.currencyCode));
-        switch (created) {
-          case GPOk<AccountEntity>(:final value):
-            resolved.add(value);
-          case GPErr<AccountEntity>(:final failure):
-            return GPErr<int>(failure);
-        }
-      }
-
-      final today = _clock.nowUtc().toLocal();
-      for (final sample in transactions) {
-        final account = resolved[sample.account];
-        final (hour, minute) = sample.time;
-        final result = await _transactions.createTransaction(
-          type: sample.type,
-          accountId: account.id,
-          destinationAccountId: sample.destination == null ? null : resolved[sample.destination!].id,
-          amount: Money(sample.amount, account.initialBalance.currencyCode),
-          // Through the constructor, not `subtract`: a DST day is not 24 hours long.
-          occurredAt: DateTime(today.year, today.month, today.day - sample.daysAgo, hour, minute).toUtc(),
-          note: sample.note,
-        );
-        if (result case GPErr<TransactionEntity>(:final failure)) return GPErr<int>(failure);
-      }
-
-      return GPOk<int>(transactions.length);
-    } on GPFailure catch (failure) {
-      return GPErr<int>(failure);
-    }
-  }
 }

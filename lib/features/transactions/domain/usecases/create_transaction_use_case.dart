@@ -1,43 +1,66 @@
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
-import 'package:ghpockit/features/transactions/domain/usecases/refusal_from_category.dart';
+import 'package:meta/meta.dart';
 
-/// ADR-0010 rule 3, checked before the repository: a category that is not live is a [GPNotFoundFailure], one of the other kind a [GPValidationFailure].
-class CreateTransactionUseCase {
-  const CreateTransactionUseCase({required TransactionRepository transactionRepository, required CategoryRepository categoryRepository})
-    : _transactions = transactionRepository,
-      _categories = categoryRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../../../categories/domain/repositories/category_repository.dart';
+import '../entities/transaction_entity.dart';
+import '../entities/transaction_type.dart';
+import '../repositories/transaction_repository.dart';
+import 'refusal_from_category.dart';
 
-  final TransactionRepository _transactions;
-  final CategoryRepository _categories;
+final class CreateTransactionUseCase with GPUseCase<CreateTransactionInput, TransactionEntity> {
+  const CreateTransactionUseCase(this._categoryRepository, this._transactionRepository);
 
-  Future<GPResult<TransactionEntity>> call({
-    required TransactionType type,
-    required String accountId,
-    required Money amount,
-    required DateTime occurredAt,
-    String? destinationAccountId,
-    String? categoryId,
-    String? note,
-  }) async {
+  final CategoryRepository _categoryRepository;
+  final TransactionRepository _transactionRepository;
+
+  @override
+  Future<GPResult<TransactionEntity>> execute(CreateTransactionInput input) async {
+    final categoryId = input.categoryId;
     if (categoryId != null) {
-      final refused = await refusalFromCategory(_categories, categoryId: categoryId, type: type);
-      if (refused != null) return GPErr<TransactionEntity>(refused);
+      final refused = await refusalFromCategory(_categoryRepository, type: input.type, categoryId: categoryId);
+      if (refused != null) return GPErr(refused);
     }
 
-    return _transactions.createTransaction(
-      type: type,
-      accountId: accountId,
-      amount: amount,
-      occurredAt: occurredAt,
-      destinationAccountId: destinationAccountId,
+    return _transactionRepository.createTransaction(
+      amount: input.amount,
+      type: input.type,
+      occurredAt: input.occurredAt,
+      accountId: input.accountId,
       categoryId: categoryId,
-      note: note,
+      destinationAccountId: input.destinationAccountId,
+      note: input.note,
     );
   }
+}
+
+@immutable
+final class CreateTransactionInput implements GPLoggable {
+  const CreateTransactionInput({
+    required this.amount,
+    required this.type,
+    required this.occurredAt,
+    required this.accountId,
+    this.categoryId,
+    this.destinationAccountId,
+    this.note,
+  });
+
+  final Money amount;
+  final TransactionType type;
+  final DateTime occurredAt;
+  final String accountId;
+  final String? categoryId;
+  final String? destinationAccountId;
+  final String? note;
+
+  @override
+  Map<String, Object?> toLog() => {
+    'type': type.storageValue,
+    'account_id': accountId,
+    'category_id': ?categoryId,
+    'destination_account_id': ?destinationAccountId,
+  };
 }

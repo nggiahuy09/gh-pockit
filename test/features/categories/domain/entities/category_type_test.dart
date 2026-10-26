@@ -21,6 +21,6 @@ void main() {
 
   test('has no transfer value, on purpose', () {
     // A transfer has no category (`category_id` is null); a third value here is how one ends up counted as both income and expense.
-    expect(CategoryType.values.map((t) => t.name), ['expense', 'income']);
+    expect(CategoryType.values.map((type) => type.name), ['expense', 'income']);
   });
 }

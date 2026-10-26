@@ -71,16 +71,16 @@ final class GPLocaleViWidgetsDatePicker implements GPLocaleBaseWidgetsDatePicker
   String monthName(int month) => 'Tháng $month';
 
   @override
-  String monthYear(int month, int year) => 'Tháng $month, $year';
+  String monthYear({required int month, required int year}) => 'Tháng $month, $year';
 
   @override
-  String chooseMonth(int month, int year) => 'Tháng $month năm $year, chọn tháng khác';
+  String chooseMonth({required int month, required int year}) => 'Tháng $month năm $year, chọn tháng khác';
 
   @override
   String backToDays(int year) => 'Năm $year, quay lại lưới ngày';
 
   @override
-  String range(DateTime start, DateTime end) {
+  String range({required DateTime end, required DateTime start}) {
     if (start.year == end.year && start.month == end.month) return '${start.day} – ${end.day} tháng ${end.month}';
     return '${start.day}/${start.month} – ${end.day}/${end.month}';
   }

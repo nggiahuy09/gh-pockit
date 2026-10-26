@@ -5,10 +5,10 @@ import 'package:ghpockit/core/localization/localization.dart';
 import 'package:ghpockit/core/localization/localization_scope.dart';
 
 /// A phone-sized screen with the GP theme and strings: the shared widgets read both, and sheets need the height of a real phone.
-Future<void> pumpOnPhone(WidgetTester tester, {required GPLocalization localization, required Widget child, ThemeMode themeMode = ThemeMode.light}) async {
+Future<void> pumpOnPhone(WidgetTester tester, {required GPLocalization localization, ThemeMode themeMode = ThemeMode.light, required Widget child}) async {
   tester.view
-    ..physicalSize = const Size(390, 844)
-    ..devicePixelRatio = 1;
+    ..physicalSize = const Size(390.0, 844.0)
+    ..devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(
@@ -20,7 +20,7 @@ Future<void> pumpOnPhone(WidgetTester tester, {required GPLocalization localizat
         themeMode: themeMode,
         home: Scaffold(
           body: SafeArea(
-            child: Padding(padding: const EdgeInsets.all(16), child: child),
+            child: Padding(padding: const EdgeInsets.all(16.0), child: child),
           ),
         ),
       ),

@@ -1,11 +1,13 @@
-import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../transactions/domain/repositories/transaction_repository.dart';
+import '../entities/account_balance.dart';
 
-/// Forwards on purpose (ADR-0013). The query is the transactions repository's, which already reads accounts (ADR-0019).
-class WatchAccountBalancesUseCase {
-  const WatchAccountBalancesUseCase({required TransactionRepository transactionRepository}) : _transactions = transactionRepository;
+/// The query is the transactions repository's, which already reads accounts (ADR-0019).
+final class WatchAccountBalancesUseCase with GPStreamUseCase<GPNoInput, List<AccountBalance>> {
+  const WatchAccountBalancesUseCase(this._repository);
 
-  final TransactionRepository _transactions;
+  final TransactionRepository _repository;
 
-  Stream<List<AccountBalance>> call() => _transactions.watchAccountBalances();
+  @override
+  Stream<List<AccountBalance>> execute(GPNoInput input) => _repository.watchAccountBalances();
 }

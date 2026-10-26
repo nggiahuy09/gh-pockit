@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/colors.dart';
-import 'package:ghpockit/core/theme/dimensions.dart';
-import 'package:ghpockit/core/theme/shadows.dart';
-import 'package:ghpockit/core/theme/tokens/dimensions.dart';
-import 'package:ghpockit/core/theme/typography.dart';
+import 'colors.dart';
+import 'dimensions.dart';
+import 'shadows.dart';
+import 'tokens/dimensions.dart';
+import 'typography.dart';
 
 /// The `!` is deliberate: under a theme without the GP extensions (a bare `MaterialApp` in a widget test) it throws rather than render Material defaults.
 extension GPThemeContext on BuildContext {

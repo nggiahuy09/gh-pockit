@@ -7,13 +7,13 @@ abstract class GPClock {
   int nowEpochMillis();
 }
 
-class GPSystemClock extends GPClock {
+final class GPSystemClock extends GPClock {
   const GPSystemClock();
 
   @override
   DateTime nowUtc() => DateTime.now().toUtc();
 
+  /// Epoch millis are the same in every timezone, so no `toUtc()`.
   @override
-  // Epoch millis are the same in every timezone, so no `toUtc()`.
   int nowEpochMillis() => DateTime.now().millisecondsSinceEpoch;
 }

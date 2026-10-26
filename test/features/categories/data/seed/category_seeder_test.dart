@@ -11,113 +11,109 @@ import 'package:ghpockit/features/categories/domain/entities/category_type.dart'
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 
+late GPAppDatabase _db;
+late CategoryDao _dao;
+late FakeClock _clock;
+
+/// The real generator, not `FakeUuidGenerator`: deterministic ids are a claim about the production one.
+CategorySeeder _seeder([String ownerId = localOwnerId]) => CategorySeeder(
+  clock: _clock,
+  dao: _dao,
+  uuidGenerator: GPUuidGeneratorImpl(clock: _clock),
+  ownerId: ownerId,
+);
+
 void main() {
-  late GPAppDatabase db;
-  late CategoryDao dao;
-  late FakeClock clock;
-
   setUp(() {
-    db = GPAppDatabase.forTesting(NativeDatabase.memory());
-    dao = CategoryDao(db);
-    clock = FakeClock();
+    _db = GPAppDatabase.forTesting(NativeDatabase.memory());
+    _dao = CategoryDao(_db);
+    _clock = FakeClock();
   });
 
-  tearDown(() async {
-    await db.close();
-  });
-
-  /// The real generator, not `FakeUuidGenerator`: deterministic ids are a claim about the production one.
-  CategorySeeder seeder({String ownerId = localOwnerId, GPUuidGenerator? uuidGenerator}) => CategorySeeder(
-    dao: dao,
-    clock: clock,
-    uuidGenerator: uuidGenerator ?? GPUuidGeneratorImpl(clock: clock),
-    ownerId: ownerId,
-  );
+  tearDown(() => _db.close());
 
   test('writes one row per default category, all of them system rows', () async {
-    expect(await seeder().seedDefaults(), DefaultCategory.values.length);
+    expect(await _seeder().seedDefaults(), DefaultCategory.values.length);
 
-    final rows = await db.select(db.categoriesTable).get();
+    final rows = await _db.select(_db.categoriesTable).get();
     expect(rows, hasLength(DefaultCategory.values.length));
-    expect(rows.every((r) => r.isSystem), isTrue);
-    expect(rows.every((r) => r.ownerId == localOwnerId), isTrue);
-    expect(rows.every((r) => r.version == 1), isTrue);
-    expect(rows.every((r) => r.createdAt == clock.nowEpochMillis()), isTrue);
+    expect(rows.every((row) => row.isSystem), isTrue);
+    expect(rows.every((row) => row.ownerId == localOwnerId), isTrue);
+    expect(rows.every((row) => row.version == 1), isTrue);
+    expect(rows.every((row) => row.createdAt == _clock.nowEpochMillis()), isTrue);
   });
 
   test('stores the translation key and leaves name null', () async {
-    await seeder().seedDefaults();
+    await _seeder().seedDefaults();
 
-    final rows = await db.select(db.categoriesTable).get();
-    expect(rows.map((r) => r.nameKey).toSet(), DefaultCategory.values.map((c) => c.nameKey).toSet());
-    expect(rows.every((r) => r.name == null), isTrue);
-    expect(rows.every((r) => r.iconKey != null), isTrue);
-    expect(rows.every((r) => r.colorKey == null), isTrue);
+    final rows = await _db.select(_db.categoriesTable).get();
+    expect(rows.map((row) => row.nameKey).toSet(), DefaultCategory.values.map((category) => category.nameKey).toSet());
+    expect(rows.every((row) => row.name == null), isTrue);
+    expect(rows.every((row) => row.iconKey != null), isTrue);
+    expect(rows.every((row) => row.colorKey == null), isTrue);
   });
 
   test('carries each category type through to the row', () async {
-    await seeder().seedDefaults();
+    await _seeder().seedDefaults();
 
     for (final category in DefaultCategory.values) {
-      final row = (await db.select(db.categoriesTable).get()).firstWhere((r) => r.nameKey == category.nameKey);
+      final row = (await _db.select(_db.categoriesTable).get()).firstWhere((row) => row.nameKey == category.nameKey);
       expect(CategoryType.fromStorage(row.type), category.type, reason: '${category.nameKey} should be ${category.type.name}');
     }
   });
 
   test('is idempotent: a second run writes nothing', () async {
-    await seeder().seedDefaults();
+    await _seeder().seedDefaults();
 
-    expect(await seeder().seedDefaults(), 0);
-    expect(await db.select(db.categoriesTable).get(), hasLength(DefaultCategory.values.length));
+    expect(await _seeder().seedDefaults(), 0);
+    expect(await _db.select(_db.categoriesTable).get(), hasLength(DefaultCategory.values.length));
   });
 
   test('two devices of the same user derive identical ids', () async {
-    await seeder().seedDefaults();
-    final first = (await db.select(db.categoriesTable).get()).map((r) => r.id).toSet();
+    await _seeder().seedDefaults();
+    final first = (await _db.select(_db.categoriesTable).get()).map((row) => row.id).toSet();
 
     final secondDevice = GPAppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(secondDevice.close);
     final secondDao = CategoryDao(secondDevice);
     await CategorySeeder(
-      dao: secondDao,
       clock: FakeClock(),
+      dao: secondDao,
       uuidGenerator: GPUuidGeneratorImpl(clock: FakeClock()),
       ownerId: localOwnerId,
     ).seedDefaults();
-    final second = (await secondDevice.select(secondDevice.categoriesTable).get()).map((r) => r.id).toSet();
+    final second = (await secondDevice.select(secondDevice.categoriesTable).get()).map((row) => row.id).toSet();
 
     expect(second, first);
-
-    await secondDevice.close();
   });
 
   test('gives two owners different ids for the same category', () async {
-    await seeder().seedDefaults();
-    await seeder(ownerId: 'someone-else').seedDefaults();
+    await _seeder().seedDefaults();
+    await _seeder('someone-else').seedDefaults();
 
-    final rows = await db.select(db.categoriesTable).get();
+    final rows = await _db.select(_db.categoriesTable).get();
     expect(rows, hasLength(DefaultCategory.values.length * 2));
-    expect(rows.map((r) => r.id).toSet(), hasLength(DefaultCategory.values.length * 2));
+    expect(rows.map((row) => row.id).toSet(), hasLength(DefaultCategory.values.length * 2));
   });
 
   test('does not bring back a category the user deleted', () async {
-    await seeder().seedDefaults();
-    final food = (await db.select(db.categoriesTable).get()).firstWhere((r) => r.nameKey == 'category.food');
-    await dao.softDelete(food.id, now: clock.nowEpochMillis());
+    await _seeder().seedDefaults();
+    final food = (await _db.select(_db.categoriesTable).get()).firstWhere((row) => row.nameKey == 'category.food');
+    await _dao.softDelete(food.id, now: _clock.nowEpochMillis());
 
-    expect(await seeder().seedDefaults(), 0);
-    expect((await dao.watchCategories(localOwnerId).first).map((r) => r.nameKey), isNot(contains('category.food')));
+    expect(await _seeder().seedDefaults(), 0);
+    expect((await _dao.watchCategories(ownerId: localOwnerId).first).map((row) => row.nameKey), isNot(contains('category.food')));
   });
 
   test('stamps every row with one instant, read once from the clock', () async {
-    final fake = FakeUuidGenerator();
-    await CategorySeeder(dao: dao, clock: clock, uuidGenerator: fake, ownerId: localOwnerId).seedDefaults();
+    await CategorySeeder(clock: _clock, dao: _dao, uuidGenerator: FakeUuidGenerator(), ownerId: localOwnerId).seedDefaults();
 
-    final stamps = (await db.select(db.categoriesTable).get()).map((r) => r.createdAt).toSet();
+    final stamps = (await _db.select(_db.categoriesTable).get()).map((row) => row.createdAt).toSet();
     expect(stamps, hasLength(1));
   });
 
-  test('every default category has a distinct key', () async {
-    expect(DefaultCategory.values.map((c) => c.nameKey).toSet(), hasLength(DefaultCategory.values.length));
+  test('every default category has a distinct key', () {
+    expect(DefaultCategory.values.map((category) => category.nameKey).toSet(), hasLength(DefaultCategory.values.length));
   });
 
   test('fromNameKey is the inverse of nameKey, and null for anything else', () {

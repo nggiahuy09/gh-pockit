@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/tokens/colors.dart';
+import 'tokens/colors.dart';
 
 /// Contrast is a build gate: `test/core/theme/contrast_test.dart` holds these pairings to WCAG AA (ADR-0005).
 @immutable
-class GPColors extends ThemeExtension<GPColors> {
+// Fields in role pairs (`primary`, `onPrimary`…), not by type and name: the pairing is what a reader checks.
+final class GPColors extends ThemeExtension<GPColors> {
   const GPColors({
     required this.brightness,
     required this.primary,
@@ -123,26 +124,6 @@ class GPColors extends ThemeExtension<GPColors> {
   /// Behind a dialog or a sheet; carries its own alpha.
   final Color scrim;
 
-  ColorScheme toColorScheme() => ColorScheme(
-    brightness: brightness,
-    primary: primary,
-    onPrimary: onPrimary,
-    primaryContainer: primaryContainer,
-    onPrimaryContainer: onPrimaryContainer,
-    secondary: accent,
-    onSecondary: onAccent,
-    secondaryContainer: accentContainer,
-    onSecondaryContainer: onAccentContainer,
-    error: danger,
-    onError: onDanger,
-    surface: surface,
-    onSurface: onSurface,
-    surfaceContainerHighest: surfaceVariant,
-    onSurfaceVariant: onSurfaceVariant,
-    outline: outline,
-    outlineVariant: outlineVariant,
-  );
-
   @override
   GPColors copyWith({
     Brightness? brightness,
@@ -236,4 +217,24 @@ class GPColors extends ThemeExtension<GPColors> {
       scrim: Color.lerp(scrim, other.scrim, t)!,
     );
   }
+
+  ColorScheme toColorScheme() => ColorScheme(
+    brightness: brightness,
+    primary: primary,
+    onPrimary: onPrimary,
+    primaryContainer: primaryContainer,
+    onPrimaryContainer: onPrimaryContainer,
+    secondary: accent,
+    onSecondary: onAccent,
+    secondaryContainer: accentContainer,
+    onSecondaryContainer: onAccentContainer,
+    error: danger,
+    onError: onDanger,
+    surface: surface,
+    onSurface: onSurface,
+    surfaceContainerHighest: surfaceVariant,
+    onSurfaceVariant: onSurfaceVariant,
+    outline: outline,
+    outlineVariant: outlineVariant,
+  );
 }

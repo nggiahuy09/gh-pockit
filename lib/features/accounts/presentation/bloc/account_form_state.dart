@@ -1,84 +1,88 @@
-part of 'account_form_cubit.dart';
+part of 'account_form_bloc.dart';
 
 @immutable
-final class AccountFormState {
+final class AccountFormState with Equatable {
   const AccountFormState({
-    this.original,
-    this.name = '',
-    this.type = AccountType.cash,
-    this.currencyCode = defaultCurrencyCode,
-    this.initialMinorUnits,
-    this.isOwed = false,
-    this.isLoading = false,
-    this.isSaving = false,
-    this.isSaved = false,
-    this.failure,
+    required this.failure,
+    required this.original,
+    required this.status,
+    required this.type,
+    required this.currencyCode,
+    required this.name,
+    required this.initialMinorUnits,
+    required this.isEditing,
+    required this.isOwed,
   });
 
-  /// The app's home market; the picker offers every `CurrencyCode`.
-  static const String defaultCurrencyCode = 'VND';
+  const AccountFormState.initial(this.isEditing)
+    : failure = null,
+      original = null,
+      status = isEditing ? AccountFormStatus.loading : AccountFormStatus.editing,
+      type = AccountType.cash,
+      currencyCode = defaultCurrencyCode,
+      name = '',
+      initialMinorUnits = null,
+      isOwed = false;
+
+  final GPFailure? failure;
 
   /// The account being edited, as loaded. Null on create.
   final AccountEntity? original;
 
-  final String name;
+  final AccountFormStatus status;
   final AccountType type;
   final String currencyCode;
+  final String name;
 
   /// The magnitude typed; [isOwed] gives the sign. Null while the field is empty, saved as zero.
   final int? initialMinorUnits;
 
+  final bool isEditing;
+
   /// A credit card or a loan starts below zero.
   final bool isOwed;
 
-  final bool isLoading;
-  final bool isSaving;
+  static const defaultCurrencyCode = 'VND';
 
-  /// Terminal: the page pops on it.
-  final bool isSaved;
+  bool get isLoading => status == AccountFormStatus.loading;
 
-  final GPFailure? failure;
+  bool get isSaving => status == AccountFormStatus.saving;
 
-  AccountFormState copyWith({
-    String? name,
+  bool get isSaved => status == AccountFormStatus.saved;
+
+  AccountFormField? get failedField {
+    final failure = this.failure;
+    return failure == null ? null : AccountFormField.fromFailure(failure);
+  }
+
+  @override
+  List<Object?> get props => [failure, original, status, type, currencyCode, name, initialMinorUnits, isEditing, isOwed];
+
+  AccountFormState _copyWith({
+    GPValueWrapper<GPFailure?>? failure,
+    AccountEntity? original,
+    AccountFormStatus? status,
     AccountType? type,
     String? currencyCode,
-    int? initialMinorUnits,
-    bool clearInitialMinorUnits = false,
+    String? name,
+    GPValueWrapper<int?>? initialMinorUnits,
     bool? isOwed,
-    bool? isLoading,
-    bool? isSaving,
-    bool? isSaved,
-    GPFailure? failure,
-    bool clearFailure = false,
   }) => AccountFormState(
-    original: original,
-    name: name ?? this.name,
+    failure: failure == null ? this.failure : failure.value,
+    original: original ?? this.original,
+    status: status ?? this.status,
     type: type ?? this.type,
     currencyCode: currencyCode ?? this.currencyCode,
-    initialMinorUnits: clearInitialMinorUnits ? null : (initialMinorUnits ?? this.initialMinorUnits),
+    name: name ?? this.name,
+    initialMinorUnits: initialMinorUnits == null ? this.initialMinorUnits : initialMinorUnits.value,
+    isEditing: isEditing,
     isOwed: isOwed ?? this.isOwed,
-    isLoading: isLoading ?? this.isLoading,
-    isSaving: isSaving ?? this.isSaving,
-    isSaved: isSaved ?? this.isSaved,
-    failure: clearFailure ? null : (failure ?? this.failure),
   );
 
+  /// No name or balance: states can end up in logs (golden rule 9).
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AccountFormState &&
-          other.original == original &&
-          other.name == name &&
-          other.type == type &&
-          other.currencyCode == currencyCode &&
-          other.initialMinorUnits == initialMinorUnits &&
-          other.isOwed == isOwed &&
-          other.isLoading == isLoading &&
-          other.isSaving == isSaving &&
-          other.isSaved == isSaved &&
-          other.failure == failure;
-
-  @override
-  int get hashCode => Object.hash(original, name, type, currencyCode, initialMinorUnits, isOwed, isLoading, isSaving, isSaved, failure);
+  String toString() => 'AccountFormState(status: ${status.name}, isEditing: $isEditing, failure: $failure)';
 }
+
+/// `saved` is terminal: the view pops on it.
+enum AccountFormStatus { loading, editing, saving, saved }

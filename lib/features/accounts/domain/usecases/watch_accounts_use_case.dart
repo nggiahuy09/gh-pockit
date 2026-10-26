@@ -1,11 +1,12 @@
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
-import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import '../../../../core/domain/use_case.dart';
+import '../entities/account_entity.dart';
+import '../repositories/account_repository.dart';
 
-/// Forwards on purpose: a BLoC reaches the domain only through use cases, never a repository (ADR-0013).
-class WatchAccountsUseCase {
-  const WatchAccountsUseCase({required AccountRepository accountRepository}) : _accounts = accountRepository;
+final class WatchAccountsUseCase with GPStreamUseCase<GPNoInput, List<AccountEntity>> {
+  const WatchAccountsUseCase(this._repository);
 
-  final AccountRepository _accounts;
+  final AccountRepository _repository;
 
-  Stream<List<AccountEntity>> call({bool includeArchived = false}) => _accounts.watchAccounts(includeArchived: includeArchived);
+  @override
+  Stream<List<AccountEntity>> execute(GPNoInput input) => _repository.watchAccounts();
 }

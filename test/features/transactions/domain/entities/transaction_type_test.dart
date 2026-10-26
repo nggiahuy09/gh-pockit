@@ -22,6 +22,10 @@ void main() {
     expect(TransactionType.fromStorage(''), isNull);
   });
 
+  test('only a transfer is a transfer', () {
+    expect(TransactionType.values.where((type) => type.isTransfer), [TransactionType.transfer]);
+  });
+
   test('files an expense and an income under their own kind of category, and a transfer under none', () {
     expect(TransactionType.expense.categoryType, CategoryType.expense);
     expect(TransactionType.income.categoryType, CategoryType.income);

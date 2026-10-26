@@ -108,7 +108,7 @@ void main() {
       for (final formatter in <GPMoneyFormatter>[en, vi]) {
         for (final amount in amounts) {
           expect(
-            formatter.parse(formatter.format(amount, withSymbol: false), currencyCode: amount.currencyCode),
+            formatter.parse(currencyCode: amount.currencyCode, text: formatter.format(amount, withSymbol: false)),
             amount,
             reason: '${formatter.locale.languageCode} should read back ${formatter.format(amount)}',
           );
@@ -118,61 +118,69 @@ void main() {
 
     test('reads the same text as different amounts in different languages', () {
       // In English `1.234` is one dong and a fraction VND does not have, so it is refused rather than rounded.
-      expect(vi.parse('1.234', currencyCode: 'VND'), Money(1234, 'VND'));
-      expect(en.parse('1.234', currencyCode: 'VND'), isNull);
-      expect(en.parse('1,234', currencyCode: 'VND'), Money(1234, 'VND'));
-      expect(vi.parse('1.234,56', currencyCode: 'USD'), Money(123456, 'USD'));
-      expect(en.parse('1,234.56', currencyCode: 'USD'), Money(123456, 'USD'));
+      expect(vi.parse(currencyCode: 'VND', text: '1.234'), Money(1234, 'VND'));
+      expect(en.parse(currencyCode: 'VND', text: '1.234'), isNull);
+      expect(en.parse(currencyCode: 'VND', text: '1,234'), Money(1234, 'VND'));
+      expect(vi.parse(currencyCode: 'USD', text: '1.234,56'), Money(123456, 'USD'));
+      expect(en.parse(currencyCode: 'USD', text: '1,234.56'), Money(123456, 'USD'));
     });
 
     test('accepts the symbol, the code and the spacing a user may paste back in', () {
-      expect(vi.parse('1.500.000\u00a0₫', currencyCode: 'VND'), Money(1500000, 'VND'));
-      expect(en.parse(r'$12.34', currencyCode: 'USD'), Money(1234, 'USD'));
-      expect(en.parse('  12.34 USD ', currencyCode: 'USD'), Money(1234, 'USD'));
-      expect(vi.parse('-1.500.000 ₫', currencyCode: 'VND'), Money(-1500000, 'VND'));
+      expect(vi.parse(currencyCode: 'VND', text: '1.500.000\u00a0₫'), Money(1500000, 'VND'));
+      expect(en.parse(currencyCode: 'USD', text: r'$12.34'), Money(1234, 'USD'));
+      expect(en.parse(currencyCode: 'USD', text: '  12.34 USD '), Money(1234, 'USD'));
+      expect(vi.parse(currencyCode: 'VND', text: '-1.500.000 ₫'), Money(-1500000, 'VND'));
     });
 
     test('pads a short fraction and accepts none at all', () {
-      expect(en.parse('12.5', currencyCode: 'USD'), Money(1250, 'USD'));
-      expect(en.parse('12', currencyCode: 'USD'), Money(1200, 'USD'));
-      expect(en.parse('.5', currencyCode: 'USD'), Money(50, 'USD'));
+      expect(en.parse(currencyCode: 'USD', text: '12.5'), Money(1250, 'USD'));
+      expect(en.parse(currencyCode: 'USD', text: '12'), Money(1200, 'USD'));
+      expect(en.parse(currencyCode: 'USD', text: '.5'), Money(50, 'USD'));
     });
 
     test('refuses more fractional digits than the currency has', () {
-      expect(en.parse('12.345', currencyCode: 'USD'), isNull);
-      expect(vi.parse('1234,5', currencyCode: 'VND'), isNull);
+      expect(en.parse(currencyCode: 'USD', text: '12.345'), isNull);
+      expect(vi.parse(currencyCode: 'VND', text: '1234,5'), isNull);
     });
 
     test('strips grouping without validating it', () {
       // Deliberate: `1.500.00` is a half-typed `1.500.000`. The decimal separator must still be exactly one.
-      expect(vi.parse('1.500.00', currencyCode: 'VND'), Money(150000, 'VND'));
-      expect(vi.parse('1.2.3', currencyCode: 'VND'), Money(123, 'VND'));
-      expect(vi.parse('1,2,3', currencyCode: 'VND'), isNull);
+      expect(vi.parse(currencyCode: 'VND', text: '1.500.00'), Money(150000, 'VND'));
+      expect(vi.parse(currencyCode: 'VND', text: '1.2.3'), Money(123, 'VND'));
+      expect(vi.parse(currencyCode: 'VND', text: '1,2,3'), isNull);
     });
 
     test('returns null for text that is not an amount', () {
       for (final text in <String>['', '   ', 'abc', '-', '₫', '12a', '1e5']) {
-        expect(en.parse(text, currencyCode: 'USD'), isNull, reason: '"$text" is not an amount');
-        expect(vi.parse(text, currencyCode: 'VND'), isNull, reason: '"$text" is not an amount');
+        expect(
+          en.parse(currencyCode: 'USD', text: text),
+          isNull,
+          reason: '"$text" is not an amount',
+        );
+        expect(
+          vi.parse(currencyCode: 'VND', text: text),
+          isNull,
+          reason: '"$text" is not an amount',
+        );
       }
     });
 
     test('returns null rather than wrapping when the amount will not fit in 64 bits', () {
-      expect(vi.parse('99.999.999.999.999.999.999', currencyCode: 'VND'), isNull);
-      expect(en.parse('9,223,372,036,854,775,808', currencyCode: 'VND'), isNull);
-      expect(en.parse('9,223,372,036,854,775,807', currencyCode: 'VND'), Money(9223372036854775807, 'VND'));
+      expect(vi.parse(currencyCode: 'VND', text: '99.999.999.999.999.999.999'), isNull);
+      expect(en.parse(currencyCode: 'VND', text: '9,223,372,036,854,775,808'), isNull);
+      expect(en.parse(currencyCode: 'VND', text: '9,223,372,036,854,775,807'), Money(9223372036854775807, 'VND'));
     });
 
     test('throws on a malformed currency code, because that one is a bug', () {
-      expect(() => en.parse('12.34', currencyCode: 'vnd'), throwsArgumentError);
+      expect(() => en.parse(currencyCode: 'vnd', text: '12.34'), throwsArgumentError);
       // Even when the amount is unreadable: the code is checked first.
-      expect(() => en.parse('abc', currencyCode: 'vnd'), throwsArgumentError);
-      expect(() => en.parse('12', currencyCode: 'VN'), throwsArgumentError);
+      expect(() => en.parse(currencyCode: 'vnd', text: 'abc'), throwsArgumentError);
+      expect(() => en.parse(currencyCode: 'VN', text: '12'), throwsArgumentError);
     });
 
     test('reads an uncatalogued currency as whole minor units', () {
-      expect(vi.parse('1.234', currencyCode: 'XYZ'), Money(1234, 'XYZ'));
-      expect(vi.parse('1.234,5', currencyCode: 'XYZ'), isNull);
+      expect(vi.parse(currencyCode: 'XYZ', text: '1.234'), Money(1234, 'XYZ'));
+      expect(vi.parse(currencyCode: 'XYZ', text: '1.234,5'), isNull);
     });
   });
 }

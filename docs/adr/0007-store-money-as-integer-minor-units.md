@@ -35,7 +35,7 @@ without its currency cannot be read.
 **3. An amount crosses three number systems.** SQLite has `INTEGER` (64-bit
 signed) and `REAL` (a double). JSON, on the wire from P4, has one number type,
 and Dart's `jsonDecode` hands `1234` back as an `int` but `12.34` as a
-`double`. Postgres, mirrored at W10, has `integer`, `bigint` and `numeric`.
+`double`. Postgres, mirrored at W11, has `integer`, `bigint` and `numeric`.
 Whatever the representation is, it has to cross all three unchanged.
 
 ## Decision
@@ -90,7 +90,7 @@ fractions of a cent, which exchange-rate maths eventually wants. Rejected for
 the stored amount on three counts. It is a dependency §5 would have to justify
 for a guarantee `int` already gives inside any real balance. No SQLite type
 holds it, so it would be stored as `TEXT` and `SUM()` could not run in SQL —
-W7's aggregates would have to load every row into Dart, turning the 50k-row
+W8's aggregates would have to load every row into Dart, turning the 50k-row
 benchmark into a parse loop. And every arithmetic operation allocates. It may
 come back for the _rate_ when multi-currency lands, not for the amount.
 
@@ -149,13 +149,13 @@ because it can be neither summed nor grouped by currency in SQL.
 - **W4 T2.** `transactions` stores its amount as `INTEGER` minor units with a
   `currency_code` on the same row (blueprint §20), and its mapper either
   builds a `Money` from both or refuses the row, as `AccountMapper` does.
-- **W7 aggregates.** `sum()` only. In Drift, `sum()` on an `int` column is an
+- **W8 aggregates.** `sum()` only. In Drift, `sum()` on an `int` column is an
   `Expression<int>`, while `total()` and `avg()` are `Expression<double>` and
   must never touch an amount. SQLite draws the same line: `SUM()` over integers
   raises `integer overflow` rather than wrapping, whereas `TOTAL()` silently
   returns `9.2233720368547758e+18` for the same input. A loud error is the
   better failure; a quiet float is the one this ADR forbids.
-- **W10 Postgres.** Amount columns are `bigint`. `integer` is 32-bit and tops
+- **W11 Postgres.** Amount columns are `bigint`. `integer` is 32-bit and tops
   out at 2,147,483,647 minor units — 2.1 billion ₫, less than an apartment in
   Hanoi. `numeric` is a decimal type and would reopen every question above at
   the API boundary.

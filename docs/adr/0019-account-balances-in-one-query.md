@@ -4,6 +4,9 @@
 
 Accepted — 2026-10-15 (W6 T6).
 
+Amended 2026-10-24 by ADR-0020: the readers are now `AccountsBloc` and `HomeAccountsBloc`, and `AccountMapper` is the
+`AccountRowMapper.toDomain()` extension.
+
 ## Context
 
 W6 T6 shows real balances: on the Accounts tab, and in the accounts section of
@@ -68,9 +71,12 @@ Negative:
   the same direction as the first, not a new direction.
 - Each correlated subquery reads every live transaction of its account
   through the index, with no covering index for `type`, `amount_minor` and
-  `deleted_at`. That is fine for the accounts of one person today. W7 T2's
-  `EXPLAIN QUERY PLAN` audit and W8's 50k-row benchmark decide whether it
-  needs a covering index.
+  `deleted_at`. That is fine for the accounts of one person today. W8 T2's
+  `EXPLAIN QUERY PLAN` audit and W9's 50k-row benchmark decide whether it
+  needs a covering index. The audit (2026-10-20) found no scan and added no
+  index. An index on `(account_id, deleted_at, type, amount_minor)` does turn
+  the source side into a covering-index search, but whether that saves enough
+  to pay for one more index on every write is W9's to measure.
 - Every transaction write re-runs the whole list. That is cheap with a handful
   of accounts, and the same trade the transaction list makes (ADR-0011).
 - The `ORDER BY` on accounts uses a temporary B-tree, which is nothing for a

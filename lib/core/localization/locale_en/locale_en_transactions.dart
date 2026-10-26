@@ -31,13 +31,10 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get emptyTitle => 'No transactions yet';
 
   @override
-  String get emptyMessage => 'Your expenses, income and transfers will show up here.';
+  String get emptyBody => 'Your expenses, income and transfers will show up here.';
 
   @override
-  String get errorMessage => 'The list comes back by itself the next time data is saved.';
-
-  @override
-  String unreadable(int count) => count == 1 ? "1 transaction can't be shown" : "$count transactions can't be shown";
+  String get errorBody => 'The list comes back by itself the next time data is saved.';
 
   @override
   String get loading => 'Loading transactions';
@@ -94,5 +91,8 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get noAccountsTitle => 'Add an account first';
 
   @override
-  String get noAccountsMessage => 'A transaction needs an account to come from or go to.';
+  String get noAccountsBody => 'A transaction needs an account to come from or go to.';
+
+  @override
+  String unreadable(int count) => count == 1 ? "1 transaction can't be shown" : "$count transactions can't be shown";
 }

@@ -8,16 +8,19 @@ import 'package:ghpockit/core/widgets/text_field.dart';
 import '../../helpers/localization_harness.dart';
 import '../../helpers/widget_harness.dart';
 
+Border _boxBorder(WidgetTester tester) =>
+    switch (tester.widget<AnimatedContainer>(find.descendant(of: find.byType(GPFieldBox), matching: find.byType(AnimatedContainer))).decoration) {
+      BoxDecoration(border: final Border border) => border,
+      final decoration => throw TestFailure('Expected a BoxDecoration with a Border, got $decoration'),
+    };
+
 void main() {
   late GPLocalization en;
 
   setUp(() async => en = await localizationFor(GPLocale.en));
 
-  BoxDecoration boxDecoration(WidgetTester tester) =>
-      tester.widget<AnimatedContainer>(find.descendant(of: find.byType(GPFieldBox), matching: find.byType(AnimatedContainer))).decoration! as BoxDecoration;
-
   group('GPTextField', () {
-    testWidgets('shows its label above the box and reports what is typed', (WidgetTester tester) async {
+    testWidgets('shows its label above the box and reports what is typed', (tester) async {
       final typed = <String>[];
       await pumpOnPhone(
         tester,
@@ -28,22 +31,22 @@ void main() {
       expect(find.text('Name'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Salary');
 
-      expect(typed, <String>['Salary']);
+      expect(typed, ['Salary']);
     });
 
-    testWidgets('an error replaces the help line and draws the danger edge', (WidgetTester tester) async {
+    testWidgets('an error replaces the help line and draws the danger edge', (tester) async {
       await pumpOnPhone(
         tester,
         localization: en,
-        child: const GPTextField(label: 'Name', helperText: 'Optional.', errorText: 'Enter a name.'),
+        child: const GPTextField(errorText: 'Enter a name.', helperText: 'Optional.', label: 'Name'),
       );
 
       expect(find.text('Enter a name.'), findsOneWidget);
       expect(find.text('Optional.'), findsNothing);
-      expect((boxDecoration(tester).border! as Border).top.width, 2);
+      expect(_boxBorder(tester).top.width, 2.0);
     });
 
-    testWidgets('focus draws the 2px edge without growing the box', (WidgetTester tester) async {
+    testWidgets('focus draws the 2px edge without growing the box', (tester) async {
       await pumpOnPhone(
         tester,
         localization: en,
@@ -54,16 +57,16 @@ void main() {
       await tester.tap(find.byType(TextField));
       await tester.pumpAndSettle();
 
-      expect((boxDecoration(tester).border! as Border).top.width, 2);
+      expect(_boxBorder(tester).top.width, 2.0);
       expect(tester.getSize(find.byType(GPFieldBox)), resting, reason: 'a field that grows on focus shoves the whole form down by two pixels');
     });
 
-    testWidgets('the clear button shows only while focused and not empty, and clearing reports an empty string', (WidgetTester tester) async {
+    testWidgets('the clear button shows only while focused and not empty, and clearing reports an empty string', (tester) async {
       final typed = <String>[];
       await pumpOnPhone(
         tester,
         localization: en,
-        child: GPTextField(label: 'Name', clearable: true, initialValue: 'Salary', onChanged: typed.add),
+        child: GPTextField(initialValue: 'Salary', label: 'Name', clearable: true, onChanged: typed.add),
       );
 
       expect(find.byTooltip('Clear text'), findsNothing, reason: 'not focused yet');
@@ -74,11 +77,11 @@ void main() {
       await tester.pump();
 
       expect(find.text('Salary'), findsNothing);
-      expect(typed, <String>['']);
+      expect(typed, ['']);
       expect(find.byTooltip('Clear text'), findsNothing);
     });
 
-    testWidgets('maxLength counts UTF-16 units and stops typing at the cap', (WidgetTester tester) async {
+    testWidgets('maxLength counts UTF-16 units and stops typing at the cap', (tester) async {
       await pumpOnPhone(
         tester,
         localization: en,
@@ -88,23 +91,22 @@ void main() {
       await tester.enterText(find.byType(TextField), 'a😀bcdef');
       await tester.pump();
 
-      // The emoji is two units: a, 😀, b, c fill the five.
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'a😀bc');
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'a😀bc', reason: 'the emoji is two units: a, 😀, b, c fill the five');
       expect(find.text('5/5'), findsOneWidget);
     });
 
-    testWidgets('a disabled field takes no input and drops its edge', (WidgetTester tester) async {
+    testWidgets('a disabled field takes no input and drops its edge', (tester) async {
       await pumpOnPhone(
         tester,
         localization: en,
-        child: const GPTextField(label: 'Currency', initialValue: 'VND', enabled: false),
+        child: const GPTextField(initialValue: 'VND', label: 'Currency', enabled: false),
       );
 
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
-      expect((boxDecoration(tester).border! as Border).top.color, Colors.transparent);
+      expect(_boxBorder(tester).top.color, Colors.transparent);
     });
 
-    testWidgets('a screen reader hears the label on the text field', (WidgetTester tester) async {
+    testWidgets('a screen reader hears the label on the text field', (tester) async {
       final semantics = tester.ensureSemantics();
       await pumpOnPhone(
         tester,

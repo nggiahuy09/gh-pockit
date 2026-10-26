@@ -1,38 +1,39 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/theme/tokens/glass.dart';
+
+import '../theme/theme_context.dart';
+import '../theme/tokens/glass.dart';
 
 /// Frosted chrome over scrolling content, as a pill or a circle. Without [tint] it takes the page's own ground.
-class GPGlass extends StatelessWidget {
-  const GPGlass({required this.child, this.tint, this.circle = false, super.key});
-
-  final Widget child;
+final class GPGlass extends StatelessWidget {
+  const GPGlass({super.key, this.tint, this.circle = false, required this.child});
 
   /// Applied at [GPGlassTokens.accentFillOpacity]: a tinted glass is a control and has to read as one.
   final Color? tint;
-  final bool circle;
 
-  static final ImageFilter _filter = ImageFilter.compose(
-    outer: ColorFilter.matrix(_saturationMatrix(GPGlassTokens.saturation)),
-    inner: ImageFilter.blur(sigmaX: GPGlassTokens.blurSigma, sigmaY: GPGlassTokens.blurSigma),
-  );
+  final bool circle;
+  final Widget child;
 
   /// Rec. 709 luma weights.
-  static List<double> _saturationMatrix(double s) {
+  static List<double> _saturationMatrix(double saturation) {
     const r = 0.2126;
     const g = 0.7152;
     const b = 0.0722;
-    final t = 1 - s;
+    final t = 1.0 - saturation;
 
-    return <double>[
-      r * t + s, g * t, b * t, 0, 0, //
-      r * t, g * t + s, b * t, 0, 0,
-      r * t, g * t, b * t + s, 0, 0,
-      0, 0, 0, 1, 0,
+    return [
+      r * t + saturation, g * t, b * t, 0.0, 0.0, //
+      r * t, g * t + saturation, b * t, 0.0, 0.0,
+      r * t, g * t, b * t + saturation, 0.0, 0.0,
+      0.0, 0.0, 0.0, 1.0, 0.0,
     ];
   }
+
+  static final _filter = ImageFilter.compose(
+    outer: ColorFilter.matrix(_saturationMatrix(GPGlassTokens.saturation)),
+    inner: ImageFilter.blur(sigmaX: GPGlassTokens.blurSigma, sigmaY: GPGlassTokens.blurSigma),
+  );
 
   @override
   Widget build(BuildContext context) {

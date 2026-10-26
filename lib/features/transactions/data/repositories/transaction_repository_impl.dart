@@ -1,47 +1,40 @@
 import 'dart:async';
 
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/logging/app_logger.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/core/utils/uuid_generator.dart';
-import 'package:ghpockit/features/accounts/data/mapper/account_mapper.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
-import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
-import 'package:ghpockit/features/transactions/data/mapper/transaction_mapper.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import '../../../../core/database/database.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/logging/app_logger.dart';
+import '../../../../core/money/money.dart';
+import '../../../../core/utils/clock.dart';
+import '../../../../core/utils/uuid_generator.dart';
+import '../../../accounts/data/mapper/account_mapper.dart';
+import '../../../accounts/domain/entities/account_balance.dart';
+import '../../domain/entities/transaction_entity.dart';
+import '../../domain/entities/transaction_list_snapshot.dart';
+import '../../domain/entities/transaction_query.dart';
+import '../../domain/entities/transaction_type.dart';
+import '../../domain/repositories/transaction_repository.dart';
+import '../daos/transaction_dao.dart';
+import '../mapper/transaction_mapper.dart';
 
-/// Account rules run inside the write's own transaction, so sync cannot delete the account between check and write (ADR-0010). A row that will not map is
-/// counted in the snapshot rather than failing the list (ADR-0011).
-class TransactionRepositoryImpl implements TransactionRepository {
+/// Account rules run inside the write's own transaction, so sync cannot delete the account between check and write (ADR-0010).
+final class TransactionRepositoryImpl implements TransactionRepository {
   const TransactionRepositoryImpl({
-    required TransactionDao dao,
     required GPClock clock,
-    required GPUuidGenerator uuidGenerator,
+    required TransactionDao dao,
     required GPAppLogger logger,
+    required GPUuidGenerator uuidGenerator,
     required String ownerId,
-    TransactionMapper mapper = const TransactionMapper(),
-    AccountMapper accountMapper = const AccountMapper(),
-  }) : _dao = dao,
-       _clock = clock,
-       _uuidGenerator = uuidGenerator,
+  }) : _clock = clock,
+       _dao = dao,
        _logger = logger,
-       _ownerId = ownerId,
-       _mapper = mapper,
-       _accountMapper = accountMapper;
+       _uuidGenerator = uuidGenerator,
+       _ownerId = ownerId;
 
-  final TransactionDao _dao;
   final GPClock _clock;
-  final GPUuidGenerator _uuidGenerator;
+  final TransactionDao _dao;
   final GPAppLogger _logger;
-  final TransactionMapper _mapper;
-  final AccountMapper _accountMapper;
+  final GPUuidGenerator _uuidGenerator;
   final String _ownerId;
 
   @override
@@ -52,11 +45,11 @@ class TransactionRepositoryImpl implements TransactionRepository {
     return _dao
         .watchTransactions(
           _ownerId,
-          limit: query.limit,
           accountIds: query.accountIds,
           categoryIds: query.categoryIds,
           types: query.types?.map((type) => type.storageValue).toSet(),
           fromMillis: query.from?.millisecondsSinceEpoch,
+          limit: query.limit,
           toMillis: query.to?.millisecondsSinceEpoch,
         )
         .transform(
@@ -64,21 +57,20 @@ class TransactionRepositoryImpl implements TransactionRepository {
             handleData: (rows, sink) {
               final transactions = <TransactionEntity>[];
               var unreadable = 0;
-
               for (final row in rows) {
-                switch (_mapper.toEntity(row)) {
+                switch (row.toDomain()) {
                   case MappedTransaction(:final transaction):
                     transactions.add(transaction);
                   case UnmappableTransactionRow(:final reason):
                     unreadable++;
-                    if (logged.add(row.id)) _logRejectedRow(row.id, reason);
+                    if (logged.add(row.id)) _logRejectedRow(reason, row.id);
                 }
               }
 
               // Raw row count, refused rows included: a full window with one unreadable row may still have more (ADR-0011).
               sink.add(TransactionListSnapshot(transactions: transactions, unreadableCount: unreadable, hasMore: rows.length >= query.limit));
             },
-            handleError: (error, stackTrace, sink) => _reportQueryError('transaction list read failed', error, stackTrace, sink),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'transaction list read failed'),
           ),
         );
   }
@@ -88,73 +80,69 @@ class TransactionRepositoryImpl implements TransactionRepository {
     var logged = false;
 
     return _dao
-        .watchTransaction(_ownerId, id)
+        .watchTransaction(id: id, ownerId: _ownerId)
         .transform(
           StreamTransformer<TransactionRow?, TransactionEntity?>.fromHandlers(
             handleData: (row, sink) {
               if (row == null) {
-                // Not an error: the DAO filters tombstones, so null means the row is gone.
                 sink.add(null);
                 return;
               }
 
-              switch (_mapper.toEntity(row)) {
+              switch (row.toDomain()) {
                 case MappedTransaction(:final transaction):
                   sink.add(transaction);
                 case UnmappableTransactionRow(:final reason, :final failure):
                   if (!logged) {
                     logged = true;
-                    _logRejectedRow(row.id, reason);
+                    _logRejectedRow(reason, row.id);
                   }
                   sink.addError(failure);
               }
             },
-            handleError: (error, stackTrace, sink) => _reportQueryError('transaction read failed', error, stackTrace, sink, id: id),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, id: id, message: 'transaction read failed'),
           ),
         );
   }
 
   @override
   Future<GPResult<TransactionEntity>> createTransaction({
-    required TransactionType type,
-    required String accountId,
     required Money amount,
+    required TransactionType type,
     required DateTime occurredAt,
-    String? destinationAccountId,
+    required String accountId,
     String? categoryId,
+    String? destinationAccountId,
     String? note,
   }) async {
     final now = _clock.nowUtc();
-
     final created = TransactionEntity.create(
-      id: _uuidGenerator.v7(),
-      type: type,
-      accountId: accountId,
-      destinationAccountId: destinationAccountId,
-      categoryId: categoryId,
       amount: amount,
-      occurredAt: occurredAt,
-      note: note,
+      type: type,
       createdAt: now,
+      occurredAt: occurredAt,
       updatedAt: now,
+      accountId: accountId,
+      categoryId: categoryId,
+      destinationAccountId: destinationAccountId,
+      id: _uuidGenerator.v7(),
+      note: note,
     );
 
     switch (created) {
-      case GPErr<TransactionEntity>():
+      case GPErr():
         return created;
-      case GPOk<TransactionEntity>(:final value):
+      case GPOk(:final value):
         try {
           return await _dao.transaction(() async {
-            final refused = await _refusalFromAccounts(accountId: value.accountId, destinationAccountId: value.destinationAccountId, currencyCode: value.amount.currencyCode);
-            if (refused != null) return GPErr<TransactionEntity>(refused);
+            final refused = await _refusalFromAccounts(accountId: value.accountId, currencyCode: value.amount.currencyCode, destinationAccountId: value.destinationAccountId);
+            if (refused != null) return GPErr(refused);
 
-            await _dao.insertTransaction(_mapper.toInsert(value, ownerId: _ownerId));
-
-            // Returned as built, not read back: the stream is what tells the UI.
-            return GPOk<TransactionEntity>(value);
+            await _dao.insertTransaction(value.toInsert(_ownerId));
+            return GPOk(value);
           });
         } on Exception catch (error, stackTrace) {
-          return _databaseFailure<TransactionEntity>('transaction insert failed', value.id, error, stackTrace);
+          return _databaseFailure(error: error, stackTrace: stackTrace, id: value.id, message: 'transaction insert failed');
         }
     }
   }
@@ -162,46 +150,36 @@ class TransactionRepositoryImpl implements TransactionRepository {
   @override
   Future<GPResult<TransactionEntity>> updateTransaction(TransactionEntity transaction) async {
     final now = _clock.nowUtc();
-    // No entity validation here: a `TransactionEntity` cannot exist unvalidated.
-    final stamped = transaction.stampedAt(now);
+    final stamped = transaction.withUpdatedAt(now);
 
     try {
       return await _dao.transaction(() async {
-        final refused = await _refusalFromAccounts(accountId: stamped.accountId, destinationAccountId: stamped.destinationAccountId, currencyCode: stamped.amount.currencyCode);
-        if (refused != null) return GPErr<TransactionEntity>(refused);
+        final refused = await _refusalFromAccounts(accountId: stamped.accountId, currencyCode: stamped.amount.currencyCode, destinationAccountId: stamped.destinationAccountId);
+        if (refused != null) return GPErr(refused);
 
-        final written = await _dao.updateTransaction(
-          stamped.id,
-          baseVersion: transaction.version,
-          patch: _mapper.toPatch(stamped),
-          now: now.millisecondsSinceEpoch,
-        );
-
-        if (written == 1) return GPOk<TransactionEntity>(stamped);
+        final written = await _dao.updateTransaction(stamped.id, patch: stamped.toPatch(), baseVersion: transaction.version, now: now.millisecondsSinceEpoch);
+        if (written == 1) return GPOk(stamped);
 
         // 0 rows: a stale version, a tombstone, or no row. Asked inside the transaction, so the answer still holds when it is returned.
         final current = await _dao.findById(stamped.id);
+        if (current == null || current.deletedAt != null) return const GPErr(GPNotFoundFailure());
 
-        if (current == null || current.deletedAt != null) return const GPErr<TransactionEntity>(GPNotFoundFailure());
-
-        return GPErr<TransactionEntity>(GPConflictFailure(entityId: stamped.id, localVersion: transaction.version, remoteVersion: current.version));
+        return GPErr(GPConflictFailure(entityId: stamped.id, localVersion: transaction.version, remoteVersion: current.version));
       });
     } on Exception catch (error, stackTrace) {
-      return _databaseFailure<TransactionEntity>('transaction update failed', stamped.id, error, stackTrace);
+      return _databaseFailure(error: error, stackTrace: stackTrace, id: stamped.id, message: 'transaction update failed');
     }
   }
 
   @override
   Future<GPResult<void>> deleteTransaction(String id) async {
-    // No account rule: a transaction on an account that is already gone must still be deletable.
     try {
       final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
+      if (written == 0) return const GPErr(GPNotFoundFailure());
 
-      if (written == 0) return const GPErr<void>(GPNotFoundFailure());
-
-      return const GPOk<void>(null);
+      return const GPOk(null);
     } on Exception catch (error, stackTrace) {
-      return _databaseFailure<void>('transaction delete failed', id, error, stackTrace);
+      return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: 'transaction delete failed');
     }
   }
 
@@ -210,17 +188,26 @@ class TransactionRepositoryImpl implements TransactionRepository {
     try {
       return await _dao.transaction(() async {
         final row = await _dao.findById(id);
-        if (row == null || row.ownerId != _ownerId || row.deletedAt == null) return const GPErr<void>(GPNotFoundFailure());
+        if (row == null || row.ownerId != _ownerId || row.deletedAt == null) return const GPErr(GPNotFoundFailure());
 
-        // Read from the row, not a mapped entity: the account rule needs three columns, and coming back must hold it as a new row does.
-        final refused = await _refusalFromAccounts(accountId: row.accountId, destinationAccountId: row.destinationAccountId, currencyCode: row.currencyCode);
-        if (refused != null) return GPErr<void>(refused);
+        // From the row, not a mapped entity: coming back must hold the account rule as a new row does.
+        final refused = await _refusalFromAccounts(accountId: row.accountId, currencyCode: row.currencyCode, destinationAccountId: row.destinationAccountId);
+        if (refused != null) return GPErr(refused);
 
         await _dao.restore(id, now: _clock.nowEpochMillis());
-        return const GPOk<void>(null);
+        return const GPOk(null);
       });
     } on Exception catch (error, stackTrace) {
-      return _databaseFailure<void>('transaction restore failed', id, error, stackTrace);
+      return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: 'transaction restore failed');
+    }
+  }
+
+  @override
+  Future<GPResult<bool>> hasLiveTransactions(String accountId) async {
+    try {
+      return GPOk(await _dao.hasLiveTransactions(accountId: accountId, ownerId: _ownerId));
+    } on Exception catch (error, stackTrace) {
+      return _databaseFailure(error: error, stackTrace: stackTrace, entity: 'account', id: accountId, message: 'transaction lookup by account failed');
     }
   }
 
@@ -232,13 +219,12 @@ class TransactionRepositoryImpl implements TransactionRepository {
           StreamTransformer<List<({AccountRow account, int balanceMinor})>, List<AccountBalance>>.fromHandlers(
             handleData: (rows, sink) {
               final balances = <AccountBalance>[];
-
               for (final row in rows) {
-                switch (_accountMapper.toEntity(row.account)) {
+                switch (row.account.toDomain()) {
                   case MappedAccount(:final account):
                     balances.add(AccountBalance(account: account, balance: Money(row.balanceMinor, account.initialBalance.currencyCode)));
                   case UnmappableAccountRow(:final reason, :final failure):
-                    // The whole list fails, as `AccountRepository.watchAccounts` does: a total with an account silently missing is worse than an error.
+                    // The whole list fails, as `watchAccounts` does: a total with an account silently missing is worse than an error.
                     _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': row.account.id, 'reason': reason.name});
                     sink.addError(failure);
                     return;
@@ -247,49 +233,46 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
               sink.add(balances);
             },
-            handleError: (error, stackTrace, sink) => _reportQueryError('account balances read failed', error, stackTrace, sink, entity: 'account'),
+            handleError: (error, stackTrace, sink) =>
+                _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, entity: 'account', message: 'account balances read failed'),
           ),
         );
   }
 
-  @override
-  Future<GPResult<bool>> hasLiveTransactions(String accountId) async {
-    try {
-      return GPOk<bool>(await _dao.hasLiveTransactions(_ownerId, accountId));
-    } on Exception catch (error, stackTrace) {
-      return _databaseFailure<bool>('transaction lookup by account failed', accountId, error, stackTrace, entity: 'account');
-    }
-  }
-
-  /// Null when the write may go ahead. Call only inside the write's transaction. Two currency codes, because the user has two different things to fix.
-  Future<GPFailure?> _refusalFromAccounts({required String accountId, required String? destinationAccountId, required String currencyCode}) async {
-    final currency = await _dao.liveAccountCurrency(_ownerId, accountId);
+  /// Null when the write may go ahead. Call only inside the write's transaction.
+  Future<GPFailure?> _refusalFromAccounts({required String accountId, required String currencyCode, required String? destinationAccountId}) async {
+    final currency = await _dao.liveAccountCurrency(accountId: accountId, ownerId: _ownerId);
     if (currency == null) return const GPNotFoundFailure();
     if (currency != currencyCode) return const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch);
 
-    final destinationId = destinationAccountId;
-    if (destinationId == null) return null;
+    if (destinationAccountId == null) return null;
 
-    final destinationCurrency = await _dao.liveAccountCurrency(_ownerId, destinationId);
+    final destinationCurrency = await _dao.liveAccountCurrency(accountId: destinationAccountId, ownerId: _ownerId);
     if (destinationCurrency == null) return const GPNotFoundFailure();
     if (destinationCurrency != currency) return const GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer);
 
     return null;
   }
 
-  /// Id, entity and reason only (golden rule 9): the amount and the note are in scope and must stay out.
-  void _logRejectedRow(String id, TransactionMapperReason reason) =>
+  void _logRejectedRow(TransactionMapperReason reason, String id) =>
       _logger.error('transaction row could not be mapped', fields: {'entity': 'transaction', 'id': id, 'reason': reason.name});
 
-  /// Call sites catch `on Exception`, never `on Object`: an `Error` is a bug and must reach the crash reporter.
-  GPResult<T> _databaseFailure<T>(String message, String id, Object error, StackTrace stackTrace, {String entity = 'transaction'}) {
+  /// For `on Exception` catches only: an `Error` is a bug and must reach the crash reporter (ADR-0006).
+  GPResult<T> _databaseFailure<T>({required Object error, required StackTrace stackTrace, String entity = 'transaction', required String id, required String message}) {
     _logger.error(message, fields: {'entity': entity, 'id': id}, error: error, stackTrace: stackTrace);
 
     return GPErr<T>(const GPDatabaseFailure());
   }
 
-  /// An [Exception] becomes a logged [GPDatabaseFailure], the only error the interface promises on the channel; anything else is a bug and passes through.
-  void _reportQueryError<T>(String message, Object error, StackTrace stackTrace, EventSink<T> sink, {String? id, String entity = 'transaction'}) {
+  /// Anything but an [Exception] is a bug and passes through.
+  void _reportQueryError<T>({
+    required Object error,
+    required EventSink<T> sink,
+    required StackTrace stackTrace,
+    String entity = 'transaction',
+    String? id,
+    required String message,
+  }) {
     if (error is! Exception) {
       sink.addError(error, stackTrace);
       return;

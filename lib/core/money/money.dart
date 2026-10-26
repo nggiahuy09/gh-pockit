@@ -1,8 +1,10 @@
+import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 
 /// Checks a currency code's shape only; whether the app knows the currency is `CurrencyCode`'s job (ADR-0007).
+// Fields in `Money(minorUnits, currencyCode)` order, not by type: golden rule 2 names that signature.
 @immutable
-final class Money implements Comparable<Money> {
+final class Money with Equatable implements Comparable<Money> {
   /// Throws [ArgumentError] unless [currencyCode] is three A–Z letters: here a bad code is a bug. Untrusted input goes through [Money.fromStorage].
   factory Money(int minorUnits, String currencyCode) {
     if (!_currencyCodePattern.hasMatch(currencyCode)) {
@@ -16,25 +18,27 @@ final class Money implements Comparable<Money> {
 
   const Money._(this.minorUnits, this.currencyCode);
 
-  /// The non-throwing twin of [Money.new], for untrusted rows. Revisit the name when the first DTO calls it (ADR-0007).
-  static Money? fromStorage(int minorUnits, String currencyCode) {
-    if (!_currencyCodePattern.hasMatch(currencyCode)) return null;
-
-    return Money._(minorUnits, currencyCode);
-  }
-
-  static final RegExp _currencyCodePattern = RegExp(r'^[A-Z]{3}$');
+  /// The non-throwing twin of [Money.new], for untrusted rows (ADR-0007).
+  static Money? fromStorage(int minorUnits, String currencyCode) => _currencyCodePattern.hasMatch(currencyCode) ? Money._(minorUnits, currencyCode) : null;
 
   /// Negative is legal: an overdrawn balance, a difference.
   final int minorUnits;
 
   final String currencyCode;
 
+  static final _currencyCodePattern = RegExp(r'^[A-Z]{3}$');
+
   bool get isZero => minorUnits == 0;
 
   bool get isNegative => minorUnits < 0;
 
   bool get isPositive => minorUnits > 0;
+
+  @override
+  List<Object?> get props => [minorUnits, currencyCode];
+
+  @override
+  int compareTo(Money other) => minorUnits.compareTo(_sameCurrency(other));
 
   /// Throws [MoneyCurrencyMismatchError] across currencies. Overflow wraps unguarded, on purpose (ADR-0007).
   Money operator +(Money other) => Money._(minorUnits + _sameCurrency(other), currencyCode);
@@ -44,11 +48,6 @@ final class Money implements Comparable<Money> {
   /// The 64-bit floor is its own negation (ADR-0007).
   Money operator -() => Money._(-minorUnits, currencyCode);
 
-  Money abs() => isNegative ? -this : this;
-
-  @override
-  int compareTo(Money other) => minorUnits.compareTo(_sameCurrency(other));
-
   bool operator <(Money other) => compareTo(other) < 0;
 
   bool operator <=(Money other) => compareTo(other) <= 0;
@@ -57,20 +56,14 @@ final class Money implements Comparable<Money> {
 
   bool operator >=(Money other) => compareTo(other) >= 0;
 
+  Money abs() => isNegative ? -this : this;
+
   /// Returns [other]'s amount once it is known to share this currency.
   int _sameCurrency(Money other) {
-    if (other.currencyCode != currencyCode) {
-      throw MoneyCurrencyMismatchError(currencyCode, other.currencyCode);
-    }
+    if (other.currencyCode != currencyCode) throw MoneyCurrencyMismatchError(currencyCode: currencyCode, otherCurrencyCode: other.currencyCode);
 
     return other.minorUnits;
   }
-
-  @override
-  bool operator ==(Object other) => identical(this, other) || other is Money && other.minorUnits == minorUnits && other.currencyCode == currencyCode;
-
-  @override
-  int get hashCode => Object.hash(minorUnits, currencyCode);
 
   /// Prints the amount: for test output, never for a log (golden rule 9).
   @override
@@ -79,7 +72,7 @@ final class Money implements Comparable<Money> {
 
 /// An `Error`, not an outcome: no UI combines two currencies, so reaching this is a bug (ADR-0006).
 final class MoneyCurrencyMismatchError extends Error {
-  MoneyCurrencyMismatchError(this.currencyCode, this.otherCurrencyCode);
+  MoneyCurrencyMismatchError({required this.currencyCode, required this.otherCurrencyCode});
 
   final String currencyCode;
   final String otherCurrencyCode;

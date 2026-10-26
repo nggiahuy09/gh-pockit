@@ -4,6 +4,10 @@
 
 Accepted — 2026-10-06 (W5 T3). First user: `TransactionListBloc`.
 
+Amended 2026-10-24 by ADR-0020: the events are now `_TransactionListStartEvent`, `TransactionListFilterChangeEvent`,
+`TransactionListLoadMoreEvent` and the private `_TransactionListWatchEvent`, the state is one class per transition, and `restartable` lives in
+`core/bloc/transformers.dart` beside `sequential`. The mechanism this ADR decides is unchanged.
+
 ## Context
 
 `TransactionListBloc` shows what `WatchTransactionsUseCase(query)` streams

@@ -5,28 +5,46 @@ sealed class TransactionListEvent {
   const TransactionListEvent();
 }
 
-final class TransactionListStarted extends TransactionListEvent {
-  const TransactionListStarted();
+@immutable
+sealed class TransactionListRequestEvent extends TransactionListEvent {
+  const TransactionListRequestEvent();
 }
 
-/// Replaces the whole filter: a null field means no filter on it, not "keep the old one". Fields mean what they mean on [TransactionQuery].
-final class TransactionListFilterChanged extends TransactionListEvent {
-  const TransactionListFilterChanged({this.accountIds, this.categoryIds, this.types, this.from, this.to});
+@immutable
+final class _TransactionListStartEvent extends TransactionListRequestEvent {
+  const _TransactionListStartEvent();
+}
 
-  final Set<String>? accountIds;
-  final Set<String>? categoryIds;
-  final Set<TransactionType>? types;
+/// Replaces the whole filter: a null field means no filter on it, not "keep the old one".
+@immutable
+final class TransactionListFilterChangeEvent extends TransactionListRequestEvent {
+  const TransactionListFilterChangeEvent({Set<String>? accountIds, Set<String>? categoryIds, Set<TransactionType>? types, this.from, this.to})
+    : _accountIds = accountIds,
+      _categoryIds = categoryIds,
+      _types = types;
+
+  final Set<String>? _accountIds;
+  final Set<String>? _categoryIds;
+  final Set<TransactionType>? _types;
   final DateTime? from;
   final DateTime? to;
+
+  Set<String>? get accountIds => _accountIds == null ? null : Set.unmodifiable(_accountIds);
+
+  Set<String>? get categoryIds => _categoryIds == null ? null : Set.unmodifiable(_categoryIds);
+
+  Set<TransactionType>? get types => _types == null ? null : Set.unmodifiable(_types);
 }
 
-/// Safe to send on every scroll frame near the end: each page is asked for once.
-final class TransactionListLoadMoreRequested extends TransactionListEvent {
-  const TransactionListLoadMoreRequested();
+/// Safe to send on every scroll frame near the end: each window is asked for once.
+@immutable
+final class TransactionListLoadMoreEvent extends TransactionListRequestEvent {
+  const TransactionListLoadMoreEvent();
 }
 
-final class _TransactionListWatchRequested extends TransactionListEvent {
-  const _TransactionListWatchRequested(this.query);
+@immutable
+final class _TransactionListWatchEvent extends TransactionListEvent {
+  const _TransactionListWatchEvent(this.query);
 
   final TransactionQuery query;
 }

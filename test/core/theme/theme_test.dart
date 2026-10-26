@@ -8,9 +8,19 @@ import 'package:ghpockit/core/theme/theme_context.dart';
 import 'package:ghpockit/core/theme/tokens/typography.dart';
 import 'package:ghpockit/core/theme/typography.dart';
 
+Widget _app(ThemeData theme, void Function(BuildContext context) onBuild) => MaterialApp(
+  theme: theme,
+  home: Builder(
+    builder: (context) {
+      onBuild.call(context);
+      return const SizedBox.shrink();
+    },
+  ),
+);
+
 void main() {
   group('GPAppTheme', () {
-    for (final (String name, ThemeData theme) in <(String, ThemeData)>[('light', GPAppTheme.light()), ('dark', GPAppTheme.dark())]) {
+    for (final (name, theme) in [('light', GPAppTheme.light()), ('dark', GPAppTheme.dark())]) {
       group(name, () {
         test('registers every extension', () {
           // `context.colors` and friends end in `!`: a dropped extension would throw on whichever screen reads it first.
@@ -64,8 +74,7 @@ void main() {
       expect(dark.brightness, Brightness.dark);
     });
 
-    test('dark mode carries no ambient shadow', () {
-      // Intended: on a near-black ground a shadow has nothing left to darken.
+    test('dark mode carries no ambient shadow, since on a near-black ground a shadow has nothing left to darken', () {
       final dark = GPAppTheme.dark().extension<GPShadows>()!;
 
       expect(dark.medium, isEmpty);
@@ -79,10 +88,10 @@ void main() {
       const light = GPColors.light();
       const dark = GPColors.dark();
 
-      expect(light.lerp(dark, 0).brightness, Brightness.light);
+      expect(light.lerp(dark, 0.0).brightness, Brightness.light);
       expect(light.lerp(dark, 0.49).brightness, Brightness.light);
       expect(light.lerp(dark, 0.5).brightness, Brightness.dark);
-      expect(light.lerp(dark, 1).brightness, Brightness.dark);
+      expect(light.lerp(dark, 1.0).brightness, Brightness.dark);
     });
 
     test('every extension returns itself when handed a foreign extension', () {
@@ -106,44 +115,28 @@ void main() {
   });
 
   group('context accessors', () {
-    testWidgets('resolve against the active theme', (WidgetTester tester) async {
+    testWidgets('resolve against the active theme', (tester) async {
       late GPColors colors;
       late double md;
 
       await tester.pumpWidget(
-        MaterialApp(
-          theme: GPAppTheme.light(),
-          home: Builder(
-            builder: (BuildContext context) {
-              colors = context.colors;
-              md = context.spacing.md;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
+        _app(GPAppTheme.light(), (context) {
+          colors = context.colors;
+          md = context.spacing.md;
+        }),
       );
 
       expect(colors.background, const GPColors.light().background);
-      expect(md, 16);
+      expect(md, 16.0);
     });
 
-    testWidgets('follow the theme when it switches to dark', (WidgetTester tester) async {
+    testWidgets('follow the theme when it switches to dark', (tester) async {
       late Brightness seen;
 
-      Widget app(ThemeData theme) => MaterialApp(
-        theme: theme,
-        home: Builder(
-          builder: (BuildContext context) {
-            seen = context.colors.brightness;
-            return const SizedBox.shrink();
-          },
-        ),
-      );
-
-      await tester.pumpWidget(app(GPAppTheme.light()));
+      await tester.pumpWidget(_app(GPAppTheme.light(), (context) => seen = context.colors.brightness));
       expect(seen, Brightness.light);
 
-      await tester.pumpWidget(app(GPAppTheme.dark()));
+      await tester.pumpWidget(_app(GPAppTheme.dark(), (context) => seen = context.colors.brightness));
       await tester.pumpAndSettle();
       expect(seen, Brightness.dark);
     });

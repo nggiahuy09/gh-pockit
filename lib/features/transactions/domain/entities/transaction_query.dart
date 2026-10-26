@@ -1,47 +1,45 @@
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
+import 'package:equatable/equatable.dart';
 import 'package:meta/meta.dart';
 
-/// Filters AND together, and `null` or an empty set means no filter on that field. The order is fixed: `occurred_at DESC, id DESC` (ADR-0011).
+import 'transaction_type.dart';
+
+/// Filters AND together; null or an empty set means no filter on that field. The order is fixed: `occurred_at DESC, id DESC` (ADR-0011).
 @immutable
-final class TransactionQuery {
+final class TransactionQuery with Equatable {
   /// Throws [ArgumentError] on a non-positive [limit] or a [from] after [to]: caller bugs, not user input (ADR-0006).
-  factory TransactionQuery({
-    required int limit,
-    Set<String>? accountIds,
-    Set<String>? categoryIds,
-    Set<TransactionType>? types,
-    DateTime? from,
-    DateTime? to,
-  }) {
+  factory TransactionQuery({Set<String>? accountIds, Set<String>? categoryIds, Set<TransactionType>? types, DateTime? from, DateTime? to, required int limit}) {
     if (limit <= 0) throw ArgumentError.value(limit, 'limit', 'must be positive');
 
     final fromUtc = from?.toUtc();
     final toUtc = to?.toUtc();
-
     if (fromUtc != null && toUtc != null && fromUtc.isAfter(toUtc)) throw ArgumentError.value(to, 'to', 'must not be before from ($from)');
 
     return TransactionQuery._(
-      limit: limit,
       accountIds: _normalized(accountIds),
       categoryIds: _normalized(categoryIds),
       types: _normalized(types),
       from: fromUtc,
       to: toUtc,
+      limit: limit,
     );
   }
 
-  const TransactionQuery._({required this.limit, required this.accountIds, required this.categoryIds, required this.types, required this.from, required this.to});
+  const TransactionQuery._({
+    required Set<String>? accountIds,
+    required Set<String>? categoryIds,
+    required Set<TransactionType>? types,
+    required this.from,
+    required this.to,
+    required this.limit,
+  }) : _accountIds = accountIds,
+       _categoryIds = categoryIds,
+       _types = types;
 
-  /// The size of the whole window, not of a page: "load more" is [withLimit] with a larger one (ADR-0011).
-  final int limit;
+  /// Matches either side of a transfer.
+  final Set<String>? _accountIds;
 
-  /// Matches either side of a transfer: `account_id` or `destination_account_id`.
-  final Set<String>? accountIds;
-
-  /// No "uncategorised only" filter yet: it is not `category_id IS NULL`, since a deleted category reads as uncategorised too (ADR-0010).
-  final Set<String>? categoryIds;
-
-  final Set<TransactionType>? types;
+  final Set<String>? _categoryIds;
+  final Set<TransactionType>? _types;
 
   /// Inclusive. An instant: presentation converts local dates (ADR-0009).
   final DateTime? from;
@@ -49,33 +47,23 @@ final class TransactionQuery {
   /// Exclusive, so one month's [to] is the next month's [from].
   final DateTime? to;
 
-  TransactionQuery withLimit(int limit) => TransactionQuery(limit: limit, accountIds: accountIds, categoryIds: categoryIds, types: types, from: from, to: to);
+  /// The size of the whole window, not of a page (ADR-0011).
+  final int limit;
 
-  static Set<T>? _normalized<T>(Set<T>? values) => (values == null || values.isEmpty) ? null : Set<T>.unmodifiable(values);
+  static Set<T>? _normalized<T>(Set<T>? values) => (values == null || values.isEmpty) ? null : Set.of(values);
 
-  static bool _sameSet<T>(Set<T>? a, Set<T>? b) => a == null || b == null ? a == b : a.length == b.length && a.containsAll(b);
+  Set<String>? get accountIds => _accountIds == null ? null : Set.unmodifiable(_accountIds);
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TransactionQuery &&
-          other.limit == limit &&
-          _sameSet(other.accountIds, accountIds) &&
-          _sameSet(other.categoryIds, categoryIds) &&
-          _sameSet(other.types, types) &&
-          other.from == from &&
-          other.to == to;
+  Set<String>? get categoryIds => _categoryIds == null ? null : Set.unmodifiable(_categoryIds);
+
+  Set<TransactionType>? get types => _types == null ? null : Set.unmodifiable(_types);
 
   @override
-  int get hashCode => Object.hash(
-    limit,
-    accountIds == null ? null : Object.hashAllUnordered(accountIds!),
-    categoryIds == null ? null : Object.hashAllUnordered(categoryIds!),
-    types == null ? null : Object.hashAllUnordered(types!),
-    from,
-    to,
-  );
+  List<Object?> get props => [_accountIds, _categoryIds, _types, from, to, limit];
+
+  TransactionQuery withLimit(int limit) => TransactionQuery(accountIds: _accountIds, categoryIds: _categoryIds, types: _types, from: from, to: to, limit: limit);
 
   @override
-  String toString() => 'TransactionQuery(limit: $limit, accountIds: $accountIds, categoryIds: $categoryIds, types: ${types?.map((t) => t.name).toSet()}, from: $from, to: $to)';
+  String toString() =>
+      'TransactionQuery(accountIds: $_accountIds, categoryIds: $_categoryIds, types: ${_types?.map((type) => type.name).toSet()}, from: $from, to: $to, limit: $limit)';
 }

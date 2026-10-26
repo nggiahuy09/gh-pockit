@@ -54,7 +54,7 @@ for. The route for the W6 form already exists.
 **Bad.** The dock is our own widget, so it gives up `NavigationBar`'s built-in
 semantics and keyboard handling. Each tab merges its semantics into one selected
 button, and a test checks the selected flag. A backdrop blur also costs a
-compositing layer on every frame the list scrolls. W8's benchmark measures scroll
+compositing layer on every frame the list scrolls. W9's benchmark measures scroll
 jank and will show whether that matters on low-end Android.
 
 **Owed.** Widget tests cannot render the blur, so only a device shows the glass.

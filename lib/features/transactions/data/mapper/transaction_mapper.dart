@@ -1,22 +1,12 @@
 import 'package:drift/drift.dart';
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
-/// Names the check that refused a row, never a value — all a log line may carry (golden rule 9).
-enum TransactionMapperReason {
-  /// The column has no vocabulary CHECK (ADR-0009), so an unknown type — from a newer build, say — is caught here.
-  unknownType,
-
-  malformedCurrencyCode,
-
-  /// E.g. a note longer than this build accepts, written by a build with a larger limit.
-  brokenDomainRule,
-}
+import '../../../../core/database/database.dart';
+import '../../../../core/error/failure.dart';
+import '../../../../core/error/result.dart';
+import '../../../../core/money/money.dart';
+import '../../domain/entities/transaction_entity.dart';
+import '../../domain/entities/transaction_type.dart';
+import '../daos/transaction_dao.dart';
 
 sealed class TransactionMapping {
   const TransactionMapping();
@@ -33,70 +23,77 @@ final class UnmappableTransactionRow extends TransactionMapping {
 
   final TransactionMapperReason reason;
 
-  /// Always [GPDatabaseFailure], whatever the reason. The list counts such rows instead of failing (ADR-0011).
   GPFailure get failure => const GPDatabaseFailure();
 }
 
-class TransactionMapper {
-  const TransactionMapper();
+extension TransactionRowMapper on TransactionRow {
+  /// Maps a tombstone like a live row: `TransactionDao.findById` wants them.
+  TransactionMapping toDomain() {
+    final transactionType = TransactionType.fromStorage(type);
+    if (transactionType == null) return const UnmappableTransactionRow(TransactionMapperReason.unknownType);
 
-  /// Tombstones are not filtered here: `TransactionDao.findById` wants them.
-  TransactionMapping toEntity(TransactionRow row) {
-    final type = TransactionType.fromStorage(row.type);
-    if (type == null) return const UnmappableTransactionRow(TransactionMapperReason.unknownType);
-
-    // `Money.fromStorage`, not the throwing `Money(...)`: a malformed code read from SQLite is data, not a bug (ADR-0006).
-    final amount = Money.fromStorage(row.amountMinor, row.currencyCode);
+    // Not the throwing `Money(...)`: a malformed code read from SQLite is data, not a bug (ADR-0006).
+    final amount = Money.fromStorage(amountMinor, currencyCode);
     if (amount == null) return const UnmappableTransactionRow(TransactionMapperReason.malformedCurrencyCode);
 
     final entity = TransactionEntity.create(
-      id: row.id,
-      type: type,
-      accountId: row.accountId,
-      destinationAccountId: row.destinationAccountId,
-      categoryId: row.categoryId,
       amount: amount,
-      occurredAt: DateTime.fromMillisecondsSinceEpoch(row.occurredAt, isUtc: true),
-      note: row.note,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(row.updatedAt, isUtc: true),
-      version: row.version,
+      type: transactionType,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true),
+      occurredAt: DateTime.fromMillisecondsSinceEpoch(occurredAt, isUtc: true),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(updatedAt, isUtc: true),
+      accountId: accountId,
+      categoryId: categoryId,
+      destinationAccountId: destinationAccountId,
+      id: id,
+      note: note,
+      version: version,
     );
 
     return switch (entity) {
-      GPOk<TransactionEntity>(:final value) => MappedTransaction(value),
-      GPErr<TransactionEntity>() => const UnmappableTransactionRow(TransactionMapperReason.brokenDomainRule),
+      GPOk(:final value) => MappedTransaction(value),
+      GPErr() => const UnmappableTransactionRow(TransactionMapperReason.brokenDomainRule),
     };
   }
+}
 
-  /// Through `.insert`, so a column added to the table without a value here is a compile error.
-  TransactionsTableCompanion toInsert(TransactionEntity entity, {required String ownerId}) => TransactionsTableCompanion.insert(
-    id: entity.id,
+extension TransactionEntityMapper on TransactionEntity {
+  /// `.insert`, so a new non-null column is a compile error here until it is set.
+  TransactionsTableCompanion toInsert(String ownerId) => TransactionsTableCompanion.insert(
+    id: id,
     ownerId: ownerId,
-    type: entity.type.storageValue,
-    accountId: entity.accountId,
-    destinationAccountId: Value(entity.destinationAccountId),
-    categoryId: Value(entity.categoryId),
-    amountMinor: entity.amount.minorUnits,
-    currencyCode: entity.amount.currencyCode,
-    occurredAt: entity.occurredAt.millisecondsSinceEpoch,
-    note: Value(entity.note),
-    createdAt: entity.createdAt.millisecondsSinceEpoch,
-    updatedAt: entity.updatedAt.millisecondsSinceEpoch,
-    version: entity.version,
+    type: type.storageValue,
+    accountId: accountId,
+    destinationAccountId: Value(destinationAccountId),
+    categoryId: Value(categoryId),
+    amountMinor: amount.minorUnits,
+    currencyCode: amount.currencyCode,
+    occurredAt: occurredAt.millisecondsSinceEpoch,
+    note: Value(note),
+    createdAt: createdAt.millisecondsSinceEpoch,
+    updatedAt: updatedAt.millisecondsSinceEpoch,
+    version: version,
     syncStatus: TransactionDao.pendingSyncStatus,
   );
 
-  /// Only what a user edit may move; the DAO stamps `updated_at` and `sync_status`. Null references are written as `Value(null)`, not left absent, so
-  /// switching the type clears the old destination or category — an absent value would keep it, and the table's CHECK would refuse the row.
-  TransactionsTableCompanion toPatch(TransactionEntity entity) => TransactionsTableCompanion(
-    type: Value(entity.type.storageValue),
-    accountId: Value(entity.accountId),
-    destinationAccountId: Value(entity.destinationAccountId),
-    categoryId: Value(entity.categoryId),
-    amountMinor: Value(entity.amount.minorUnits),
-    currencyCode: Value(entity.amount.currencyCode),
-    occurredAt: Value(entity.occurredAt.millisecondsSinceEpoch),
-    note: Value(entity.note),
+  /// Null references are written as `Value(null)`, not left absent: switching the type must clear the old destination or category, or the table's CHECK
+  /// refuses the row.
+  TransactionsTableCompanion toPatch() => TransactionsTableCompanion(
+    type: Value(type.storageValue),
+    accountId: Value(accountId),
+    destinationAccountId: Value(destinationAccountId),
+    categoryId: Value(categoryId),
+    amountMinor: Value(amount.minorUnits),
+    currencyCode: Value(amount.currencyCode),
+    occurredAt: Value(occurredAt.millisecondsSinceEpoch),
+    note: Value(note),
   );
+}
+
+/// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).
+enum TransactionMapperReason {
+  unknownType,
+
+  malformedCurrencyCode,
+  brokenDomainRule,
 }

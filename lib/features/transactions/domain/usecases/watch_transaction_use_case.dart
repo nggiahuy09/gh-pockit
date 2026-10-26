@@ -1,11 +1,25 @@
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013).
-class WatchTransactionUseCase {
-  const WatchTransactionUseCase({required TransactionRepository transactionRepository}) : _transactions = transactionRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../entities/transaction_entity.dart';
+import '../repositories/transaction_repository.dart';
 
-  final TransactionRepository _transactions;
+final class WatchTransactionUseCase with GPStreamUseCase<WatchTransactionInput, TransactionEntity?> {
+  const WatchTransactionUseCase(this._repository);
 
-  Stream<TransactionEntity?> call(String id) => _transactions.watchTransaction(id);
+  final TransactionRepository _repository;
+
+  @override
+  Stream<TransactionEntity?> execute(WatchTransactionInput input) => _repository.watchTransaction(input.transactionId);
+}
+
+@immutable
+final class WatchTransactionInput implements GPLoggable {
+  const WatchTransactionInput(this.transactionId);
+
+  final String transactionId;
+
+  @override
+  Map<String, Object?> toLog() => {'transaction_id': transactionId};
 }

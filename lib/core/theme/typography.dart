@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/tokens/typography.dart';
+import 'tokens/typography.dart';
 
 /// Styles carry no color: it comes from the enclosing `DefaultTextStyle` or an explicit `context.colors`.
 @immutable
-class GPTypography extends ThemeExtension<GPTypography> {
+// Fields in Material's scale order, not by name.
+final class GPTypography extends ThemeExtension<GPTypography> {
   const GPTypography({
     required this.displayLarge,
     required this.displayMedium,
@@ -145,24 +146,6 @@ class GPTypography extends ThemeExtension<GPTypography> {
   final TextStyle labelMedium;
   final TextStyle labelSmall;
 
-  TextTheme toTextTheme() => TextTheme(
-    displayLarge: displayLarge,
-    displayMedium: displayMedium,
-    displaySmall: displaySmall,
-    headlineLarge: headlineLarge,
-    headlineMedium: headlineMedium,
-    headlineSmall: headlineSmall,
-    titleLarge: titleLarge,
-    titleMedium: titleMedium,
-    titleSmall: titleSmall,
-    bodyLarge: bodyLarge,
-    bodyMedium: bodyMedium,
-    bodySmall: bodySmall,
-    labelLarge: labelLarge,
-    labelMedium: labelMedium,
-    labelSmall: labelSmall,
-  );
-
   @override
   GPTypography copyWith({
     TextStyle? displayLarge,
@@ -220,4 +203,22 @@ class GPTypography extends ThemeExtension<GPTypography> {
       labelSmall: TextStyle.lerp(labelSmall, other.labelSmall, t)!,
     );
   }
+
+  TextTheme toTextTheme() => TextTheme(
+    displayLarge: displayLarge,
+    displayMedium: displayMedium,
+    displaySmall: displaySmall,
+    headlineLarge: headlineLarge,
+    headlineMedium: headlineMedium,
+    headlineSmall: headlineSmall,
+    titleLarge: titleLarge,
+    titleMedium: titleMedium,
+    titleSmall: titleSmall,
+    bodyLarge: bodyLarge,
+    bodyMedium: bodyMedium,
+    bodySmall: bodySmall,
+    labelLarge: labelLarge,
+    labelMedium: labelMedium,
+    labelSmall: labelSmall,
+  );
 }

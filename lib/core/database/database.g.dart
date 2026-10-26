@@ -106,13 +106,9 @@ class $SettingsTableTable extends SettingsTable with TableInfo<$SettingsTableTab
 }
 
 class SettingRow extends DataClass implements Insertable<SettingRow> {
-  /// Namespaced by dotted prefix (`locale.selected`) so a later feature cannot collide with an older one by picking the same short word.
+  /// Dotted namespace, e.g. `locale.selected`.
   final String key;
-
-  /// Always a string, whatever the caller means by it. Parsing belongs to the store that owns the key — `GPDriftLocaleStore` for `locale.*` — not here.
   final String value;
-
-  /// Epoch millis, UTC (§6 — never an ISO string). Written from `GPClock`, never `DateTime.now()`, so a test can state the time instead of racing it.
   final int updatedAt;
   const SettingRow({
     required this.key,
@@ -565,65 +561,22 @@ class $AccountsTableTable extends AccountsTable with TableInfo<$AccountsTableTab
 }
 
 class AccountRow extends DataClass implements Insertable<AccountRow> {
-  /// UUID, generated client-side by `GPUuidGenerator` before the insert (golden rule 4, ADR-0002).
-  ///
-  /// Not `clientDefault`: drift would then mint the id inside the insert, and the repository would have to read the row back to learn what it just wrote —
-  /// which is the round trip client-side ids exist to remove. The caller generates it, the caller keeps it, the outbox references it.
   final String id;
-
-  /// `localOwnerId` until W10. Never null — see `core/database/owner_id.dart`.
   final String ownerId;
-
-  /// User-facing, user-editable. No length constraint here on purpose: "an account name may not be blank" is a business rule, and §3 puts business rules in
-  /// `domain/` where T5's `AccountEntity` can state it once for every caller, not in a CHECK that only the DB path enforces.
   final String name;
 
-  /// `AccountType` as of T5, stored as plain text and converted by `AccountMapper` at T6 — not `textEnum<AccountType>()`.
-  ///
-  /// `textEnum` persists the Dart constant's *name*, which turns renaming an enum value into a silent data migration: the code compiles, the old rows stop
-  /// matching, and nothing fails until a user notices their accounts lost their type. An explicit mapper makes the stored vocabulary a thing a reviewer can
-  /// see in a diff, and it is also what §3's three-model rule asks for — the row and the entity are allowed to disagree about representation.
+  /// Not drift's `textEnum`, which stores the Dart name and makes renaming a value a silent data migration.
   final String type;
 
-  /// ISO-4217, e.g. `VND`, `USD`.
-  ///
-  /// The one hand-written CHECK on this table, and the reason it is not "domain validation leaking into the DB": this column decides how [initialBalance]
-  /// is read. VND has exponent 0 and USD exponent 2, so a malformed code makes the integer next to it un-interpretable rather than merely invalid. That is
-  /// a storage-integrity property, and W3 T4's `CurrencyCode` catalog layers the business meaning — which codes actually exist — on top of it.
-  ///
-  /// `check()` rather than the shorter `withLength(min: 3, max: 3)`, which is what this column was written as first. `withLength` compiles to a Dart-side
-  /// validator and nothing else: the column reached the schema dump as a bare `TEXT NOT NULL`, so it would have held for a companion insert and evaporated
-  /// for a raw upsert or a migration. `check()` is written into the `CREATE TABLE` instead, which also carries it into the fixtures W9 migrates against.
-  /// Both paths are asserted in `test/features/accounts/data/tables/accounts_table_test.dart` — the second test is there precisely to fail if someone
-  /// "simplifies" this back.
+  /// `check()`, not `withLength()`: drift enforces `withLength` only in Dart, never in the `CREATE TABLE`.
   final String currencyCode;
-
-  /// Minor units, `int` — golden rule 2. 1.500.000 ₫ is `1500000`; $12.34 is `1234`. There is no `double` anywhere on the path from here to the UI.
-  ///
-  /// The *opening* balance only. The current balance is never a column: §6 forbids a stored derived value without a recompute strategy, and §12.8 names it
-  /// an anti-pattern outright. It is `initial_balance + SUM(transactions)` over an index, measured at W8.
   final int initialBalance;
-
-  /// Archived ≠ deleted. An archived account disappears from pickers but keeps its history and keeps syncing; [deletedAt] is the tombstone.
-  ///
-  /// `boolean()` rather than `integer()`: the storage is the same `INTEGER` the blueprint specifies, drift adds `CHECK (is_archived IN (0, 1))` for free,
-  /// and the Dart side gets a `bool` instead of an `int` that a caller could compare against 2.
   final bool isArchived;
-
-  /// Epoch millis, UTC — never an ISO string (§6), never `DateTime.now()` (§8 wants a fake clock, `GPClock` provides one).
   final int createdAt;
 
-  /// Epoch millis, UTC. Half of the pull cursor at W14 T2, so it must move on every write the server should learn about.
+  /// Moves on every synced write: it is half the pull cursor.
   final int updatedAt;
-
-  /// Optimistic-concurrency token (§7). Starts at 1 on create and is set from the server's response, never incremented hopefully on the client.
   final int version;
-
-  /// Soft-delete tombstone (golden rule 5): epoch millis when deleted, null while alive. Every local query filters `deleted_at IS NULL` — audited across
-  /// all DAOs at W15 T3.
-  ///
-  /// Not indexed. At transaction scale a partial index earns its keep; a user has a handful of accounts, and an index nothing needs is still an index every
-  /// write maintains.
   final int? deletedAt;
   const AccountRow({
     required this.id,
@@ -1283,46 +1236,28 @@ class $CategoriesTableTable extends CategoriesTable with TableInfo<$CategoriesTa
 }
 
 class CategoryRow extends DataClass implements Insertable<CategoryRow> {
-  /// UUID. For a user-created category it is `GPUuidGenerator.v7`, as everywhere else; for a seeded one it is `v5` over `owner_id|name_key`, so that two
-  /// devices belonging to the same user mint the *same* id for "Food" and a pull reconciles them instead of showing the user two of everything. See
-  /// `category_seeder.dart`.
+  /// A seeded row's is v5 over `owner_id|name_key`, so every device mints the same id for it (ADR-0002 amendment).
   final String id;
-
-  /// `localOwnerId` until W10. Never null — see `core/database/owner_id.dart`.
   final String ownerId;
 
-  /// Translation key for a seeded category (`category.food`), null for one the user created. Never translated text — see the class doc.
+  /// A translation key, never translated text (ADR-0004).
   final String? nameKey;
-
-  /// The name the user typed, and the one that wins when both are present. Null on a seeded category nobody has renamed.
   final String? name;
 
-  /// `CategoryType` — `expense` or `income` — stored as plain text and converted by the mapper at T6, not `textEnum<CategoryType>()`. Same reasoning as
-  /// `accounts.type`: `textEnum` persists the Dart constant's name, which turns a rename into a silent data migration.
+  /// Not `textEnum`, which stores the Dart name and would make a rename a data migration.
   final String type;
 
-  /// A key into the app's icon set, resolved in presentation — `icon_food`, not a code point. A stored code point is a number that means nothing after the
-  /// icon font changes, and Material's identifiers are not stable enough to put in a database.
+  /// Never a code point: one would break when the icon font changes.
   final String? iconKey;
 
-  /// A key into the theme's palette, resolved in presentation. Never `#FF5722`: a stored hex is a colour that ignores dark mode and cannot be re-themed.
+  /// Never a hex: a stored colour cannot follow dark mode.
   final String? colorKey;
-
-  /// True for the rows the seeder wrote. It is not a permission — the user may rename, recolour and soft-delete a system category — it is provenance, and
-  /// W6 uses it to offer "restore defaults" and to keep a fresh install's categories out of the "you created these" list.
   final bool isSystem;
-
-  /// Epoch millis, UTC (§6). Written from `GPClock`, never `DateTime.now()`.
   final int createdAt;
-
-  /// Epoch millis, UTC. Half the pull cursor at W14 T2.
   final int updatedAt;
-
-  /// Optimistic-concurrency token (§7). Starts at 1, set from the server's response, never bumped hopefully on the client.
   final int version;
 
-  /// Soft-delete tombstone (golden rule 5). Not indexed, same as `accounts`: a user has tens of categories, and an index nothing needs is one every write
-  /// maintains.
+  /// Not indexed: a user has tens of categories.
   final int? deletedAt;
   const CategoryRow({
     required this.id,
@@ -2098,69 +2033,28 @@ class $TransactionsTableTable extends TransactionsTable with TableInfo<$Transact
 }
 
 class TransactionRow extends DataClass implements Insertable<TransactionRow> {
-  /// UUID v7, minted client-side before the insert (golden rule 4, ADR-0002). Not `clientDefault`, for the reason `accounts.id` gives.
   final String id;
-
-  /// `localOwnerId` until auth lands. Never null — see `core/database/owner_id.dart`.
   final String ownerId;
 
-  /// `TransactionType.storageValue` — `expense`, `income` or `transfer` — stored as plain text and converted by the mapper at T6 rather than by `textEnum`,
-  /// for the reason `accounts.type` gives. No vocabulary CHECK (ADR-0009). `'transfer'` does appear in [customConstraints] as a literal, which is why
-  /// `TransactionType` warns against renaming it.
+  /// No vocabulary CHECK (ADR-0009). `'transfer'` is a literal in [customConstraints]: never rename it.
   final String type;
 
-  /// The account money leaves (expense, transfer) or arrives in (income).
-  ///
-  /// **Checked immediately, not `DEFERRABLE INITIALLY DEFERRED`.** Deferring would let one pull page (W14) apply children before parents, but not across
-  /// pages — those still have to arrive parents first — and it moves the failure from the statement that caused it to the `COMMIT`, where nothing says
-  /// which row it was. Deferral is part of the constraint, so this is the one foreign-key property that cannot change later without a rebuild; immediate
-  /// is the one that is easier to debug.
-  ///
-  /// `@ReferenceName` because two columns here reference `accounts`, and drift's generated manager names each reverse relation after the referencing table
-  /// by default — the two would collide and drift would drop both. Nothing in the app uses the manager API (DAOs own every query), but a build that warns
-  /// on every run is a build whose next real warning goes unread.
+  /// `@ReferenceName` because two columns reference `accounts`, and drift's default reverse-relation names would collide.
   final String accountId;
-
-  /// Where a transfer's money arrives. Set on every transfer and on nothing else — see [customConstraints].
   final String? destinationAccountId;
 
-  /// What the transaction is filed under, or null for uncategorised. Never set on a transfer.
-  ///
-  /// The foreign key sees a soft-deleted category as present — the row is still there — which is what ADR-0010 wants: deleting a category leaves its
-  /// transactions pointing at the tombstone, and readers show them as "Uncategorised".
+  /// Accepts a soft-deleted category on purpose: its transactions read as "Uncategorised" (ADR-0010).
   final String? categoryId;
-
-  /// Minor units, `int` (golden rule 2), and **always positive**: [type] says which way the money moves (ADR-0009). Zero is refused too — an entry that
-  /// moves nothing is a typo.
-  ///
-  /// A `check()` on the column rather than a table constraint, so it lands in the `CREATE TABLE` beside the column it is about — the choice, and the reason,
-  /// of `accounts.currency_code`.
   final int amountMinor;
-
-  /// ISO-4217, with the CHECK `accounts.currency_code` has (ADR-0007): the code decides how [amountMinor] is read. That it equals the account's own currency
-  /// is a fact about another row, so it is the repository's check (ADR-0010), not the schema's.
   final String currencyCode;
-
-  /// When the money moved: an instant, epoch millis UTC (§6). Which day that is depends on the zone it is shown in, which is presentation's (ADR-0009).
   final int occurredAt;
-
-  /// Free text the user typed, or null. No length CHECK: `TransactionEntity.noteMaxLength` is a business rule, and §3 keeps those out of SQL.
   final String? note;
-
-  /// Epoch millis, UTC. Written from `GPClock`, never `DateTime.now()`.
   final int createdAt;
-
-  /// Epoch millis, UTC. Half the pull cursor at W14 T2.
   final int updatedAt;
-
-  /// Optimistic-concurrency token (§7). Starts at 1, set from the server's response, never bumped hopefully on the client.
   final int version;
-
-  /// Soft-delete tombstone (golden rule 5). Not indexed, and not yet a partial-index condition — see the indexes above.
   final int? deletedAt;
 
-  /// `pending` or `synced` (ADR-0009). Every local write sets `pending`; only the sync engine writes `synced`, from W13. No default, like every column here —
-  /// a default would be a sync state nobody wrote — and no vocabulary CHECK.
+  /// No default: that would be a sync state nobody wrote.
   final String syncStatus;
   const TransactionRow({
     required this.id,

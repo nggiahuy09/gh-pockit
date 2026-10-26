@@ -1,4 +1,4 @@
-import 'package:ghpockit/app/app.dart';
-import 'package:ghpockit/app/bootstrap.dart';
+import 'app/app.dart';
+import 'app/bootstrap.dart';
 
 Future<void> main() => bootstrap(GPApp.new);

@@ -10,23 +10,23 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 /// Every [watchTransactions] call opens a [FakeWatch] the test drives by hand; [log] records each `listen #n` / `cancel #n` in the order they happen.
-class FakeTransactionRepository implements TransactionRepository {
-  /// With no [balances], each call gets a fresh one-empty-list stream, as `FakeAccountRepository` does.
-  FakeTransactionRepository({this.balances});
+base class FakeTransactionRepository extends TransactionRepository {
+  /// Without [_balances], each call gets a fresh one-empty-list stream.
+  FakeTransactionRepository([this._balances]);
 
-  final Stream<List<AccountBalance>>? balances;
+  final List<String> _log = [];
+  final List<FakeWatch> _watches = [];
+  final Stream<List<AccountBalance>>? _balances;
 
-  final List<FakeWatch> watches = <FakeWatch>[];
-  final List<String> log = <String>[];
+  List<String> get log => List.unmodifiable(_log);
+
+  List<FakeWatch> get watches => List.unmodifiable(_watches);
 
   @override
   Stream<TransactionListSnapshot> watchTransactions(TransactionQuery query) {
-    final index = watches.length;
-    final watch = FakeWatch._(
-      query,
-      StreamController<TransactionListSnapshot>(onListen: () => log.add('listen #$index'), onCancel: () => log.add('cancel #$index')),
-    );
-    watches.add(watch);
+    final index = _watches.length;
+    final watch = FakeWatch._(query, StreamController(onListen: () => _log.add('listen #$index'), onCancel: () => _log.add('cancel #$index')));
+    _watches.add(watch);
 
     return watch._controller.stream;
   }
@@ -36,12 +36,12 @@ class FakeTransactionRepository implements TransactionRepository {
 
   @override
   Future<GPResult<TransactionEntity>> createTransaction({
-    required TransactionType type,
-    required String accountId,
     required Money amount,
+    required TransactionType type,
     required DateTime occurredAt,
-    String? destinationAccountId,
+    required String accountId,
     String? categoryId,
+    String? destinationAccountId,
     String? note,
   }) => throw UnimplementedError();
 
@@ -55,13 +55,13 @@ class FakeTransactionRepository implements TransactionRepository {
   Future<GPResult<void>> restoreTransaction(String id) => throw UnimplementedError();
 
   @override
-  Stream<List<AccountBalance>> watchAccountBalances() => balances ?? Stream<List<AccountBalance>>.value(const <AccountBalance>[]);
+  Future<GPResult<bool>> hasLiveTransactions(String accountId) => throw UnimplementedError();
 
   @override
-  Future<GPResult<bool>> hasLiveTransactions(String accountId) => throw UnimplementedError();
+  Stream<List<AccountBalance>> watchAccountBalances() => _balances ?? Stream.value(const []);
 }
 
-class FakeWatch {
+final class FakeWatch {
   FakeWatch._(this.query, this._controller);
 
   final TransactionQuery query;

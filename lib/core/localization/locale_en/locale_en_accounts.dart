@@ -7,16 +7,13 @@ final class GPLocaleEnAccounts implements GPLocaleBaseAccounts {
   String get title => 'Accounts';
 
   @override
-  String count(int count) => count == 1 ? '1 account' : '$count accounts';
-
-  @override
   String get balanceColumn => 'Balance';
 
   @override
   String get loading => 'Loading accounts';
 
   @override
-  String get errorMessage => 'The list comes back by itself the next time data is saved.';
+  String get errorBody => 'The list comes back by itself the next time data is saved.';
 
   @override
   String get typeCash => 'Cash';
@@ -37,7 +34,7 @@ final class GPLocaleEnAccounts implements GPLocaleBaseAccounts {
   String get emptyTitle => 'No accounts yet';
 
   @override
-  String get emptyMessage => 'Your cash, bank accounts, e-wallets and cards will show up here.';
+  String get emptyBody => 'Your cash, bank accounts, e-wallets and cards will show up here.';
 
   @override
   String get add => 'Add account';
@@ -65,4 +62,7 @@ final class GPLocaleEnAccounts implements GPLocaleBaseAccounts {
 
   @override
   String get save => 'Save';
+
+  @override
+  String count(int count) => count == 1 ? '1 account' : '$count accounts';
 }

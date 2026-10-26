@@ -17,13 +17,13 @@ import '../../../../helpers/fake_account_repository.dart';
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/localization_harness.dart';
+import '../../../../helpers/results.dart';
 
 /// Fakes, not drift: the write starts from a tap inside the widget test's fake zone, where drift's query timers never fire.
-/// `create_sample_transaction_use_case_test.dart` covers the real database.
 void main() {
   group('debug tools', () {
-    testWidgets('are absent from a release build', (WidgetTester tester) async {
-      await tester.pumpWidget(localizedHarness(child: const SettingsPage(showDebugTools: false), localization: await localizationFor(GPLocale.en)));
+    testWidgets('are absent from a release build', (tester) async {
+      await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: const SettingsPage(showsDebugTools: false)));
 
       expect(find.text('Add a sample transaction'), findsNothing);
     });
@@ -32,34 +32,36 @@ void main() {
       late _RecordingTransactionRepository transactions;
 
       setUp(() {
-        final account = AccountEntity.create(
-          id: 'acc-cash',
-          name: 'Cash',
-          type: AccountType.cash,
-          initialBalance: Money.zero('VND'),
-          createdAt: DateTime.utc(2026),
-          updatedAt: DateTime.utc(2026),
+        final account = okValue(
+          AccountEntity.create(
+            initialBalance: Money.zero('VND'),
+            type: AccountType.cash,
+            createdAt: DateTime.utc(2026),
+            updatedAt: DateTime.utc(2026),
+            id: 'acc-cash',
+            name: 'Cash',
+          ),
         );
         getIt
-          ..registerSingleton<AccountRepository>(FakeAccountRepository(accounts: Stream<List<AccountEntity>>.value(<AccountEntity>[(account as GPOk<AccountEntity>).value])))
+          ..registerSingleton<AccountRepository>(FakeAccountRepository(Stream.value([account])))
           ..registerSingleton<TransactionRepository>(transactions = _RecordingTransactionRepository())
           ..registerSingleton<GPClock>(FakeClock());
       });
       tearDown(getIt.reset);
 
-      testWidgets('add a sample transaction in the UI language and say so', (WidgetTester tester) async {
-        await tester.pumpWidget(localizedHarness(child: const SettingsPage(), localization: await localizationFor(GPLocale.en)));
+      testWidgets('add a sample transaction in the UI language and say so', (tester) async {
+        await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: const SettingsPage()));
         await tester.tap(find.text('Add a sample transaction'));
         await tester.pumpAndSettle();
 
-        expect(transactions.notes, <String?>['Sample transaction']);
+        expect(transactions.notes, ['Sample transaction']);
         expect(find.text('Sample transaction added.'), findsOneWidget);
       });
 
-      testWidgets('show the failure instead when the write is refused', (WidgetTester tester) async {
+      testWidgets('show the failure instead when the write is refused', (tester) async {
         transactions.refuseWith = const GPDatabaseFailure();
         final localization = await localizationFor(GPLocale.en);
-        await tester.pumpWidget(localizedHarness(child: const SettingsPage(), localization: localization));
+        await tester.pumpWidget(localizedHarness(localization: localization, child: const SettingsPage()));
         await tester.tap(find.text('Add a sample transaction'));
         await tester.pumpAndSettle();
 
@@ -69,24 +71,36 @@ void main() {
   });
 }
 
-class _RecordingTransactionRepository extends FakeTransactionRepository {
-  final List<String?> notes = <String?>[];
+final class _RecordingTransactionRepository extends FakeTransactionRepository {
+  final List<String?> _notes = [];
+
   GPFailure? refuseWith;
+
+  List<String?> get notes => List.unmodifiable(_notes);
 
   @override
   Future<GPResult<TransactionEntity>> createTransaction({
-    required TransactionType type,
-    required String accountId,
     required Money amount,
+    required TransactionType type,
     required DateTime occurredAt,
-    String? destinationAccountId,
+    required String accountId,
     String? categoryId,
+    String? destinationAccountId,
     String? note,
   }) async {
     final refusal = refuseWith;
-    if (refusal != null) return GPErr<TransactionEntity>(refusal);
+    if (refusal != null) return GPErr(refusal);
 
-    notes.add(note);
-    return TransactionEntity.create(id: 'tx-1', type: type, accountId: accountId, amount: amount, occurredAt: occurredAt, createdAt: occurredAt, updatedAt: occurredAt, note: note);
+    _notes.add(note);
+    return TransactionEntity.create(
+      amount: amount,
+      type: type,
+      createdAt: occurredAt,
+      occurredAt: occurredAt,
+      updatedAt: occurredAt,
+      accountId: accountId,
+      id: 'tx-1',
+      note: note,
+    );
   }
 }

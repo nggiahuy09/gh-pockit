@@ -67,5 +67,5 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get routeNotFoundTitle => 'Không tìm thấy trang';
 
   @override
-  String get routeNotFoundMessage => 'Liên kết này không dẫn tới đâu trong Pockit.';
+  String get routeNotFoundBody => 'Liên kết này không dẫn tới đâu trong Pockit.';
 }

@@ -16,6 +16,21 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
+import '../../../../helpers/results.dart';
+
+const _refused = GPErr<void>(GPValidationFailure(GPValidationCode.accountHasTransactions));
+
+Future<TransactionEntity> _record(TransactionRepositoryImpl transactions, {TransactionType type = TransactionType.expense, String? destinationAccountId}) async => okValue(
+  await transactions.createTransaction(
+    amount: Money(125000, 'VND'),
+    type: type,
+    occurredAt: DateTime.utc(2026, 9, 30, 5, 30),
+    accountId: 'acc-cash',
+    destinationAccountId: destinationAccountId,
+  ),
+);
+
+Future<int?> _deletedAtOf(GPAppDatabase db, String accountId) async => (await (db.select(db.accountsTable)..where((t) => t.id.equals(accountId))).getSingle()).deletedAt;
 
 /// Real repositories on one in-memory database: the rule under test spans the account and transaction tables.
 void main() {
@@ -31,11 +46,11 @@ void main() {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
     clock = FakeClock(DateTime.utc(2026, 9, 30, 9));
     uuid = FakeUuidGenerator();
-    logger = RecordingLogger(clock: clock);
+    logger = RecordingLogger(clock);
 
-    accounts = AccountRepositoryImpl(dao: AccountDao(db), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
-    transactions = TransactionRepositoryImpl(dao: TransactionDao(db), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
-    deleteAccount = DeleteAccountUseCase(accountRepository: accounts, transactionRepository: transactions);
+    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+    deleteAccount = DeleteAccountUseCase(accounts, transactions);
 
     for (final id in ['acc-cash', 'acc-bank']) {
       await db
@@ -57,71 +72,53 @@ void main() {
     }
   });
 
-  tearDown(() async {
-    await db.close();
-  });
-
-  Future<TransactionEntity> record({TransactionType type = TransactionType.expense, String? destinationAccountId}) async {
-    final result = await transactions.createTransaction(
-      type: type,
-      accountId: 'acc-cash',
-      amount: Money(125000, 'VND'),
-      occurredAt: DateTime.utc(2026, 9, 30, 5, 30),
-      destinationAccountId: destinationAccountId,
-    );
-
-    return (result as GPOk<TransactionEntity>).value;
-  }
-
-  Future<int?> deletedAtOf(String accountId) async => (await (db.select(db.accountsTable)..where((t) => t.id.equals(accountId))).getSingle()).deletedAt;
-
-  const refused = GPErr<void>(GPValidationFailure(GPValidationCode.accountHasTransactions));
+  tearDown(() => db.close());
 
   test('deletes an account no transaction touches', () async {
-    await record();
+    await _record(transactions);
 
-    expect(await deleteAccount('acc-bank'), const GPOk<void>(null));
-    expect(await deletedAtOf('acc-bank'), clock.nowEpochMillis());
+    expect(await deleteAccount.execute(const DeleteAccountInput('acc-bank')), const GPOk<void>(null));
+    expect(await _deletedAtOf(db, 'acc-bank'), clock.nowEpochMillis());
   });
 
   test('refuses an account a live transaction is on — pointing to archive — and leaves it live', () async {
-    await record();
+    await _record(transactions);
 
-    expect(await deleteAccount('acc-cash'), refused);
-    expect(await deletedAtOf('acc-cash'), isNull);
+    expect(await deleteAccount.execute(const DeleteAccountInput('acc-cash')), _refused);
+    expect(await _deletedAtOf(db, 'acc-cash'), isNull);
   });
 
   test("refuses a transfer's destination too — the side whose balance would move with nothing to show for it", () async {
-    await record(type: TransactionType.transfer, destinationAccountId: 'acc-bank');
+    await _record(transactions, type: TransactionType.transfer, destinationAccountId: 'acc-bank');
 
-    expect(await deleteAccount('acc-bank'), refused);
+    expect(await deleteAccount.execute(const DeleteAccountInput('acc-bank')), _refused);
   });
 
   test('deletes the account once its transactions are deleted', () async {
-    final transaction = await record();
+    final transaction = await _record(transactions);
     await transactions.deleteTransaction(transaction.id);
 
-    expect(await deleteAccount('acc-cash'), const GPOk<void>(null));
+    expect(await deleteAccount.execute(const DeleteAccountInput('acc-cash')), const GPOk<void>(null));
   });
 
   test("reports an account that is not there as not found — the repository's answer, unchanged", () async {
-    expect(await deleteAccount('acc-missing'), const GPErr<void>(GPNotFoundFailure()));
+    expect(await deleteAccount.execute(const DeleteAccountInput('acc-missing')), const GPErr<void>(GPNotFoundFailure()));
   });
 
   test('deletes nothing when the question cannot be answered', () async {
     final failing = DeleteAccountUseCase(
-      accountRepository: accounts,
-      transactionRepository: TransactionRepositoryImpl(dao: LookupFailingTransactionDao(db), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId),
+      accounts,
+      TransactionRepositoryImpl(clock: clock, dao: _LookupFailingTransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
     );
 
-    expect(await failing('acc-cash'), const GPErr<void>(GPDatabaseFailure()));
-    expect(await deletedAtOf('acc-cash'), isNull);
+    expect(await failing.execute(const DeleteAccountInput('acc-cash')), const GPErr<void>(GPDatabaseFailure()));
+    expect(await _deletedAtOf(db, 'acc-cash'), isNull);
   });
 }
 
-class LookupFailingTransactionDao extends TransactionDao {
-  LookupFailingTransactionDao(super.attachedDatabase);
+final class _LookupFailingTransactionDao extends TransactionDao {
+  _LookupFailingTransactionDao(super.attachedDatabase);
 
   @override
-  Future<bool> hasLiveTransactions(String ownerId, String accountId) => Future<bool>.error(Exception('disk I/O error'));
+  Future<bool> hasLiveTransactions({required String accountId, required String ownerId}) => Future.error(Exception('disk I/O error'));
 }

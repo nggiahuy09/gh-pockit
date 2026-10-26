@@ -12,16 +12,16 @@ double _contrast(Color a, Color b) {
 }
 
 /// WCAG AA for body-sized text.
-const double _aaText = 4.5;
+const _aaText = 4.5;
 
 /// WCAG AA for large text and for non-text UI (icons, borders, focus rings).
-const double _aaLarge = 3;
+const _aaLarge = 3.0;
 
 void main() {
-  for (final (String name, GPColors colors) in const <(String, GPColors)>[('light', GPColors.light()), ('dark', GPColors.dark())]) {
+  for (final (name, colors) in const [('light', GPColors.light()), ('dark', GPColors.dark())]) {
     group('$name palette', () {
       test('every fill is legible under its own content color', () {
-        final pairs = <String, (Color, Color)>{
+        final pairs = {
           'onPrimary/primary': (colors.onPrimary, colors.primary),
           'onPrimaryContainer/primaryContainer': (colors.onPrimaryContainer, colors.primaryContainer),
           'onAccent/accent': (colors.onAccent, colors.accent),
@@ -47,9 +47,9 @@ void main() {
       });
 
       test('money colors are legible on every surface they can land on', () {
-        // An amount is body-sized text, so it owes the full 4.5:1 — not the 3:1 a large figure would.
-        for (final (String role, Color color) in <(String, Color)>[('income', colors.income), ('expense', colors.expense)]) {
-          for (final (String ground, Color background) in <(String, Color)>[('background', colors.background), ('surface', colors.surface)]) {
+        // An amount is body-sized text, so it owes the full 4.5:1, not the 3:1 a large figure would.
+        for (final (role, color) in [('income', colors.income), ('expense', colors.expense)]) {
+          for (final (ground, background) in [('background', colors.background), ('surface', colors.surface)]) {
             final ratio = _contrast(color, background);
             expect(ratio, greaterThanOrEqualTo(_aaText), reason: '$name $role on $ground is ${ratio.toStringAsFixed(2)}:1');
           }
@@ -57,21 +57,20 @@ void main() {
       });
 
       test('accentInk carries the accent as text, where accent itself cannot', () {
-        for (final (String ground, Color background) in <(String, Color)>[('background', colors.background), ('surface', colors.surface)]) {
+        for (final (ground, background) in [('background', colors.background), ('surface', colors.surface)]) {
           final ratio = _contrast(colors.accentInk, background);
           expect(ratio, greaterThanOrEqualTo(_aaText), reason: '$name accentInk on $ground is ${ratio.toStringAsFixed(2)}:1');
         }
       });
 
       test('income and expense separate by hue, which is the only axis they can separate on', () {
-        // Not a contrast check: the two are tuned to the same luminance, so their mutual ratio is ~1.0 by construction. Hue is the secondary signal —
-        // the sign in front of the amount carries the meaning (WCAG 1.4.1).
+        // The two are tuned to the same luminance, so their mutual ratio is ~1.0 by construction; the sign carries the meaning (WCAG 1.4.1).
         final income = HSLColor.fromColor(colors.income).hue;
         final expense = HSLColor.fromColor(colors.expense).hue;
         final distance = (income - expense).abs();
-        final circular = math.min(distance, 360 - distance);
+        final circular = math.min(distance, 360.0 - distance);
 
-        expect(circular, greaterThanOrEqualTo(60), reason: '$name income and expense are only ${circular.toStringAsFixed(0)}° apart');
+        expect(circular, greaterThanOrEqualTo(60.0), reason: '$name income and expense are only ${circular.toStringAsFixed(0)}° apart');
       });
 
       test('borders are visible, and outline is the louder of the two', () {
@@ -79,14 +78,14 @@ void main() {
         final outline = _contrast(colors.outline, colors.surface);
         final variant = _contrast(colors.outlineVariant, colors.surface);
 
-        expect(outline, greaterThanOrEqualTo(1.25), reason: '$name outline on surface is ${outline.toStringAsFixed(2)}:1 — invisible');
-        expect(variant, greaterThanOrEqualTo(1.1), reason: '$name outlineVariant on surface is ${variant.toStringAsFixed(2)}:1 — invisible');
+        expect(outline, greaterThanOrEqualTo(1.25), reason: '$name outline on surface is ${outline.toStringAsFixed(2)}:1: invisible');
+        expect(variant, greaterThanOrEqualTo(1.1), reason: '$name outlineVariant on surface is ${variant.toStringAsFixed(2)}:1: invisible');
         expect(outline, greaterThan(variant), reason: '$name outline must be stronger than outlineVariant');
       });
 
       test('every focus-ring color can be seen on the ground it is drawn over', () {
-        // WCAG 1.4.11's 3:1 applies here. `accent` itself lands at 2.96:1 on the light ground, which is why GPButton rings with `accentInk`.
-        final ringColors = <String, Color>{'accent': colors.accentInk, 'neutral': colors.onSurfaceVariant, 'danger': colors.danger};
+        // `accent` itself lands at 2.96:1 on the light ground, which is why GPButton rings with `accentInk`.
+        final ringColors = {'accent': colors.accentInk, 'neutral': colors.onSurfaceVariant, 'danger': colors.danger};
 
         for (final entry in ringColors.entries) {
           final ratio = _contrast(entry.value, colors.background);

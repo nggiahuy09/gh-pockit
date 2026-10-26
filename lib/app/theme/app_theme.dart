@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:ghpockit/core/theme/colors.dart';
-import 'package:ghpockit/core/theme/dimensions.dart';
-import 'package:ghpockit/core/theme/shadows.dart';
-import 'package:ghpockit/core/theme/typography.dart';
+import '../../core/theme/colors.dart';
+import '../../core/theme/dimensions.dart';
+import '../../core/theme/shadows.dart';
+import '../../core/theme/typography.dart';
 
 abstract final class GPAppTheme {
   static ThemeData light() => _build(colors: const GPColors.light(), shadows: const GPShadows.light());
@@ -24,21 +24,21 @@ abstract final class GPAppTheme {
     );
 
     return base.copyWith(
-      extensions: <ThemeExtension<dynamic>>[colors, typography, spacing, radii, shadows],
+      extensions: [colors, typography, spacing, radii, shadows],
       appBarTheme: AppBarTheme(
         backgroundColor: colors.background,
         foregroundColor: colors.onBackground,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
+        elevation: 0.0,
+        scrolledUnderElevation: 0.0,
         centerTitle: false,
         titleTextStyle: typography.headlineMedium.copyWith(color: colors.onBackground),
       ),
-      dividerTheme: DividerThemeData(color: colors.outlineVariant, thickness: 1, space: 1),
+      dividerTheme: DividerThemeData(color: colors.outlineVariant, thickness: 1.0, space: 1.0),
       cardTheme: CardThemeData(
         color: colors.surface,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        elevation: 0.0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(borderRadius: radii.borderLg),
       ),

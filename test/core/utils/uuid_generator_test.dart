@@ -5,13 +5,10 @@ import '../../helpers/fake_clock.dart';
 
 void main() {
   // Version nibble and RFC 9562 variant bits pinned: plain random hex would pass a looser pattern.
-  RegExp canonical(int version) => RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-$version[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\$');
-
-  int timestampOf(String id) => int.parse(id.substring(0, 8) + id.substring(9, 13), radix: 16);
 
   group('v4', () {
     test('is a canonical version-4 UUID', () {
-      expect(GPUuidGeneratorImpl(clock: FakeClock()).v4(), matches(canonical(4)));
+      expect(GPUuidGeneratorImpl(clock: FakeClock()).v4(), matches(_canonical(4)));
     });
 
     test('does not repeat', () {
@@ -25,13 +22,13 @@ void main() {
       // The 48 bits that hold a v7's timestamp must not hold the clock in a v4.
       final clock = FakeClock(DateTime.utc(2026, 9, 9, 21, 30));
 
-      expect(timestampOf(GPUuidGeneratorImpl(clock: clock).v4()), isNot(clock.nowEpochMillis()));
+      expect(_timestampOf(GPUuidGeneratorImpl(clock: clock).v4()), isNot(clock.nowEpochMillis()));
     });
   });
 
   group('v7', () {
     test('is a canonical version-7 UUID', () {
-      expect(GPUuidGeneratorImpl(clock: FakeClock()).v7(), matches(canonical(7)));
+      expect(GPUuidGeneratorImpl(clock: FakeClock()).v7(), matches(_canonical(7)));
     });
 
     test('does not repeat', () {
@@ -44,7 +41,7 @@ void main() {
     test('encodes the clock in its 48-bit prefix', () {
       final clock = FakeClock(DateTime.utc(2026, 9, 9, 21, 30));
 
-      expect(timestampOf(GPUuidGeneratorImpl(clock: clock).v7()), clock.nowEpochMillis());
+      expect(_timestampOf(GPUuidGeneratorImpl(clock: clock).v7()), clock.nowEpochMillis());
     });
 
     test('sorts in creation order within one millisecond', () {
@@ -78,7 +75,7 @@ void main() {
       final after = generator.v7();
 
       expect(after.compareTo(before), greaterThan(0));
-      expect(timestampOf(after), timestampOf(before));
+      expect(_timestampOf(after), _timestampOf(before));
     });
 
     test('borrows the next millisecond when the counter overflows', () {
@@ -89,8 +86,8 @@ void main() {
 
       expect(ids.toSet(), hasLength(4097));
       expect(ids, [...ids]..sort());
-      expect(timestampOf(ids[4095]), clock.nowEpochMillis());
-      expect(timestampOf(ids[4096]), clock.nowEpochMillis() + 1);
+      expect(_timestampOf(ids[4095]), clock.nowEpochMillis());
+      expect(_timestampOf(ids[4096]), clock.nowEpochMillis() + 1);
     });
   });
 
@@ -113,7 +110,7 @@ void main() {
     });
 
     test('is a well-formed v5 UUID', () {
-      // A server column typed `uuid` (W10) will parse these.
+      // A server column typed `uuid` will parse these.
       final id = GPUuidGeneratorImpl(clock: FakeClock()).v5('local|category.food');
 
       expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
@@ -127,3 +124,7 @@ void main() {
     });
   });
 }
+
+RegExp _canonical(int version) => RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-$version[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\$');
+
+int _timestampOf(String id) => int.parse(id.substring(0, 8) + id.substring(9, 13), radix: 16);

@@ -5,11 +5,32 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 
-void main() {
-  const t0 = 1757800000000;
-  const t1 = 1757800060000;
-  const otherOwner = 'someone-else';
+const _t0 = 1757800000000;
+const _t1 = 1757800060000;
+const _otherOwner = 'someone-else';
 
+CategoriesTableCompanion _row({
+  String id = 'c1',
+  String? name,
+  String? nameKey = 'category.food',
+  String ownerId = localOwnerId,
+  String type = 'expense',
+  int createdAt = _t0,
+  int version = 1,
+  bool isSystem = true,
+}) => CategoriesTableCompanion.insert(
+  id: id,
+  ownerId: ownerId,
+  nameKey: Value(nameKey),
+  name: Value(name),
+  type: type,
+  isSystem: isSystem,
+  createdAt: createdAt,
+  updatedAt: createdAt,
+  version: version,
+);
+
+void main() {
   late GPAppDatabase db;
   late CategoryDao dao;
 
@@ -18,98 +39,75 @@ void main() {
     dao = CategoryDao(db);
   });
 
-  tearDown(() async {
-    await db.close();
-  });
-
-  CategoriesTableCompanion row({
-    String id = 'c1',
-    String ownerId = localOwnerId,
-    String? nameKey = 'category.food',
-    String? name,
-    String type = 'expense',
-    bool isSystem = true,
-    int createdAt = t0,
-    int version = 1,
-  }) => CategoriesTableCompanion.insert(
-    id: id,
-    ownerId: ownerId,
-    nameKey: Value(nameKey),
-    name: Value(name),
-    type: type,
-    isSystem: isSystem,
-    createdAt: createdAt,
-    updatedAt: createdAt,
-    version: version,
-  );
+  tearDown(() => db.close());
 
   group('watchCategories', () {
     test('emits a newly inserted category', () async {
-      final emissions = dao.watchCategories(localOwnerId);
+      final emissions = dao.watchCategories(ownerId: localOwnerId);
 
-      await dao.insertCategory(row());
+      await dao.insertCategory(_row());
 
       await expectLater(emissions, emitsThrough(predicate<List<CategoryRow>>((rows) => rows.length == 1 && rows.single.nameKey == 'category.food')));
     });
 
     test('shows only the asked-for owner', () async {
-      await dao.insertCategory(row(id: 'mine'));
-      await dao.insertCategory(row(id: 'theirs', ownerId: otherOwner));
+      await dao.insertCategory(_row(id: 'mine'));
+      await dao.insertCategory(_row(id: 'theirs', ownerId: _otherOwner));
 
-      expect((await dao.watchCategories(localOwnerId).first).map((r) => r.id), ['mine']);
+      expect((await dao.watchCategories(ownerId: localOwnerId).first).map((r) => r.id), ['mine']);
     });
 
     test('hides soft-deleted rows', () async {
-      await dao.insertCategory(row(id: 'alive'));
-      await dao.insertCategory(row(id: 'gone', nameKey: 'category.bills'));
-      await dao.softDelete('gone', now: t1);
+      await dao.insertCategory(_row(id: 'alive'));
+      await dao.insertCategory(_row(id: 'gone', nameKey: 'category.bills'));
+      await dao.softDelete('gone', now: _t1);
 
-      expect((await dao.watchCategories(localOwnerId).first).map((r) => r.id), ['alive']);
+      expect((await dao.watchCategories(ownerId: localOwnerId).first).map((r) => r.id), ['alive']);
     });
 
     test('narrows to one type when asked', () async {
-      await dao.insertCategory(row(id: 'spend'));
-      await dao.insertCategory(row(id: 'earn', nameKey: 'category.salary', type: 'income'));
+      await dao.insertCategory(_row(id: 'spend'));
+      await dao.insertCategory(_row(id: 'earn', nameKey: 'category.salary', type: 'income'));
 
-      expect((await dao.watchCategories(localOwnerId, type: 'income').first).map((r) => r.id), ['earn']);
-      expect(await dao.watchCategories(localOwnerId).first, hasLength(2));
+      expect((await dao.watchCategories(ownerId: localOwnerId, type: 'income').first).map((r) => r.id), ['earn']);
+      expect(await dao.watchCategories(ownerId: localOwnerId).first, hasLength(2));
     });
 
     test('orders by creation, then by id', () async {
-      // `a` takes the default t0 but is inserted second; `b` and `c` share t1, so the id breaks their tie.
-      await dao.insertCategory(row(id: 'b', nameKey: 'category.bills', createdAt: t1));
-      await dao.insertCategory(row(id: 'a'));
-      await dao.insertCategory(row(id: 'c', nameKey: 'category.health', createdAt: t1));
+      // `a` is inserted second but created first; `b` and `c` share a timestamp, so the id breaks their tie.
+      await dao.insertCategory(_row(id: 'b', nameKey: 'category.bills', createdAt: _t1));
+      await dao.insertCategory(_row(id: 'a'));
+      await dao.insertCategory(_row(id: 'c', nameKey: 'category.health', createdAt: _t1));
 
-      expect((await dao.watchCategories(localOwnerId).first).map((r) => r.id), ['a', 'b', 'c']);
+      expect((await dao.watchCategories(ownerId: localOwnerId).first).map((r) => r.id), ['a', 'b', 'c']);
     });
   });
 
   group('watchCategory', () {
     test('emits null once the row is soft-deleted', () async {
-      await dao.insertCategory(row());
+      await dao.insertCategory(_row());
 
-      final emissions = dao.watchCategory(localOwnerId, 'c1');
+      final emissions = dao.watchCategory(id: 'c1', ownerId: localOwnerId);
       expect(await emissions.first, isNotNull);
 
-      await dao.softDelete('c1', now: t1);
+      await dao.softDelete('c1', now: _t1);
 
-      await expectLater(dao.watchCategory(localOwnerId, 'c1'), emitsThrough(isNull));
+      await expectLater(dao.watchCategory(id: 'c1', ownerId: localOwnerId), emitsThrough(isNull));
     });
   });
 
   group('findById', () {
     test('finds a tombstoned row, unlike every other read', () async {
-      await dao.insertCategory(row());
-      await dao.softDelete('c1', now: t1);
+      await dao.insertCategory(_row());
+      await dao.softDelete('c1', now: _t1);
 
-      expect((await dao.findById('c1'))?.deletedAt, t1);
+      expect((await dao.findById('c1'))?.deletedAt, _t1);
     });
   });
 
   group('insertMissing', () {
     test('inserts everything on the first run and nothing on the second', () async {
-      final rows = [row(), row(id: 'c2', nameKey: 'category.bills')];
+      final rows = [_row(), _row(id: 'c2', nameKey: 'category.bills')];
 
       expect(await dao.insertMissing(rows), 2);
       expect(await dao.insertMissing(rows), 0);
@@ -117,25 +115,25 @@ void main() {
     });
 
     test('leaves an existing row exactly as it is, renames included', () async {
-      await dao.insertCategory(row(name: 'Ăn uống của tôi'));
+      await dao.insertCategory(_row(name: 'Ăn uống của tôi'));
 
-      expect(await dao.insertMissing([row()]), 0);
+      expect(await dao.insertMissing([_row()]), 0);
       expect((await dao.findById('c1'))?.name, 'Ăn uống của tôi');
     });
 
     test('does not resurrect a category the user deleted', () async {
-      await dao.insertMissing([row()]);
-      await dao.softDelete('c1', now: t1);
+      await dao.insertMissing([_row()]);
+      await dao.softDelete('c1', now: _t1);
 
-      expect(await dao.insertMissing([row()]), 0);
-      expect((await dao.findById('c1'))?.deletedAt, t1);
-      expect(await dao.watchCategories(localOwnerId).first, isEmpty);
+      expect(await dao.insertMissing([_row()]), 0);
+      expect((await dao.findById('c1'))?.deletedAt, _t1);
+      expect(await dao.watchCategories(ownerId: localOwnerId).first, isEmpty);
     });
 
     test('inserts only the rows that are missing', () async {
-      await dao.insertMissing([row()]);
+      await dao.insertMissing([_row()]);
 
-      expect(await dao.insertMissing([row(), row(id: 'c2', nameKey: 'category.bills')]), 1);
+      expect(await dao.insertMissing([_row(), _row(id: 'c2', nameKey: 'category.bills')]), 1);
     });
 
     test('writes nothing and counts nothing for an empty list', () async {
@@ -145,47 +143,47 @@ void main() {
 
   group('updateCategory', () {
     test('writes the patch and moves updated_at, leaving version alone', () async {
-      await dao.insertCategory(row());
+      await dao.insertCategory(_row());
 
       final written = await dao.updateCategory(
         'c1',
-        baseVersion: 1,
         patch: const CategoriesTableCompanion(name: Value('Ăn uống')),
-        now: t1,
+        baseVersion: 1,
+        now: _t1,
       );
 
       final updated = await dao.findById('c1');
       expect(written, 1);
       expect(updated?.name, 'Ăn uống');
       expect(updated?.nameKey, 'category.food');
-      expect(updated?.updatedAt, t1);
+      expect(updated?.updatedAt, _t1);
       expect(updated?.version, 1);
     });
 
     test('writes nothing when the base version is stale', () async {
-      await dao.insertCategory(row(version: 2));
+      await dao.insertCategory(_row(version: 2));
 
       expect(
         await dao.updateCategory(
           'c1',
-          baseVersion: 1,
           patch: const CategoriesTableCompanion(name: Value('Ăn uống')),
-          now: t1,
+          baseVersion: 1,
+          now: _t1,
         ),
         0,
       );
     });
 
     test('refuses to edit a tombstone', () async {
-      await dao.insertCategory(row());
-      await dao.softDelete('c1', now: t1);
+      await dao.insertCategory(_row());
+      await dao.softDelete('c1', now: _t1);
 
       expect(
         await dao.updateCategory(
           'c1',
-          baseVersion: 1,
           patch: const CategoriesTableCompanion(name: Value('Ăn uống')),
-          now: t1,
+          baseVersion: 1,
+          now: _t1,
         ),
         0,
       );
@@ -194,26 +192,26 @@ void main() {
 
   group('softDelete', () {
     test('stamps both deleted_at and updated_at', () async {
-      await dao.insertCategory(row());
+      await dao.insertCategory(_row());
 
-      expect(await dao.softDelete('c1', now: t1), 1);
+      expect(await dao.softDelete('c1', now: _t1), 1);
 
       final deleted = await dao.findById('c1');
-      expect(deleted?.deletedAt, t1);
-      expect(deleted?.updatedAt, t1);
+      expect(deleted?.deletedAt, _t1);
+      expect(deleted?.updatedAt, _t1);
     });
 
     test('deletes a system category, because is_system is provenance and not a lock', () async {
-      await dao.insertCategory(row());
+      await dao.insertCategory(_row());
 
-      expect(await dao.softDelete('c1', now: t1), 1);
+      expect(await dao.softDelete('c1', now: _t1), 1);
     });
 
     test('reports 0 on a row that is already gone', () async {
-      await dao.insertCategory(row());
-      await dao.softDelete('c1', now: t1);
+      await dao.insertCategory(_row());
+      await dao.softDelete('c1', now: _t1);
 
-      expect(await dao.softDelete('c1', now: t1), 0);
+      expect(await dao.softDelete('c1', now: _t1), 0);
     });
   });
 }

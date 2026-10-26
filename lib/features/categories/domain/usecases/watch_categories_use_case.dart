@@ -1,12 +1,12 @@
-import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
-import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
+import '../../../../core/domain/use_case.dart';
+import '../entities/category_entity.dart';
+import '../repositories/category_repository.dart';
 
-/// Forwards on purpose (ADR-0013).
-class WatchCategoriesUseCase {
-  const WatchCategoriesUseCase({required CategoryRepository categoryRepository}) : _categories = categoryRepository;
+final class WatchCategoriesUseCase with GPStreamUseCase<GPNoInput, List<CategoryEntity>> {
+  const WatchCategoriesUseCase(this._repository);
 
-  final CategoryRepository _categories;
+  final CategoryRepository _repository;
 
-  Stream<List<CategoryEntity>> call({CategoryType? type}) => _categories.watchCategories(type: type);
+  @override
+  Stream<List<CategoryEntity>> execute(GPNoInput input) => _repository.watchCategories();
 }

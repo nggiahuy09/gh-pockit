@@ -1,20 +1,21 @@
 import 'package:drift/drift.dart';
-import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/utils/clock.dart';
-import 'package:ghpockit/core/utils/uuid_generator.dart';
-import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
-import 'package:ghpockit/features/categories/data/seed/default_categories.dart';
 
-/// Safe on every launch and from two isolates at once: the ids are derived, and [CategoryDao.insertMissing] skips rows already there, deleted ones included.
-class CategorySeeder {
-  const CategorySeeder({required CategoryDao dao, required GPClock clock, required GPUuidGenerator uuidGenerator, required String ownerId})
-    : _dao = dao,
-      _clock = clock,
+import '../../../../core/database/database.dart';
+import '../../../../core/utils/clock.dart';
+import '../../../../core/utils/uuid_generator.dart';
+import '../daos/category_dao.dart';
+import 'default_categories.dart';
+
+/// Safe on every launch and from two isolates at once: the ids are derived, and [CategoryDao.insertMissing] skips rows already there.
+final class CategorySeeder {
+  const CategorySeeder({required GPClock clock, required CategoryDao dao, required GPUuidGenerator uuidGenerator, required String ownerId})
+    : _clock = clock,
+      _dao = dao,
       _uuidGenerator = uuidGenerator,
       _ownerId = ownerId;
 
-  final CategoryDao _dao;
   final GPClock _clock;
+  final CategoryDao _dao;
   final GPUuidGenerator _uuidGenerator;
   final String _ownerId;
 
@@ -25,8 +26,7 @@ class CategorySeeder {
     return _dao.insertMissing([for (final category in DefaultCategory.values) _companionFor(category, now)]);
   }
 
-  /// v5, not v7: two offline devices must mint the same id for "Food", so sync reconciles it rather than duplicating it (ADR-0002 amendment).
-  /// The owner is part of the input, or every user would share one set of ids.
+  /// v5, not v7: two offline devices must mint the same id for "Food" (ADR-0002 amendment). The owner is in the input, or every user would share ids.
   String _idFor(DefaultCategory category) => _uuidGenerator.v5('$_ownerId|${category.nameKey}');
 
   CategoriesTableCompanion _companionFor(DefaultCategory category, int now) => CategoriesTableCompanion.insert(

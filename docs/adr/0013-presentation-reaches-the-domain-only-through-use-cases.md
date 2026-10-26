@@ -6,6 +6,9 @@ Accepted — 2026-10-06 (W5 T3). Supersedes ADR-0010's "a use case exists only
 when it owns a rule", and widens the injector's rule on who may call `getIt`;
 the rest of ADR-0010 stands.
 
+Amended 2026-10-24 by ADR-0020: a use case is `with GPUseCase<XInput, Output>` and is called as `execute(XInput(...))`, not through
+`call`; its repositories arrive positionally. Who builds it, and where, is unchanged.
+
 ## Context
 
 ADR-0010 let a BLoC call a repository directly when an operation had no rule of
