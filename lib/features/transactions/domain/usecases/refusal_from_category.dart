@@ -1,20 +1,17 @@
-import 'package:ghpockit/core/error/failure.dart';
-import 'package:ghpockit/features/categories/domain/entities/category_entity.dart';
-import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
+import '../../../../core/error/failure.dart';
+import '../../../categories/domain/entities/category_entity.dart';
+import '../../../categories/domain/repositories/category_repository.dart';
+import '../entities/transaction_type.dart';
 
-/// ADR-0010 rule 3. Null when [type] may be filed under [categoryId]; otherwise [GPNotFoundFailure] (no live category), the type-mismatch
-/// [GPValidationFailure], or the category read's own [GPFailure]. Runs outside the write's transaction, a race ADR-0010 accepts.
-Future<GPFailure?> refusalFromCategory(CategoryRepository categories, {required String categoryId, required TransactionType type}) async {
-  // Null for a transfer: the entity drops its category, so there is nothing to judge.
+/// ADR-0010 rule 3: null when [type] may be filed under [categoryId]. Runs outside the write's transaction, a race the ADR accepts.
+Future<GPFailure?> refusalFromCategory(CategoryRepository repository, {required TransactionType type, required String categoryId}) async {
   final expected = type.categoryType;
   if (expected == null) return null;
 
   final CategoryEntity? category;
   try {
-    category = await categories.watchCategory(categoryId).first;
+    category = await repository.watchCategory(categoryId).first;
   } on GPFailure catch (failure) {
-    // Anything that is not a `GPFailure` is a bug: let it reach the crash reporter.
     return failure;
   }
 

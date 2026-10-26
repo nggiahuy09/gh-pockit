@@ -1,12 +1,26 @@
-import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose: a BLoC reaches the domain only through use cases, never a repository (ADR-0013).
-class WatchTransactionsUseCase {
-  const WatchTransactionsUseCase({required TransactionRepository transactionRepository}) : _transactions = transactionRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../entities/transaction_list_snapshot.dart';
+import '../entities/transaction_query.dart';
+import '../repositories/transaction_repository.dart';
 
-  final TransactionRepository _transactions;
+final class WatchTransactionsUseCase with GPStreamUseCase<WatchTransactionsInput, TransactionListSnapshot> {
+  const WatchTransactionsUseCase(this._repository);
 
-  Stream<TransactionListSnapshot> call(TransactionQuery query) => _transactions.watchTransactions(query);
+  final TransactionRepository _repository;
+
+  @override
+  Stream<TransactionListSnapshot> execute(WatchTransactionsInput input) => _repository.watchTransactions(input.query);
+}
+
+@immutable
+final class WatchTransactionsInput implements GPLoggable {
+  const WatchTransactionsInput(this.query);
+
+  final TransactionQuery query;
+
+  @override
+  Map<String, Object?> toLog() => {'limit': query.limit};
 }

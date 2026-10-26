@@ -17,50 +17,34 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
+import '../../../../helpers/results.dart';
+
+final _startedAt = DateTime.utc(2026, 9, 28, 9);
+final _occurredAt = DateTime.utc(2026, 9, 28, 5, 30);
+const _otherOwner = 'someone-else';
 
 /// Real in-memory SQL with the real DAO, not a mock: a mock would only restate which DAO methods the repository calls.
 void main() {
   late GPAppDatabase db;
-  late TransactionDao dao;
   late FakeClock clock;
-  late FakeUuidGenerator uuid;
+  late TransactionDao dao;
   late RecordingLogger logger;
+  late FakeUuidGenerator uuid;
   late TransactionRepositoryImpl repository;
-
-  final startedAt = DateTime.utc(2026, 9, 28, 9);
-  final occurredAt = DateTime.utc(2026, 9, 28, 5, 30);
-  const otherOwner = 'someone-else';
 
   setUp(() async {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
     dao = TransactionDao(db);
-    clock = FakeClock(startedAt);
+    clock = FakeClock(_startedAt);
     uuid = FakeUuidGenerator();
-    logger = RecordingLogger(clock: clock);
-    repository = TransactionRepositoryImpl(dao: dao, clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
+    logger = RecordingLogger(clock);
+    repository = _repositoryOver(dao, clock: clock, logger: logger, uuid: uuid);
 
-    Future<void> account(String id, {String ownerId = localOwnerId, String currencyCode = 'VND', bool isArchived = false}) => db
-        .into(db.accountsTable)
-        .insert(
-          AccountsTableCompanion.insert(
-            id: id,
-            ownerId: ownerId,
-            name: id,
-            type: 'cash',
-            currencyCode: currencyCode,
-            initialBalance: 0,
-            isArchived: isArchived,
-            createdAt: 0,
-            updatedAt: 0,
-            version: 1,
-          ),
-        );
-
-    await account('acc-cash');
-    await account('acc-bank');
-    await account('acc-usd', currencyCode: 'USD');
-    await account('acc-archived', isArchived: true);
-    await account('acc-theirs', ownerId: otherOwner);
+    await _insertAccount(db, 'acc-cash');
+    await _insertAccount(db, 'acc-bank');
+    await _insertAccount(db, 'acc-usd', currencyCode: 'USD');
+    await _insertAccount(db, 'acc-archived', isArchived: true);
+    await _insertAccount(db, 'acc-theirs', ownerId: _otherOwner);
     await db
         .into(db.categoriesTable)
         .insert(
@@ -77,134 +61,87 @@ void main() {
         );
   });
 
-  tearDown(() async {
-    await db.close();
-  });
-
-  Future<GPResult<TransactionEntity>> create({
-    TransactionType type = TransactionType.expense,
-    String accountId = 'acc-cash',
-    String? destinationAccountId,
-    String? categoryId = 'cat-food',
-    Money? amount,
-    DateTime? at,
-    String? note,
-  }) => repository.createTransaction(
-    type: type,
-    accountId: accountId,
-    destinationAccountId: destinationAccountId,
-    categoryId: categoryId,
-    amount: amount ?? Money(125000, 'VND'),
-    occurredAt: at ?? occurredAt,
-    note: note,
-  );
-
-  TransactionEntity ok(GPResult<TransactionEntity> result) => (result as GPOk<TransactionEntity>).value;
-
-  GPErr<TransactionEntity> refusedBy(GPFailure failure) => GPErr<TransactionEntity>(failure);
-
-  Future<List<TransactionRow>> storedRows() => db.select(db.transactionsTable).get();
-
-  Future<void> softDeleteAccount(String id) => (db.update(db.accountsTable)..where((t) => t.id.equals(id))).write(const AccountsTableCompanion(deletedAt: Value(1)));
-
-  /// A `refund` row: the mapper refuses it, the table accepts it (no vocabulary CHECK, ADR-0009).
-  Future<void> insertUnreadableRow(String id, {int occurredAtMillis = 1}) => db
-      .into(db.transactionsTable)
-      .insert(
-        TransactionsTableCompanion.insert(
-          id: id,
-          ownerId: localOwnerId,
-          type: 'refund',
-          accountId: 'acc-cash',
-          amountMinor: 1,
-          currencyCode: 'VND',
-          occurredAt: occurredAtMillis,
-          createdAt: 0,
-          updatedAt: 0,
-          version: 1,
-          syncStatus: 'pending',
-        ),
-      );
+  tearDown(() => db.close());
 
   group('createTransaction', () {
     test('writes the transaction and returns it as stored — id minted, both timestamps from the clock', () async {
-      final created = ok(await create(note: 'Phở bò'));
+      final created = okValue(await _create(repository, note: 'Phở bò'));
 
       expect(created.id, 'id-v7-1');
-      expect(created.createdAt, startedAt);
-      expect(created.updatedAt, startedAt);
+      expect(created.createdAt, _startedAt);
+      expect(created.updatedAt, _startedAt);
       expect(created.version, 1);
 
-      final stored = (await storedRows()).single;
+      final stored = (await _storedRows(db)).single;
       expect(stored.id, created.id);
       expect(stored.ownerId, localOwnerId);
       expect(stored.amountMinor, 125000);
       expect(stored.currencyCode, 'VND');
-      expect(stored.occurredAt, occurredAt.millisecondsSinceEpoch);
+      expect(stored.occurredAt, _occurredAt.millisecondsSinceEpoch);
       expect(stored.note, 'Phở bò');
       expect(stored.syncStatus, 'pending');
     });
 
     test('an entity rule refuses before the database is touched', () async {
-      expect(await create(amount: Money.zero('VND')), refusedBy(const GPValidationFailure(GPValidationCode.transactionAmountNotPositive)));
-      expect(await create(type: TransactionType.transfer), refusedBy(const GPValidationFailure(GPValidationCode.transactionDestinationMissing)));
-      expect(await storedRows(), isEmpty);
+      expect(await _create(repository, amount: Money.zero('VND')), _refusedBy(const GPValidationFailure(GPValidationCode.transactionAmountNotPositive)));
+      expect(await _create(repository, type: TransactionType.transfer), _refusedBy(const GPValidationFailure(GPValidationCode.transactionDestinationMissing)));
+      expect(await _storedRows(db), isEmpty);
     });
 
     test('refuses an account that is missing, deleted, or not the owner’s — as not found', () async {
-      await softDeleteAccount('acc-bank');
+      await _softDeleteAccount(db, 'acc-bank');
 
-      expect(await create(accountId: 'acc-missing'), refusedBy(const GPNotFoundFailure()));
-      expect(await create(accountId: 'acc-bank'), refusedBy(const GPNotFoundFailure()));
-      expect(await create(accountId: 'acc-theirs'), refusedBy(const GPNotFoundFailure()));
-      expect(await storedRows(), isEmpty);
+      expect(await _create(repository, accountId: 'acc-missing'), _refusedBy(const GPNotFoundFailure()));
+      expect(await _create(repository, accountId: 'acc-bank'), _refusedBy(const GPNotFoundFailure()));
+      expect(await _create(repository, accountId: 'acc-theirs'), _refusedBy(const GPNotFoundFailure()));
+      expect(await _storedRows(db), isEmpty);
     });
 
     test('accepts an archived account', () async {
-      expect(await create(accountId: 'acc-archived'), isA<GPOk<TransactionEntity>>());
+      expect(await _create(repository, accountId: 'acc-archived'), isA<GPOk<TransactionEntity>>());
     });
 
     test('refuses an amount in another currency than the account’s', () async {
-      expect(await create(amount: Money(1234, 'USD')), refusedBy(const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch)));
-      expect(await storedRows(), isEmpty);
+      expect(await _create(repository, amount: Money(1234, 'USD')), _refusedBy(const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch)));
+      expect(await _storedRows(db), isEmpty);
     });
 
     test('refuses a transfer into a deleted account, and one between two currencies', () async {
-      await softDeleteAccount('acc-bank');
+      await _softDeleteAccount(db, 'acc-bank');
 
-      expect(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank'), refusedBy(const GPNotFoundFailure()));
+      expect(await _create(repository, type: TransactionType.transfer, destinationAccountId: 'acc-bank'), _refusedBy(const GPNotFoundFailure()));
       expect(
-        await create(type: TransactionType.transfer, destinationAccountId: 'acc-usd'),
-        refusedBy(const GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer)),
+        await _create(repository, type: TransactionType.transfer, destinationAccountId: 'acc-usd'),
+        _refusedBy(const GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer)),
       );
-      expect(await storedRows(), isEmpty);
+      expect(await _storedRows(db), isEmpty);
     });
 
     test('writes a transfer between two live accounts of one currency', () async {
       // `create` passes `cat-food` by default, so this transfer arrives with a category.
-      final created = ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank'));
+      final created = okValue(await _create(repository, type: TransactionType.transfer, destinationAccountId: 'acc-bank'));
 
-      final stored = (await storedRows()).single;
+      final stored = (await _storedRows(db)).single;
       expect(stored.destinationAccountId, 'acc-bank');
       expect(stored.categoryId, isNull);
       expect(created.categoryId, isNull);
     });
 
     test('a category that does not exist is a database failure — the foreign key refuses it', () async {
-      expect(await create(categoryId: 'cat-ghost'), refusedBy(const GPDatabaseFailure()));
+      expect(await _create(repository, categoryId: 'cat-ghost'), _refusedBy(const GPDatabaseFailure()));
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'id-v7-1'});
     });
   });
 
   group('updateTransaction', () {
     test('applies the edit, stamps updated_at from the clock, and leaves version alone', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       clock.advance(const Duration(minutes: 5));
 
-      final updated = ok(await repository.updateTransaction(ok(created.update(amount: Money(95000, 'VND'), note: 'Bún chả'))));
+      final updated = okValue(await repository.updateTransaction(okValue(created.update(amount: Money(95000, 'VND'), note: 'Bún chả'))));
 
-      expect(updated.updatedAt, startedAt.add(const Duration(minutes: 5)));
-      final stored = (await storedRows()).single;
+      expect(updated.updatedAt, _startedAt.add(const Duration(minutes: 5)));
+      final stored = (await _storedRows(db)).single;
       expect(stored.amountMinor, 95000);
       expect(stored.note, 'Bún chả');
       expect(stored.updatedAt, updated.updatedAt.millisecondsSinceEpoch);
@@ -213,75 +150,75 @@ void main() {
     });
 
     test('switches an expense to a transfer in storage, clearing its category', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
 
-      await repository.updateTransaction(ok(created.update(type: TransactionType.transfer, destinationAccountId: 'acc-bank')));
+      await repository.updateTransaction(okValue(created.update(type: TransactionType.transfer, destinationAccountId: 'acc-bank')));
 
-      final stored = (await storedRows()).single;
+      final stored = (await _storedRows(db)).single;
       expect(stored.type, 'transfer');
       expect(stored.destinationAccountId, 'acc-bank');
       expect(stored.categoryId, isNull);
     });
 
     test('reports a conflict with the version that is actually stored', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       // Stands in for another device's edit, as a sync pull would apply it.
       await (db.update(db.transactionsTable)..where((t) => t.id.equals(created.id))).write(const TransactionsTableCompanion(version: Value(2)));
 
-      final result = await repository.updateTransaction(ok(created.update(note: 'Bún chả')));
+      final result = await repository.updateTransaction(okValue(created.update(note: 'Bún chả')));
 
-      expect(result, refusedBy(GPConflictFailure(entityId: created.id, localVersion: 1, remoteVersion: 2)));
-      expect((await storedRows()).single.note, isNull);
+      expect(result, _refusedBy(GPConflictFailure(entityId: created.id, localVersion: 1, remoteVersion: 2)));
+      expect((await _storedRows(db)).single.note, isNull);
     });
 
     test('reports a deleted transaction as not found, not as a conflict', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await dao.softDelete(created.id, now: 1);
 
-      expect(await repository.updateTransaction(created), refusedBy(const GPNotFoundFailure()));
+      expect(await repository.updateTransaction(created), _refusedBy(const GPNotFoundFailure()));
     });
 
     test('refuses when the account was deleted after the form opened', () async {
-      final created = ok(await create());
-      await softDeleteAccount('acc-cash');
+      final created = okValue(await _create(repository));
+      await _softDeleteAccount(db, 'acc-cash');
 
-      expect(await repository.updateTransaction(ok(created.update(note: 'Bún chả'))), refusedBy(const GPNotFoundFailure()));
-      expect((await storedRows()).single.note, isNull);
+      expect(await repository.updateTransaction(okValue(created.update(note: 'Bún chả'))), _refusedBy(const GPNotFoundFailure()));
+      expect((await _storedRows(db)).single.note, isNull);
     });
 
     test('refuses when the account’s currency changed after the form opened', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await (db.update(db.accountsTable)..where((t) => t.id.equals('acc-cash'))).write(const AccountsTableCompanion(currencyCode: Value('USD')));
 
       expect(
-        await repository.updateTransaction(ok(created.update(note: 'Bún chả'))),
-        refusedBy(const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch)),
+        await repository.updateTransaction(okValue(created.update(note: 'Bún chả'))),
+        _refusedBy(const GPValidationFailure(GPValidationCode.transactionCurrencyMismatch)),
       );
     });
 
     test('checks the account before the version', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await (db.update(db.transactionsTable)..where((t) => t.id.equals(created.id))).write(const TransactionsTableCompanion(version: Value(2)));
-      await softDeleteAccount('acc-cash');
+      await _softDeleteAccount(db, 'acc-cash');
 
-      expect(await repository.updateTransaction(created), refusedBy(const GPNotFoundFailure()));
+      expect(await repository.updateTransaction(created), _refusedBy(const GPNotFoundFailure()));
     });
   });
 
   group('deleteTransaction', () {
     test('soft-deletes: the row stays, stamped, and leaves the list', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       clock.advance(const Duration(minutes: 1));
 
       expect(await repository.deleteTransaction(created.id), const GPOk<void>(null));
 
-      final stored = (await storedRows()).single;
+      final stored = (await _storedRows(db)).single;
       expect(stored.deletedAt, clock.nowEpochMillis());
       expect((await repository.watchTransactions(TransactionQuery(limit: 50)).first).transactions, isEmpty);
     });
 
     test('reports not found the second time, and for an unknown id', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await repository.deleteTransaction(created.id);
 
       expect(await repository.deleteTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
@@ -289,8 +226,8 @@ void main() {
     });
 
     test('deletes even when the account is already gone — the only way to clean one up', () async {
-      final created = ok(await create());
-      await softDeleteAccount('acc-cash');
+      final created = okValue(await _create(repository));
+      await _softDeleteAccount(db, 'acc-cash');
 
       expect(await repository.deleteTransaction(created.id), const GPOk<void>(null));
     });
@@ -298,28 +235,22 @@ void main() {
 
   group('restoreTransaction', () {
     test('brings a deleted transaction back into the list, stamped', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await repository.deleteTransaction(created.id);
       clock.advance(const Duration(seconds: 3));
 
       expect(await repository.restoreTransaction(created.id), const GPOk<void>(null));
 
-      final stored = (await storedRows()).single;
+      final stored = (await _storedRows(db)).single;
       expect(stored.deletedAt, isNull);
       expect(stored.updatedAt, clock.nowEpochMillis());
       expect((await repository.watchTransactions(TransactionQuery(limit: 50)).first).transactions.single.id, created.id);
     });
 
     test('reports not found for a live transaction, an unknown id, and one of another owner', () async {
-      final created = ok(await create());
-      final theirs = TransactionRepositoryImpl(
-        dao: dao,
-        clock: clock,
-        uuidGenerator: FakeUuidGenerator(prefix: 'theirs'),
-        logger: logger,
-        ownerId: otherOwner,
-      );
-      final their = ok(await theirs.createTransaction(type: TransactionType.expense, accountId: 'acc-theirs', amount: Money(1000, 'VND'), occurredAt: occurredAt));
+      final created = okValue(await _create(repository));
+      final theirs = TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator('theirs'), ownerId: _otherOwner);
+      final their = okValue(await theirs.createTransaction(amount: Money(1000, 'VND'), type: TransactionType.expense, occurredAt: _occurredAt, accountId: 'acc-theirs'));
       await theirs.deleteTransaction(their.id);
 
       expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
@@ -328,24 +259,24 @@ void main() {
     });
 
     test('is refused once its account is deleted, and the transaction stays deleted', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await repository.deleteTransaction(created.id);
-      await softDeleteAccount('acc-cash');
+      await _softDeleteAccount(db, 'acc-cash');
 
       expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
-      expect((await storedRows()).single.deletedAt, isNotNull);
+      expect((await _storedRows(db)).single.deletedAt, isNotNull);
     });
 
     test("is refused once a transfer's destination is deleted", () async {
-      final created = ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
+      final created = okValue(await _create(repository, type: TransactionType.transfer, categoryId: null, destinationAccountId: 'acc-bank'));
       await repository.deleteTransaction(created.id);
-      await softDeleteAccount('acc-bank');
+      await _softDeleteAccount(db, 'acc-bank');
 
       expect(await repository.restoreTransaction(created.id), const GPErr<void>(GPNotFoundFailure()));
     });
 
     test('an archived account still takes it back: archived counts as live', () async {
-      final created = ok(await create(accountId: 'acc-archived'));
+      final created = okValue(await _create(repository, accountId: 'acc-archived'));
       await repository.deleteTransaction(created.id);
 
       expect(await repository.restoreTransaction(created.id), const GPOk<void>(null));
@@ -354,8 +285,8 @@ void main() {
 
   group('watchAccountBalances', () {
     test('pairs each account with its balance, in the currency of that account', () async {
-      ok(await create(amount: Money(45000, 'VND')));
-      ok(await create(accountId: 'acc-usd', categoryId: null, amount: Money(1250, 'USD')));
+      okValue(await _create(repository, amount: Money(45000, 'VND')));
+      okValue(await _create(repository, amount: Money(1250, 'USD'), accountId: 'acc-usd', categoryId: null));
 
       final balances = await repository.watchAccountBalances().first;
       final byId = {for (final balance in balances) balance.account.id: balance.balance};
@@ -376,7 +307,7 @@ void main() {
 
   group('hasLiveTransactions', () {
     test('answers yes for either side of a transfer, and no for an account nothing touches', () async {
-      ok(await create(type: TransactionType.transfer, destinationAccountId: 'acc-bank', categoryId: null));
+      okValue(await _create(repository, type: TransactionType.transfer, categoryId: null, destinationAccountId: 'acc-bank'));
 
       expect(await repository.hasLiveTransactions('acc-cash'), const GPOk<bool>(true));
       expect(await repository.hasLiveTransactions('acc-bank'), const GPOk<bool>(true));
@@ -384,7 +315,7 @@ void main() {
     });
 
     test('stops counting a transaction once it is deleted', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await repository.deleteTransaction(created.id);
 
       expect(await repository.hasLiveTransactions('acc-cash'), const GPOk<bool>(false));
@@ -397,9 +328,9 @@ void main() {
       final subscription = repository.watchTransactions(TransactionQuery(limit: 50)).listen(emissions.add);
 
       await pumpEventQueue();
-      ok(await create(at: occurredAt));
+      okValue(await _create(repository, at: _occurredAt));
       await pumpEventQueue();
-      ok(await create(at: occurredAt.add(const Duration(hours: 1))));
+      okValue(await _create(repository, at: _occurredAt.add(const Duration(hours: 1))));
       await pumpEventQueue();
       await subscription.cancel();
 
@@ -413,20 +344,20 @@ void main() {
     });
 
     test('passes the query down: types as storage values, the range as millis, accounts on either side', () async {
-      ok(await create(at: DateTime.utc(2026, 9))); // id-v7-1 — expense on cash, on `from` exactly: included
-      ok(await create(type: TransactionType.transfer, accountId: 'acc-bank', destinationAccountId: 'acc-cash', at: DateTime.utc(2026, 9, 2))); // id-v7-2
-      ok(await create(type: TransactionType.income, at: DateTime.utc(2026, 9, 3))); // id-v7-3 — an income: filtered out by type
-      ok(await create(at: DateTime.utc(2026, 10))); // id-v7-4 — on `to` exactly: excluded
-      ok(await create(accountId: 'acc-bank', at: DateTime.utc(2026, 9, 4))); // id-v7-5 — bank only: filtered out by account
+      okValue(await _create(repository, at: DateTime.utc(2026, 9))); // id-v7-1 — expense on cash, on `from` exactly: included
+      okValue(await _create(repository, type: TransactionType.transfer, at: DateTime.utc(2026, 9, 2), accountId: 'acc-bank', destinationAccountId: 'acc-cash')); // id-v7-2
+      okValue(await _create(repository, type: TransactionType.income, at: DateTime.utc(2026, 9, 3))); // id-v7-3 — an income: filtered out by type
+      okValue(await _create(repository, at: DateTime.utc(2026, 10))); // id-v7-4 — on `to` exactly: excluded
+      okValue(await _create(repository, at: DateTime.utc(2026, 9, 4), accountId: 'acc-bank')); // id-v7-5 — bank only: filtered out by account
 
       final snapshot = await repository
           .watchTransactions(
             TransactionQuery(
-              limit: 50,
               accountIds: const {'acc-cash'},
               types: const {TransactionType.expense, TransactionType.transfer},
               from: DateTime.utc(2026, 9),
               to: DateTime.utc(2026, 10),
+              limit: 50,
             ),
           )
           .first;
@@ -436,21 +367,20 @@ void main() {
 
     test('says there may be more exactly when the window came back full', () async {
       for (var i = 0; i < 3; i++) {
-        ok(await create(at: occurredAt.add(Duration(minutes: i))));
+        okValue(await _create(repository, at: _occurredAt.add(Duration(minutes: i))));
       }
 
-      Future<TransactionListSnapshot> window(int limit) => repository.watchTransactions(TransactionQuery(limit: limit)).first;
-
-      expect((await window(2)).hasMore, isTrue);
-      expect((await window(2)).transactions, hasLength(2));
+      final windowOfTwo = await repository.watchTransactions(TransactionQuery(limit: 2)).first;
+      expect(windowOfTwo.hasMore, isTrue);
+      expect(windowOfTwo.transactions, hasLength(2));
       // Exactly full looks the same as "more behind it" — one larger window settles it (ADR-0011).
-      expect((await window(3)).hasMore, isTrue);
-      expect((await window(4)).hasMore, isFalse);
+      expect((await repository.watchTransactions(TransactionQuery(limit: 3)).first).hasMore, isTrue);
+      expect((await repository.watchTransactions(TransactionQuery(limit: 4)).first).hasMore, isFalse);
     });
 
     test('counts an unreadable row instead of failing the list — and hasMore counts it too', () async {
-      ok(await create(at: DateTime.utc(2026, 9, 28)));
-      await insertUnreadableRow('tx-bad');
+      okValue(await _create(repository, at: DateTime.utc(2026, 9, 28)));
+      await _insertUnreadableRow(db, 'tx-bad');
 
       final snapshot = await repository.watchTransactions(TransactionQuery(limit: 2)).first;
 
@@ -461,15 +391,15 @@ void main() {
     });
 
     test('logs an unreadable row once per stream, however often the list re-emits', () async {
-      await insertUnreadableRow('tx-bad');
+      await _insertUnreadableRow(db, 'tx-bad');
 
       final emissions = <TransactionListSnapshot>[];
       final subscription = repository.watchTransactions(TransactionQuery(limit: 50)).listen(emissions.add);
 
       await pumpEventQueue();
-      ok(await create());
+      okValue(await _create(repository));
       await pumpEventQueue();
-      ok(await create());
+      okValue(await _create(repository));
       await pumpEventQueue();
       await subscription.cancel();
 
@@ -484,7 +414,7 @@ void main() {
 
   group('watchTransaction', () {
     test('emits the transaction, then null once it is deleted', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
 
       final emissions = <String?>[];
       final subscription = repository.watchTransaction(created.id).listen((t) => emissions.add(t?.id));
@@ -498,7 +428,7 @@ void main() {
     });
 
     test('puts an unreadable row on the error channel as a GPDatabaseFailure — one row has no partial answer', () async {
-      await insertUnreadableRow('tx-bad');
+      await _insertUnreadableRow(db, 'tx-bad');
 
       await expectLater(repository.watchTransaction('tx-bad'), emitsError(const GPDatabaseFailure()));
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'tx-bad', 'reason': 'unknownType'});
@@ -506,54 +436,61 @@ void main() {
   });
 
   group('a write the database refuses', () {
-    /// A real database does not fail on request, so the `catch` sites are reached through a DAO that throws; its reads stay real.
-    TransactionRepositoryImpl repositoryFailingWith(Object thrown) =>
-        TransactionRepositoryImpl(dao: ThrowingTransactionDao(db, thrown), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
-
     test('createTransaction reports it and logs an id, not the row', () async {
-      final result = await repositoryFailingWith(Exception('disk full')).createTransaction(
-        type: TransactionType.expense,
-        accountId: 'acc-cash',
+      final result = await _repositoryOver(_ThrowingTransactionDao(db, Exception('disk full')), clock: clock, logger: logger, uuid: uuid).createTransaction(
         amount: Money(125000, 'VND'),
-        occurredAt: occurredAt,
+        type: TransactionType.expense,
+        occurredAt: _occurredAt,
+        accountId: 'acc-cash',
         note: 'Phở bò',
       );
 
-      expect(result, refusedBy(const GPDatabaseFailure()));
+      expect(result, _refusedBy(const GPDatabaseFailure()));
       expect(logger.last.level, GPLogLevel.error);
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'id-v7-1'});
     });
 
     test('updateTransaction reports it, rolling the transaction back', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
 
-      final result = await repositoryFailingWith(Exception('locked')).updateTransaction(ok(created.update(note: 'Bún chả')));
+      final result = await _repositoryOver(
+        _ThrowingTransactionDao(db, Exception('locked')),
+        clock: clock,
+        logger: logger,
+        uuid: uuid,
+      ).updateTransaction(okValue(created.update(note: 'Bún chả')));
 
-      expect(result, refusedBy(const GPDatabaseFailure()));
-      expect((await storedRows()).single.note, isNull);
+      expect(result, _refusedBy(const GPDatabaseFailure()));
+      expect((await _storedRows(db)).single.note, isNull);
     });
 
     test('deleteTransaction reports it too', () async {
-      expect(await repositoryFailingWith(Exception('io error')).deleteTransaction('tx-1'), const GPErr<void>(GPDatabaseFailure()));
+      expect(
+        await _repositoryOver(_ThrowingTransactionDao(db, Exception('io error')), clock: clock, logger: logger, uuid: uuid).deleteTransaction('tx-1'),
+        const GPErr<void>(GPDatabaseFailure()),
+      );
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'tx-1'});
     });
 
     test('restoreTransaction reports it too, and the transaction stays deleted', () async {
-      final created = ok(await create());
+      final created = okValue(await _create(repository));
       await repository.deleteTransaction(created.id);
 
-      expect(await repositoryFailingWith(Exception('io error')).restoreTransaction(created.id), const GPErr<void>(GPDatabaseFailure()));
+      expect(
+        await _repositoryOver(_ThrowingTransactionDao(db, Exception('io error')), clock: clock, logger: logger, uuid: uuid).restoreTransaction(created.id),
+        const GPErr<void>(GPDatabaseFailure()),
+      );
       expect(logger.last.fields, {'entity': 'transaction', 'id': created.id});
-      expect((await storedRows()).single.deletedAt, isNotNull);
+      expect((await _storedRows(db)).single.deletedAt, isNotNull);
     });
 
     test('an Error is not swallowed — it is a bug and must reach the crash reporter', () async {
       await expectLater(
-        repositoryFailingWith(StateError('broken invariant')).createTransaction(
-          type: TransactionType.expense,
-          accountId: 'acc-cash',
+        _repositoryOver(_ThrowingTransactionDao(db, StateError('broken invariant')), clock: clock, logger: logger, uuid: uuid).createTransaction(
           amount: Money(125000, 'VND'),
-          occurredAt: occurredAt,
+          type: TransactionType.expense,
+          occurredAt: _occurredAt,
+          accountId: 'acc-cash',
         ),
         throwsA(isA<StateError>()),
       );
@@ -563,7 +500,7 @@ void main() {
 
   group('the delete check the database refuses', () {
     test('comes back as a GPDatabaseFailure, logged against the account it was asked about', () async {
-      final failing = TransactionRepositoryImpl(dao: ThrowingTransactionDao(db, Exception('disk I/O')), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
+      final failing = _repositoryOver(_ThrowingTransactionDao(db, Exception('disk I/O')), clock: clock, logger: logger, uuid: uuid);
 
       expect(await failing.hasLiveTransactions('acc-cash'), const GPErr<bool>(GPDatabaseFailure()));
       expect(logger.last.fields, {'entity': 'account', 'id': 'acc-cash'});
@@ -571,9 +508,6 @@ void main() {
   });
 
   group('a read the database refuses', () {
-    TransactionRepositoryImpl repositoryReadingFrom(Object error) =>
-        TransactionRepositoryImpl(dao: FailingStreamTransactionDao(db, error), clock: clock, uuidGenerator: uuid, logger: logger, ownerId: localOwnerId);
-
     test('a query SQLite refuses reaches the caller as a GPDatabaseFailure, not as a raw SqliteException', () async {
       // No double: a dropped table fails the real query the way a corrupt file would.
       await db.customStatement('DROP TABLE transactions');
@@ -583,26 +517,40 @@ void main() {
     });
 
     test('watchTransactions reports an exception and logs an entity type, nothing else', () async {
-      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchTransactions(TransactionQuery(limit: 50)), emitsError(const GPDatabaseFailure()));
+      await expectLater(
+        _repositoryOver(
+          _FailingStreamTransactionDao(db, SqliteException(10, 'disk I/O error')),
+          clock: clock,
+          logger: logger,
+          uuid: uuid,
+        ).watchTransactions(TransactionQuery(limit: 50)),
+        emitsError(const GPDatabaseFailure()),
+      );
 
       expect(logger.last.fields, {'entity': 'transaction'});
     });
 
     test('watchAccountBalances reports it too, logged against accounts', () async {
-      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchAccountBalances(), emitsError(const GPDatabaseFailure()));
+      await expectLater(
+        _repositoryOver(_FailingStreamTransactionDao(db, SqliteException(10, 'disk I/O error')), clock: clock, logger: logger, uuid: uuid).watchAccountBalances(),
+        emitsError(const GPDatabaseFailure()),
+      );
 
       expect(logger.last.fields, {'entity': 'account'});
     });
 
     test('watchTransaction reports it too, and logs the id', () async {
-      await expectLater(repositoryReadingFrom(SqliteException(10, 'disk I/O error')).watchTransaction('tx-1'), emitsError(const GPDatabaseFailure()));
+      await expectLater(
+        _repositoryOver(_FailingStreamTransactionDao(db, SqliteException(10, 'disk I/O error')), clock: clock, logger: logger, uuid: uuid).watchTransaction('tx-1'),
+        emitsError(const GPDatabaseFailure()),
+      );
 
       expect(logger.last.fields, {'entity': 'transaction', 'id': 'tx-1'});
     });
 
     test('an Error is forwarded unchanged', () async {
       final bug = StateError('broken invariant');
-      final failing = repositoryReadingFrom(bug);
+      final failing = _repositoryOver(_FailingStreamTransactionDao(db, bug), clock: clock, logger: logger, uuid: uuid);
 
       await expectLater(failing.watchTransactions(TransactionQuery(limit: 50)), emitsError(same(bug)));
       await expectLater(failing.watchTransaction('tx-1'), emitsError(same(bug)));
@@ -611,47 +559,112 @@ void main() {
   });
 }
 
-/// Subclasses the real DAO so `transaction()` and the other reads still run against the in-memory database; only these calls fail.
-class ThrowingTransactionDao extends TransactionDao {
-  ThrowingTransactionDao(super.attachedDatabase, this.thrown);
+Future<void> _insertAccount(GPAppDatabase db, String id, {String currencyCode = 'VND', String ownerId = localOwnerId, bool isArchived = false}) => db
+    .into(db.accountsTable)
+    .insert(
+      AccountsTableCompanion.insert(
+        id: id,
+        ownerId: ownerId,
+        name: id,
+        type: 'cash',
+        currencyCode: currencyCode,
+        initialBalance: 0,
+        isArchived: isArchived,
+        createdAt: 0,
+        updatedAt: 0,
+        version: 1,
+      ),
+    );
 
-  final Object thrown;
+TransactionRepositoryImpl _repositoryOver(TransactionDao dao, {required FakeClock clock, required RecordingLogger logger, required FakeUuidGenerator uuid}) =>
+    TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+
+Future<GPResult<TransactionEntity>> _create(
+  TransactionRepositoryImpl repository, {
+  Money? amount,
+  TransactionType type = TransactionType.expense,
+  DateTime? at,
+  String accountId = 'acc-cash',
+  String? categoryId = 'cat-food',
+  String? destinationAccountId,
+  String? note,
+}) => repository.createTransaction(
+  amount: amount ?? Money(125000, 'VND'),
+  type: type,
+  occurredAt: at ?? _occurredAt,
+  accountId: accountId,
+  categoryId: categoryId,
+  destinationAccountId: destinationAccountId,
+  note: note,
+);
+
+GPErr<TransactionEntity> _refusedBy(GPFailure failure) => GPErr(failure);
+
+Future<List<TransactionRow>> _storedRows(GPAppDatabase db) => db.select(db.transactionsTable).get();
+
+Future<void> _softDeleteAccount(GPAppDatabase db, String id) =>
+    (db.update(db.accountsTable)..where((t) => t.id.equals(id))).write(const AccountsTableCompanion(deletedAt: Value(1)));
+
+/// A `refund` row: the mapper refuses it, the table accepts it (no vocabulary CHECK, ADR-0009).
+Future<void> _insertUnreadableRow(GPAppDatabase db, String id) => db
+    .into(db.transactionsTable)
+    .insert(
+      TransactionsTableCompanion.insert(
+        id: id,
+        ownerId: localOwnerId,
+        type: 'refund',
+        accountId: 'acc-cash',
+        amountMinor: 1,
+        currencyCode: 'VND',
+        occurredAt: 1,
+        createdAt: 0,
+        updatedAt: 0,
+        version: 1,
+        syncStatus: 'pending',
+      ),
+    );
+
+/// A real database does not fail on request, so the `catch` sites are reached through a DAO that throws; its reads stay real.
+final class _ThrowingTransactionDao extends TransactionDao {
+  _ThrowingTransactionDao(super.attachedDatabase, this._thrown);
+
+  final Object _thrown;
 
   @override
-  Future<void> insertTransaction(TransactionsTableCompanion row) => Future<void>.error(thrown);
+  Future<void> insertTransaction(TransactionsTableCompanion row) => Future.error(_thrown);
 
   @override
-  Future<int> updateTransaction(String id, {required int baseVersion, required TransactionsTableCompanion patch, required int now}) => Future<int>.error(thrown);
+  Future<int> updateTransaction(String id, {required TransactionsTableCompanion patch, required int baseVersion, required int now}) => Future.error(_thrown);
 
   @override
-  Future<int> softDelete(String id, {required int now}) => Future<int>.error(thrown);
+  Future<int> softDelete(String id, {required int now}) => Future.error(_thrown);
 
   @override
-  Future<int> restore(String id, {required int now}) => Future<int>.error(thrown);
+  Future<int> restore(String id, {required int now}) => Future.error(_thrown);
 
   @override
-  Future<bool> hasLiveTransactions(String ownerId, String accountId) => Future<bool>.error(thrown);
+  Future<bool> hasLiveTransactions({required String accountId, required String ownerId}) => Future.error(_thrown);
 }
 
-class FailingStreamTransactionDao extends TransactionDao {
-  FailingStreamTransactionDao(super.attachedDatabase, this.error);
+final class _FailingStreamTransactionDao extends TransactionDao {
+  _FailingStreamTransactionDao(super.attachedDatabase, this._error);
 
-  final Object error;
+  final Object _error;
 
   @override
   Stream<List<TransactionRow>> watchTransactions(
     String ownerId, {
-    required int limit,
     Set<String>? accountIds,
     Set<String>? categoryIds,
     Set<String>? types,
     int? fromMillis,
+    required int limit,
     int? toMillis,
-  }) => Stream<List<TransactionRow>>.error(error);
+  }) => Stream.error(_error);
 
   @override
-  Stream<TransactionRow?> watchTransaction(String ownerId, String id) => Stream<TransactionRow?>.error(error);
+  Stream<TransactionRow?> watchTransaction({required String id, required String ownerId}) => Stream.error(_error);
 
   @override
-  Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) => Stream<List<({AccountRow account, int balanceMinor})>>.error(error);
+  Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) => Stream.error(_error);
 }

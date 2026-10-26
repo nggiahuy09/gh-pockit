@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
-import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
@@ -10,48 +9,49 @@ import 'package:ghpockit/features/transactions/domain/usecases/create_sample_tra
 
 import '../../../../helpers/fake_account_repository.dart';
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/results.dart';
+
+const _input = CreateSampleTransactionInput(accountName: 'Ví mẫu', note: 'Giao dịch mẫu');
 
 void main() {
-  late InMemoryRepositories repos;
-  late CreateSampleTransactionUseCase createSample;
+  late InMemoryRepositories repositories;
+  late CreateSampleTransactionUseCase createSampleTransaction;
 
   setUp(() {
-    repos = InMemoryRepositories();
-    createSample = CreateSampleTransactionUseCase(accountRepository: repos.accounts, transactionRepository: repos.transactions, clock: repos.clock);
+    repositories = InMemoryRepositories();
+    createSampleTransaction = CreateSampleTransactionUseCase(repositories.accounts, repositories.clock, repositories.transactions);
   });
-  tearDown(() => repos.close());
-
-  TransactionEntity valueOf(GPResult<TransactionEntity> result) => (result as GPOk<TransactionEntity>).value;
+  tearDown(() => repositories.close());
 
   test('with no account, creates a cash account first and writes the expense into it', () async {
-    final sample = valueOf(await createSample(accountName: 'Ví mẫu', note: 'Giao dịch mẫu'));
+    final sample = okValue(await createSampleTransaction.execute(_input));
 
-    final accounts = await repos.accounts.watchAccounts().first;
-    expect(accounts.map((AccountEntity a) => (a.name, a.type)), [('Ví mẫu', AccountType.cash)]);
+    final accounts = await repositories.accounts.watchAccounts().first;
+    expect(accounts.map((account) => (account.name, account.type)), [('Ví mẫu', AccountType.cash)]);
     expect(sample.accountId, accounts.single.id);
     expect(sample.type, TransactionType.expense);
     expect(sample.note, 'Giao dịch mẫu');
-    expect(sample.occurredAt, repos.clock.nowUtc());
+    expect(sample.occurredAt, repositories.clock.nowUtc());
   });
 
   test('reuses the oldest account, in its own currency', () async {
-    final oldest = await repos.accounts.createAccount(name: 'Chase', type: AccountType.bank, initialBalance: Money.zero('USD'));
-    await repos.accounts.createAccount(name: 'Cash', type: AccountType.cash, initialBalance: Money.zero('VND'));
+    final oldest = okValue(await repositories.accounts.createAccount(initialBalance: Money.zero('USD'), type: AccountType.bank, name: 'Chase'));
+    await repositories.accounts.createAccount(initialBalance: Money.zero('VND'), type: AccountType.cash, name: 'Cash');
 
-    final sample = valueOf(await createSample(accountName: 'Ví mẫu', note: 'Giao dịch mẫu'));
+    final sample = okValue(await createSampleTransaction.execute(_input));
 
-    expect(sample.accountId, (oldest as GPOk<AccountEntity>).value.id);
+    expect(sample.accountId, oldest.id);
     expect(sample.amount.currencyCode, 'USD');
-    expect(await repos.accounts.watchAccounts().first, hasLength(2), reason: 'no extra account when one exists');
+    expect(await repositories.accounts.watchAccounts().first, hasLength(2), reason: 'no extra account when one exists');
   });
 
   test('a failure reading the accounts comes back as the result, not a throw', () async {
-    final failing = CreateSampleTransactionUseCase(
-      accountRepository: FakeAccountRepository(accounts: Stream<List<AccountEntity>>.error(const GPDatabaseFailure())),
-      transactionRepository: repos.transactions,
-      clock: repos.clock,
-    );
+    final failing = CreateSampleTransactionUseCase(FakeAccountRepository(Stream.error(const GPDatabaseFailure())), repositories.clock, repositories.transactions);
 
-    expect(await failing(accountName: 'Ví mẫu', note: 'Giao dịch mẫu'), const GPErr<TransactionEntity>(GPDatabaseFailure()));
+    expect(await failing.execute(_input), const GPErr<TransactionEntity>(GPDatabaseFailure()));
+  });
+
+  test('the input logs nothing: the name and the note are text', () {
+    expect(_input.toLog(), isEmpty);
   });
 }

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:ghpockit/core/localization/localization_scope.dart';
-import 'package:ghpockit/core/theme/theme_context.dart';
-import 'package:ghpockit/core/widgets/money_text.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
-import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
-import 'package:ghpockit/features/transactions/presentation/transaction_labels.dart';
+
+import '../../../../core/localization/localization_scope.dart';
+import '../../../../core/theme/theme_context.dart';
+import '../../../../core/widgets/money_text.dart';
+import '../../domain/entities/transaction_entity.dart';
+import '../transaction_entity_extension.dart';
 
 /// Stays pinned while its day is on screen, so the rows under it always say which day they belong to.
-class TransactionDayHeader extends StatelessWidget {
-  const TransactionDayHeader({required this.label, super.key});
+final class TransactionDayHeaderWidget extends StatelessWidget {
+  const TransactionDayHeaderWidget({super.key, required this.label});
 
   final String label;
 
@@ -22,16 +22,16 @@ class TransactionDayHeader extends StatelessWidget {
 
     return SliverPersistentHeader(
       pinned: true,
-      delegate: _DayHeaderDelegate(label: label, style: style, extent: (lineHeight + spacing.md + spacing.sm).ceilToDouble()),
+      delegate: _DayHeaderDelegate(style: style, label: label, extent: (lineHeight + spacing.md + spacing.sm).ceilToDouble()),
     );
   }
 }
 
-class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
-  const _DayHeaderDelegate({required this.label, required this.style, required this.extent});
+final class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _DayHeaderDelegate({required this.style, required this.label, required this.extent});
 
-  final String label;
   final TextStyle style;
+  final String label;
   final double extent;
 
   @override
@@ -39,6 +39,9 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   double get maxExtent => extent;
+
+  @override
+  bool shouldRebuild(_DayHeaderDelegate oldDelegate) => oldDelegate.label != label || oldDelegate.style != style || oldDelegate.extent != extent;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
@@ -62,18 +65,13 @@ class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
       ),
     );
   }
-
-  @override
-  bool shouldRebuild(_DayHeaderDelegate oldDelegate) => oldDelegate.label != label || oldDelegate.style != style || oldDelegate.extent != extent;
 }
 
-/// One day's rows on a single card.
-class TransactionDayCard extends StatelessWidget {
-  const TransactionDayCard({required this.transactions, this.onOpen, this.onDelete, super.key});
+final class TransactionDayCardWidget extends StatelessWidget {
+  const TransactionDayCardWidget({super.key, required this.transactions, this.onOpen, this.onDelete});
 
   final List<TransactionEntity> transactions;
-
-  final ValueChanged<TransactionEntity>? onOpen;
+  final void Function(TransactionEntity transaction)? onOpen;
 
   /// Swiping a row away, or the screen reader's delete action. Completes true once the row is deleted; false puts a swiped row back.
   final Future<bool> Function(TransactionEntity transaction)? onDelete;
@@ -83,7 +81,6 @@ class TransactionDayCard extends StatelessWidget {
     final colors = context.colors;
     final radius = context.radii.borderLg;
     final onOpen = this.onOpen;
-    final onDelete = this.onDelete;
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: context.spacing.md),
@@ -95,20 +92,17 @@ class TransactionDayCard extends StatelessWidget {
           child: Material(
             type: MaterialType.transparency,
             child: Column(
-              children: <Widget>[
+              children: [
                 for (var i = 0; i < transactions.length; i++)
                   _DeletableRow(
-                    key: ValueKey<String>(transactions[i].id),
+                    key: ValueKey(transactions[i].id),
                     transaction: transactions[i],
                     onDelete: onDelete,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
                       ),
-                      child: TransactionRow(
-                        transaction: transactions[i],
-                        onTap: onOpen == null ? null : () => onOpen(transactions[i]),
-                      ),
+                      child: TransactionRowWidget(transaction: transactions[i], onTap: onOpen == null ? null : () => onOpen.call(transactions[i])),
                     ),
                   ),
               ],
@@ -121,8 +115,8 @@ class TransactionDayCard extends StatelessWidget {
 }
 
 /// Swipe towards the start to delete. The delete is written before the row goes, so the list's next snapshot is what removes it (ADR-0017).
-class _DeletableRow extends StatelessWidget {
-  const _DeletableRow({required this.transaction, required this.onDelete, required this.child, super.key});
+final class _DeletableRow extends StatelessWidget {
+  const _DeletableRow({super.key, required this.transaction, required this.onDelete, required this.child});
 
   final TransactionEntity transaction;
   final Future<bool> Function(TransactionEntity transaction)? onDelete;
@@ -138,11 +132,11 @@ class _DeletableRow extends StatelessWidget {
 
     return Semantics(
       // Swiping is out of reach of a screen reader.
-      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{CustomSemanticsAction(label: label): () => onDelete(transaction)},
+      customSemanticsActions: {CustomSemanticsAction(label: label): () => onDelete.call(transaction)},
       child: Dismissible(
-        key: ValueKey<String>('dismiss-${transaction.id}'),
+        key: ValueKey('dismiss-${transaction.id}'),
         direction: DismissDirection.endToStart,
-        confirmDismiss: (_) => onDelete(transaction),
+        confirmDismiss: (_) => onDelete.call(transaction),
         background: ColoredBox(
           color: colors.danger,
           child: Align(
@@ -160,34 +154,33 @@ class _DeletableRow extends StatelessWidget {
 }
 
 /// Only the title is ever cut short; the amount always shows in full.
-class TransactionRow extends StatelessWidget {
-  const TransactionRow({required this.transaction, this.onTap, super.key});
-
-  static const double minHeight = 56;
+final class TransactionRowWidget extends StatelessWidget {
+  const TransactionRowWidget({super.key, required this.transaction, this.onTap});
 
   final TransactionEntity transaction;
-  final VoidCallback? onTap;
+  final void Function()? onTap;
+
+  static const minHeight = 56.0;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
     final textStyle = context.text.bodyLarge;
-
     final row = ConstrainedBox(
       // Scales with the system text size, as the design's rows do, so a larger text setting keeps the same breathing room.
       constraints: BoxConstraints(minHeight: MediaQuery.textScalerOf(context).scale(minHeight)),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: spacing.md, vertical: spacing.sm),
         child: Row(
-          children: <Widget>[
-            if (transaction.type == TransactionType.transfer) ...<Widget>[
-              Icon(Icons.swap_horiz, size: 18, color: colors.onSurfaceVariant),
-              const SizedBox(width: 6),
+          children: [
+            if (transaction.type.isTransfer) ...[
+              Icon(Icons.swap_horiz, size: 18.0, color: colors.onSurfaceVariant),
+              const SizedBox(width: 6.0),
             ],
             Expanded(
               child: Text(
-                transaction.titleIn(context.l10n),
+                transaction.getTitle(context.l10n),
                 style: textStyle.copyWith(color: colors.onSurface),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -195,9 +188,9 @@ class TransactionRow extends StatelessWidget {
             ),
             SizedBox(width: spacing.smd),
             GPMoneyText(
-              transaction.amount,
-              tone: transaction.moneyTone,
               style: textStyle.copyWith(fontWeight: FontWeight.w600, color: colors.onSurface),
+              amount: transaction.amount,
+              tone: transaction.moneyTone,
             ),
           ],
         ),
@@ -208,13 +201,10 @@ class TransactionRow extends StatelessWidget {
   }
 }
 
-/// Sits above the rows and never replaces them.
-class TransactionListBanner extends StatelessWidget {
-  /// The query failed while rows were already on screen.
-  const TransactionListBanner.error({required this.message, super.key}) : _isError = true;
+final class TransactionListBannerWidget extends StatelessWidget {
+  const TransactionListBannerWidget.error({super.key, required this.message}) : _isError = true;
 
-  /// Some rows could not be read (ADR-0011).
-  const TransactionListBanner.notice({required this.message, super.key}) : _isError = false;
+  const TransactionListBannerWidget.notice({super.key, required this.message}) : _isError = false;
 
   final String message;
   final bool _isError;
@@ -229,13 +219,13 @@ class TransactionListBanner extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       child: Container(
-        margin: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, 0),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, 0.0),
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
         decoration: BoxDecoration(color: background, borderRadius: context.radii.borderMd),
         child: Row(
-          children: <Widget>[
-            Icon(_isError ? Icons.error_outline : Icons.info_outline, size: 20, color: foreground),
-            const SizedBox(width: 10),
+          spacing: 10.0,
+          children: [
+            Icon(_isError ? Icons.error_outline : Icons.info_outline, size: 20.0, color: foreground),
             Expanded(
               child: Text(message, style: context.text.bodyMedium.copyWith(color: foreground)),
             ),
@@ -247,8 +237,8 @@ class TransactionListBanner extends StatelessWidget {
 }
 
 /// Shown while the window may hold more rows; scrolling near it loads them, so there is no button.
-class TransactionListFooter extends StatelessWidget {
-  const TransactionListFooter({required this.label, super.key});
+final class TransactionListFooterWidget extends StatelessWidget {
+  const TransactionListFooterWidget({super.key, required this.label});
 
   final String label;
 
@@ -259,36 +249,28 @@ class TransactionListFooter extends StatelessWidget {
       child: Semantics(
         label: label,
         child: SizedBox.square(
-          dimension: 24,
-          child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.onSurfaceVariant),
+          dimension: 24.0,
+          child: CircularProgressIndicator(strokeWidth: 2.0, color: context.colors.onSurfaceVariant),
         ),
       ),
     ),
   );
 }
 
-/// First load, or the moments after a filter change.
-class TransactionListSkeleton extends StatelessWidget {
-  const TransactionListSkeleton({super.key});
+final class TransactionListSkeletonWidget extends StatelessWidget {
+  const TransactionListSkeletonWidget({super.key});
 
   /// Title and amount bar widths per row: uneven on purpose, so it reads as text rather than a grid.
-  static const List<List<(double, double)>> _days = <List<(double, double)>>[
-    <(double, double)>[(120, 72), (168, 64), (96, 80)],
-    <(double, double)>[(140, 96), (184, 72), (112, 64)],
-    <(double, double)>[(200, 64), (88, 72)],
+  static const _days = [
+    [(120.0, 72.0), (168.0, 64.0), (96.0, 80.0)],
+    [(140.0, 96.0), (184.0, 72.0), (112.0, 64.0)],
+    [(200.0, 64.0), (88.0, 72.0)],
   ];
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final spacing = context.spacing;
-    final radius = context.radii.borderLg;
-
-    Widget bar(double width, double height) => Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(color: colors.surfaceVariant, borderRadius: context.radii.borderSm),
-    );
 
     return Semantics(
       container: true,
@@ -298,23 +280,29 @@ class TransactionListSkeleton extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              for (final rows in _days) ...<Widget>[
+            children: [
+              for (final rows in _days) ...[
                 Padding(
-                  padding: EdgeInsets.fromLTRB(spacing.md, spacing.md + spacing.xs, spacing.md, 10),
-                  child: bar(88, 12),
+                  padding: EdgeInsets.fromLTRB(spacing.md, spacing.md + spacing.xs, spacing.md, 10.0),
+                  child: const _SkeletonBar(height: 12.0, width: 88.0),
                 ),
                 Container(
                   margin: EdgeInsets.symmetric(horizontal: spacing.md),
-                  decoration: BoxDecoration(color: colors.surface, borderRadius: radius, boxShadow: context.shadows.small),
+                  decoration: BoxDecoration(color: colors.surface, borderRadius: context.radii.borderLg, boxShadow: context.shadows.small),
                   child: Column(
-                    children: <Widget>[
+                    children: [
                       for (final (title, amount) in rows)
                         SizedBox(
-                          height: TransactionRow.minHeight,
+                          height: TransactionRowWidget.minHeight,
                           child: Padding(
                             padding: EdgeInsets.symmetric(horizontal: spacing.md),
-                            child: Row(children: <Widget>[bar(title, 14), const Spacer(), bar(amount, 14)]),
+                            child: Row(
+                              children: [
+                                _SkeletonBar(height: 14.0, width: title),
+                                const Spacer(),
+                                _SkeletonBar(height: 14.0, width: amount),
+                              ],
+                            ),
                           ),
                         ),
                     ],
@@ -327,4 +315,20 @@ class TransactionListSkeleton extends StatelessWidget {
       ),
     );
   }
+}
+
+final class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({required this.height, required this.width});
+
+  final double height;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    height: height,
+    child: DecoratedBox(
+      decoration: BoxDecoration(color: context.colors.surfaceVariant, borderRadius: context.radii.borderSm),
+    ),
+  );
 }

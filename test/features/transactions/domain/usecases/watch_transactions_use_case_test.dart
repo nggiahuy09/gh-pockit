@@ -13,7 +13,7 @@ void main() {
     final snapshot = TransactionListSnapshot(transactions: const [], unreadableCount: 0, hasMore: false);
     final received = <Object>[];
 
-    final subscription = WatchTransactionsUseCase(transactionRepository: repository)(query).listen(received.add, onError: received.add);
+    final subscription = WatchTransactionsUseCase(repository).execute(WatchTransactionsInput(query)).listen(received.add, onError: received.add);
     addTearDown(subscription.cancel);
     repository.watches.single
       ..emit(snapshot)
@@ -22,5 +22,9 @@ void main() {
 
     expect(repository.watches.single.query, query);
     expect(received, [snapshot, const GPDatabaseFailure()]);
+  });
+
+  test('the input logs the window size and nothing else', () {
+    expect(WatchTransactionsInput(TransactionQuery(accountIds: const {'acc-1'}, limit: 50)).toLog(), {'limit': 50});
   });
 }

@@ -1,11 +1,25 @@
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013). No category rule: coming back creates no new filing, the case `UpdateTransactionUseCase` skips too.
-class RestoreTransactionUseCase {
-  const RestoreTransactionUseCase({required TransactionRepository transactionRepository}) : _transactions = transactionRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/result.dart';
+import '../repositories/transaction_repository.dart';
 
-  final TransactionRepository _transactions;
+final class RestoreTransactionUseCase with GPUseCase<RestoreTransactionInput, void> {
+  const RestoreTransactionUseCase(this._repository);
 
-  Future<GPResult<void>> call(String id) => _transactions.restoreTransaction(id);
+  final TransactionRepository _repository;
+
+  @override
+  Future<GPResult<void>> execute(RestoreTransactionInput input) => _repository.restoreTransaction(input.transactionId);
+}
+
+@immutable
+final class RestoreTransactionInput implements GPLoggable {
+  const RestoreTransactionInput(this.transactionId);
+
+  final String transactionId;
+
+  @override
+  Map<String, Object?> toLog() => {'transaction_id': transactionId};
 }

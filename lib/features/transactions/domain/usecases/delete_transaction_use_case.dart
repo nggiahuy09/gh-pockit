@@ -1,11 +1,25 @@
-import 'package:ghpockit/core/error/result.dart';
-import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:meta/meta.dart';
 
-/// Forwards on purpose (ADR-0013): deleting a transaction owns no rule (ADR-0010).
-class DeleteTransactionUseCase {
-  const DeleteTransactionUseCase({required TransactionRepository transactionRepository}) : _transactions = transactionRepository;
+import '../../../../core/domain/loggable.dart';
+import '../../../../core/domain/use_case.dart';
+import '../../../../core/error/result.dart';
+import '../repositories/transaction_repository.dart';
 
-  final TransactionRepository _transactions;
+final class DeleteTransactionUseCase with GPUseCase<DeleteTransactionInput, void> {
+  const DeleteTransactionUseCase(this._repository);
 
-  Future<GPResult<void>> call(String id) => _transactions.deleteTransaction(id);
+  final TransactionRepository _repository;
+
+  @override
+  Future<GPResult<void>> execute(DeleteTransactionInput input) => _repository.deleteTransaction(input.transactionId);
+}
+
+@immutable
+final class DeleteTransactionInput implements GPLoggable {
+  const DeleteTransactionInput(this.transactionId);
+
+  final String transactionId;
+
+  @override
+  Map<String, Object?> toLog() => {'transaction_id': transactionId};
 }
