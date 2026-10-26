@@ -463,7 +463,7 @@ void main() {
       expect(plan, isNot(contains('TEMP B-TREE')));
     });
 
-    test('the account filter never scans the table — the two plans SQLite may pick are pinned until W8', () async {
+    test('the account filter never scans the table, whichever of its two plans SQLite picks', () async {
       // SQLite's pick for an OR across two columns differs between versions: the owner index plus a filter, or `MULTI-INDEX OR` plus a sort. Never a `SCAN`.
       final plan = await _planOf(db, dao.selectTransactions(localOwnerId, accountIds: {'acc-cash'}, limit: 50));
 

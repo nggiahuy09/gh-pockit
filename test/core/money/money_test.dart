@@ -136,7 +136,7 @@ void main() {
     });
 
     test('addition past the ceiling wraps instead of throwing — the documented bound, not a bug', () {
-      // Deliberately unguarded (ROADMAP W3 T3, option A): a throw here would reverse that decision, not fix a bug.
+      // Deliberately unguarded (ADR-0007): a throw here would reverse that decision, not fix a bug.
       expect(Money(ceiling, 'VND') + Money(1, 'VND'), Money(floor, 'VND'));
       expect(Money(floor, 'VND') - Money(1, 'VND'), Money(ceiling, 'VND'));
     });

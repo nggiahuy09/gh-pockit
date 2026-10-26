@@ -134,7 +134,7 @@ void main() {
     await db.close();
   });
 
-  group('v3 → v4 (transactions, W4 T3)', () {
+  group('v3 → v4 (transactions)', () {
     // Raw SQL: the database is still v3.
 
     test('migrates into the schema a fresh v4 install has', () async {

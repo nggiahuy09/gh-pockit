@@ -110,7 +110,7 @@ void main() {
     });
 
     test('is a well-formed v5 UUID', () {
-      // A server column typed `uuid` (W10) will parse these.
+      // A server column typed `uuid` will parse these.
       final id = GPUuidGeneratorImpl(clock: FakeClock()).v5('local|category.food');
 
       expect(id, matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
