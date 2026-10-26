@@ -4,6 +4,9 @@
 
 Accepted — 2026-10-15 (W6 T6).
 
+Amended 2026-10-24 by ADR-0020: the readers are now `AccountsBloc` and `HomeAccountsBloc`, and `AccountMapper` is the
+`AccountRowMapper.toDomain()` extension.
+
 ## Context
 
 W6 T6 shows real balances: on the Accounts tab, and in the accounts section of

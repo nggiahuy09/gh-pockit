@@ -56,7 +56,7 @@ Presentation → Domain ← Data
 
 ```mermaid
 flowchart TD
-    UI[Widgets] --> SM[BLoC / Cubit]
+    UI[Widgets] --> SM[BLoC]
     SM --> UC[Use Cases]
     UC --> RP[Repository Interface - domain]
     RP -.implemented by.-> RI[Repository Impl - data]
@@ -72,12 +72,14 @@ flowchart TD
 
 | Layer          | May contain                                                                                                                                                  | Must not contain                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `presentation` | Page, Widget, BLoC/Cubit, UI model                                                                                                                           | SQL, Dio, DTO, sync logic, repo calls    |
+| `presentation` | Page, View, Widget, BLoC, UI model                                                                                                                           | SQL, Dio, DTO, sync logic, repo calls    |
 | `domain`       | Entity, Value Object, Repository _interface_, UseCase, Failure                                                                                               | Any Flutter import (ideally), DTO, Drift |
 | `data`         | Repository impl, DAO, DTO, Mapper, RemoteDataSource                                                                                                          | Widget, BuildContext                     |
 | `core`         | Database, network client, sync coordinator, logger, secure storage, `GPClock`, `GPUuidGenerator`, connectivity — every type here is `GP`-prefixed, see below | Business rules of any specific feature   |
 
-**Presentation reaches the domain only through use cases, which a BLoC builds itself** (ADR-0013). A BLoC calls use cases, never a repository method, so every write goes through its rule (`deleteAccount` only via `DeleteAccountUseCase`). It builds them in field initializers from repositories resolved through `getIt`; its constructor takes only what the screen hands it. Use cases are not registered in DI, take repositories through their constructor and never touch `getIt`. A use case that only forwards one call (`WatchTransactionsUseCase`) is fine. Rules that need another row still live in use cases (ADR-0010).
+**Presentation reaches the domain only through use cases, which a BLoC builds itself** (ADR-0013). A BLoC calls use cases, never a repository method, so every write goes through its rule (`deleteAccount` only via `DeleteAccountUseCase`). It builds them in field initializers from repositories resolved through `getIt`; its constructor takes only what the screen hands it. Use cases are not registered in DI, take repositories through their constructor and never touch `getIt`. A use case that only forwards one call (`WatchTransactionsUseCase`) is fine. Rules that need another row still live in use cases (ADR-0010). A use case is `with GPUseCase<XInput, Output>` (or `GPStreamUseCase`) and is called as `execute(XInput(...))`; the input implements `GPLoggable` with ids only (ADR-0020).
+
+**Blocs, never Cubits; the Page provides, the View lays out** (ADR-0020). A bloc registers one `on<FeatureEvent>` per transformer group (`sequential` for requests, `restartable` for watches) with an exhaustive `switch` delegating to `_xHandler`s, and starts itself in its constructor. Lists use one state class per transition (`XInitState` / `XLoadingState` / `XLoadedState` / `XLoadErrorState`); field-heavy forms are single-state with a `status` enum and a private `_copyWith`. A Page only provides the `BlocProvider`; the View holds the layout, the listeners and the navigation; snackbars and navigation come from listeners, never from the bloc.
 
 ### The three-model rule
 
@@ -103,6 +105,9 @@ Rules:
   rule bites: `AccountEntity` / `AccountDto` / `AccountRow` are three names a reader tells apart in an import list, where a bare `Account` reads like
   whichever of the three the surrounding file happens to be about. It is also why the file name carries it here and nowhere else — `account.dart`,
   `account_dto.dart` and `accounts_table.dart` sitting in one editor's tab bar is exactly the confusion the suffix removes.
+- **Feature widgets end in `Widget`** (`AccountBalanceCardWidget` in `account_balance_list_widget.dart`); shared ones keep `GP` and no suffix. Helpers on a
+  type are `<type>_extension.dart` (`AccountTypeExtension`), a shared enum is `<name>_enum.dart`, user-facing text comes from `getTitle(locale)` /
+  `getMessage(locale)`, events are `{Noun}{Verb}Event`.
 - **The suffix stops at "is it an entity".** Not at the folder: an enum or value object living beside them takes no suffix — `AccountType` stays
   `AccountType` in `account_type.dart`, because it is a type discriminator, not a thing with identity. Nor does anything in `domain/repositories/`
   or `domain/usecases/`: `AccountRepository` and `CreateTransactionUseCase` already say what they are.
@@ -154,6 +159,7 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | HTTP           | `dio`                                   | 5.11.1                      |
 | Backend        | `supabase_flutter`                      | 2.17.2                      |
 | Immutable      | `freezed`, `json_serializable`          | — / 6.14.1                  |
+| Equality       | `equatable`                             | 2.1.0 (ADR-0020)            |
 | Annotations    | `meta`                                  | 1.16.0                      |
 | Secure storage | `flutter_secure_storage`                | —                           |
 | Biometric      | `local_auth`                            | 3.0.2                       |
@@ -225,6 +231,9 @@ acquire lock → push pending mutations → pull delta (cursor) → apply inside
 | Integration | Golden path offline→sync→multi-device                              |
 
 Sync engine tests must use a **fake clock** and a **fake remote**, never a real `Future.delayed`.
+
+Test doubles are hand-written `final class`es extending the abstract type (no mocking library); read a result the test expects to succeed with
+`okValue(result)` from `test/helpers/results.dart`, never an `as GPOk<T>` cast.
 
 ---
 
@@ -363,6 +372,8 @@ A feature is Done only when **all** of these hold:
 
 ## 13. When working in this repo, Claude should
 
+- **Follow `docs/coding-style-flutter.md`** for code style. It is binding wherever this file is silent; on a conflict this file wins, and the calls
+  made so far — what applies, what does not, and why — are in ADR-0020.
 - **Ask before adding a new dependency** or changing the architecture.
 - When asked to implement a feature: read the matching section of `docs/blueprint.md` first, then write code.
 - Write code in this order: domain entity → repository interface → DAO/drift table → repository impl → use case → BLoC → UI. Never jump straight to the UI.
@@ -381,13 +392,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase        | **Between P1 and P2 — W7 Review + refactor** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                   |
-| Week                 | **W7 in progress** (19/10) — W6 merged into `dev`. Review + refactor week inserted 20/10, ROADMAP W8–W16 shifted one week (year-end buffer burnt). W8 T2 done early: `EXPLAIN QUERY PLAN` audit, no missing index, schema stays v4 (ADR-0019 amended). Next: W7 T3, map the codebase + one transaction end to end. Week pointers outside ROADMAP still use the old numbering — a W7 item |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml`                                                                                                                                                                                                                                                                                  |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                     |
-| Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                                                                                                                                                                                                                       |
-| Backend              | not set up yet                                                                                                                                                                                                                                                                                                                                                          |
-| Latest ADR           | 0019 — an account's balance is one query over both tables, owned by the transactions side (15/10, W6 T6); 0018 — the shared inputs follow the Pockit Design canvas: a sheet picks, a dialog decides (14/10, W6); 0017 — undo is a restore: a delete is written at once and taken back by clearing `deleted_at`; 0016 — a refused save is shown on the field it is about |
-| Blocker              | —                                                                                                                                                                                                                                                                                                                                                                       |
+| Field                | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase        | **Between P1 and P2 — W7 Review + refactor** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                                                                                                                                          |
+| Week                 | **W7 in progress** (19/10) — W6 merged into `dev`. Review + refactor week inserted 20/10, ROADMAP W8–W16 shifted one week (year-end buffer burnt). W8 T2 done early: `EXPLAIN QUERY PLAN` audit, no missing index, schema stays v4 (ADR-0019 amended). Next: W7 T3, map the codebase + one transaction end to end. Week pointers outside ROADMAP still use the old numbering — a W7 item                                                                                                       |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                                                                                                                                                                   |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                                                                                                                                                                                                                                                                                                                                              |
+| Backend              | not set up yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Latest ADR           | 0020 — adopt the Flutter coding style guide: Blocs only, `GPUseCase` inputs, Page/View split, `Equatable` (24/10, W7); 0019 — an account's balance is one query over both tables, owned by the transactions side (15/10, W6 T6); 0018 — the shared inputs follow the Pockit Design canvas: a sheet picks, a dialog decides (14/10, W6); 0017 — undo is a restore: a delete is written at once and taken back by clearing `deleted_at`; 0016 — a refused save is shown on the field it is about |
+| Blocker              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

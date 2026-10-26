@@ -5,6 +5,9 @@
 Accepted — 2026-09-18 (W2 T5). One open item — the corrupt-row policy for
 transactions — settled 2026-09-27 by ADR-0011; see _What is still open_.
 
+Amended 2026-10-24 by ADR-0020: `GPResult` and `GPFailure` are `Equatable` now (equality also checks `runtimeType`), and
+`failure_message.dart` became `failure_extension.dart` with `getMessage(locale)`. The decision itself stands.
+
 > Numbered sequentially, not from Appendix E of `docs/blueprint.md`. That list
 > reserved 0006 for version-based conflict detection; the repo diverged at 0003
 > and the numbers are now in the order decisions were actually made. Conflict
