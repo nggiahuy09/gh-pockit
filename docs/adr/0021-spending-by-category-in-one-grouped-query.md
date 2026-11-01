@@ -4,6 +4,9 @@
 
 Accepted — 2026-11-01 (W8 T3).
 
+Amended 2026-11-01 (W8 T4): one currency per query, named by the caller, and VND only for now. See the amendment at the end; the "one row per
+category and currency" below is superseded.
+
 ## Context
 
 W8 T3 is the first aggregate the app reads: what was spent, per category, in a
@@ -113,3 +116,48 @@ Negative:
   key, but it is the part a covering index would not remove. W9 measures it.
 - A month is two instants computed in the device's current zone, so moving
   zones re-buckets the edges of a month, as ADR-0009 already accepts for days.
+
+## Amended 2026-11-01 (W8 T4) — one currency, the month fixed per Home
+
+W8 T4 puts the month on Home: a card with the month's income, spending and the
+difference, and the breakdown under it. The user settled three questions on
+2026-11-01.
+
+**1. VND only, for now.** Both queries take the currency as a parameter (`?2`)
+instead of grouping by it:
+
+- `spendingByCategorySql` drops `t.currency_code` from its select, its
+  `GROUP BY` and its `ORDER BY`, and filters on it instead.
+- The new `incomeExpenseTotalsSql` sums income and expenses in one row with
+  `SUM(CASE …)`. It filters the same way, returns zeros for an empty range,
+  and counts a transfer as neither (ADR-0009).
+
+The data layer still chooses nothing. `WatchMonthlySummaryUseCase.currency`
+does, and `WatchCategoryBreakdownUseCase` reads it from there, so the
+breakdown always adds up to the card's spending figure. A transaction in
+another currency is left out of both, not converted: a user with a USD account
+sees only the dong side of the month. Multi-currency revisits this, and it
+needs no schema change to do so.
+
+**2. Option A on Home** (canvas page "W8 · Trang chủ"). Home shows:
+
+- the three largest categories;
+- then "Uncategorised", always last whatever its size;
+- then one line that sums the rest.
+
+The bars are scaled to the largest group, with the share of the month's
+spending beside each bar. The shaping belongs to presentation
+(`HomeCategoryRows`). It folds a handful of groups that the query has already
+summed, never transactions.
+
+**3. The month is fixed when Home is built.** `HomePage` computes
+`GPCalendarMonth.of(clock.nowUtc().toLocal())` once and hands it to both
+blocs. An app left open across midnight on the first keeps showing the old
+month until Home is rebuilt, which in practice means an app restart. If that
+ever needs fixing, the fix belongs to the `appResumed` sync trigger (W21), not
+a timer here.
+
+`GPCalendarMonth` (core) turns a month into its two local midnights, the
+instants the queries take (ADR-0009 §6). The totals query has the same plan as
+the breakdown: a seek into `transactions_owner_id_occurred_at_id` on the owner
+and the range. A DAO test pins it. No index is added.

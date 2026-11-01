@@ -7,6 +7,9 @@ columns and constraints, and SQLite cannot `ALTER` a constraint: changing one
 later is a table rebuild. Implemented by W4 T2 (`TransactionEntity`) and W4 T3
 (the table).
 
+Narrowed 2026-11-01 by ADR-0022: §6's instant is never on a local day after
+today.
+
 ## Context
 
 `transactions` is the table every number in the app is computed from: balances
