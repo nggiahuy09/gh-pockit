@@ -2,25 +2,25 @@ import 'package:intl/intl.dart';
 import 'package:meta/meta.dart';
 
 import '../../../core/localization/locale_base/locale_base.dart';
-import '../domain/entities/transaction_entity.dart';
+import '../domain/entities/transaction_list_item.dart';
 
 @immutable
 final class TransactionDay {
-  const TransactionDay(this._transactions, this.date);
+  const TransactionDay(this._items, this.date);
 
-  final List<TransactionEntity> _transactions;
+  final List<TransactionListItem> _items;
 
   /// Local midnight.
   final DateTime date;
 
-  List<TransactionEntity> get transactions => List.unmodifiable(_transactions);
+  List<TransactionListItem> get items => List.unmodifiable(_items);
 }
 
-List<TransactionDay> groupByLocalDay(Iterable<TransactionEntity> transactions) {
-  final days = <DateTime, List<TransactionEntity>>{};
-  for (final transaction in transactions) {
-    final local = transaction.occurredAt.toLocal();
-    days.putIfAbsent(DateTime(local.year, local.month, local.day), () => []).add(transaction);
+List<TransactionDay> groupByLocalDay(Iterable<TransactionListItem> items) {
+  final days = <DateTime, List<TransactionListItem>>{};
+  for (final item in items) {
+    final local = item.transaction.occurredAt.toLocal();
+    days.putIfAbsent(DateTime(local.year, local.month, local.day), () => []).add(item);
   }
 
   return [for (final MapEntry(key: date, value: rows) in days.entries) TransactionDay(rows, date)];

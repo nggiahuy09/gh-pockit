@@ -438,11 +438,22 @@ Future<void> _pumpApp(WidgetTester tester, {String at = Routes.transactions}) as
 }
 
 /// For a one-shot read (`.first`), as the edit form's load is: the database was opened outside the fake zone, so its future completes only in real time.
+/// Real time passes in short steps until the form's spinner is gone: a single guessed delay is one a busy machine can overrun.
 Future<void> _settleRead(WidgetTester tester) async {
   await tester.pump();
-  await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+  for (var step = 0; step < _settleReadSteps && _spinner.evaluate().isNotEmpty; step++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+    await tester.pump();
+  }
+  // Still loading after the last step: this settle times out and fails the test, rather than leaving it to hang.
   await tester.pumpAndSettle();
 }
+
+/// About two seconds of real time: far beyond a local read, so reaching it means the read never came back.
+const _settleReadSteps = 400;
+
+/// Offstage included: a pushed route spends its first frame offstage, so the default finder would see no spinner and stop waiting at once.
+final Finder _spinner = find.byType(CircularProgressIndicator, skipOffstage: false);
 
 /// Cold on the edit form, whose load would keep a plain settle spinning.
 Future<void> _pumpEditForm(WidgetTester tester, String transactionId) async {

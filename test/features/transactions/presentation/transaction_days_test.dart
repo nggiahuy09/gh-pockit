@@ -3,6 +3,7 @@ import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/localization/locale_vi/locale_vi.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_list_item.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/presentation/transaction_days.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -22,8 +23,8 @@ void main() {
       ]);
 
       expect(days.map((day) => day.date), [DateTime(2026, 10, 5), DateTime(2026, 10, 4)]);
-      expect(days.first.transactions.map((t) => t.id), ['tx-4', 'tx-3']);
-      expect(days.last.transactions.map((t) => t.id), ['tx-2', 'tx-1']);
+      expect(days.first.items.map((item) => item.transaction.id), ['tx-4', 'tx-3']);
+      expect(days.last.items.map((item) => item.transaction.id), ['tx-2', 'tx-1']);
     });
 
     test('splits at local midnight, not at UTC midnight', () {
@@ -64,14 +65,18 @@ void main() {
 }
 
 // Local wall-clock times, so the tests read the same in any time zone.
-TransactionEntity _at(DateTime local, String id) => okValue(
-  TransactionEntity.create(
-    amount: Money(45000, 'VND'),
-    type: TransactionType.expense,
-    createdAt: DateTime.utc(2026, 10, 6),
-    occurredAt: local,
-    updatedAt: DateTime.utc(2026, 10, 6),
-    accountId: 'acc-cash',
-    id: id,
+TransactionListItem _at(DateTime local, String id) => TransactionListItem(
+  transaction: okValue(
+    TransactionEntity.create(
+      amount: Money(45000, 'VND'),
+      type: TransactionType.expense,
+      createdAt: DateTime.utc(2026, 10, 6),
+      occurredAt: local,
+      updatedAt: DateTime.utc(2026, 10, 6),
+      accountId: 'acc-cash',
+      id: id,
+    ),
   ),
+  category: null,
+  accountName: 'Ví tiền mặt',
 );

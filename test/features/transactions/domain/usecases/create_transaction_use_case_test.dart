@@ -23,16 +23,18 @@ final _occurredAt = DateTime.utc(2026, 9, 30, 5, 30);
 /// Real repositories on in-memory SQL: what matters is the answer a real `watchCategory` gives (live, deleted, another owner's, unreadable).
 void main() {
   late GPAppDatabase db;
+  late FakeClock clock;
   late CreateTransactionUseCase createTransaction;
 
   setUp(() async {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
-    final clock = FakeClock(DateTime.utc(2026, 9, 30, 9));
+    clock = FakeClock(DateTime.utc(2026, 9, 30, 9));
     final uuid = FakeUuidGenerator();
     final logger = RecordingLogger(clock);
 
     createTransaction = CreateTransactionUseCase(
       CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
+      clock,
       TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
     );
 
@@ -120,6 +122,17 @@ void main() {
     );
   });
 
+  test('takes any time today, even one still ahead of the clock, and refuses the first moment of tomorrow (ADR-0022)', () async {
+    final today = clock.nowUtc().toLocal();
+
+    expect(await _create(createTransaction, occurredAt: DateTime(today.year, today.month, today.day, 23, 59, 59, 999)), isA<GPOk<TransactionEntity>>());
+    expect(
+      await _create(createTransaction, occurredAt: DateTime(today.year, today.month, today.day + 1)),
+      const GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionDateInFuture)),
+    );
+    expect(await db.select(db.transactionsTable).get(), hasLength(1));
+  });
+
   test('the input logs ids and the type, never the amount or the note', () {
     final input = CreateTransactionInput(amount: Money(125000, 'VND'), type: TransactionType.expense, occurredAt: _occurredAt, accountId: 'acc-cash', note: 'Phở');
 
@@ -150,11 +163,12 @@ Future<GPResult<TransactionEntity>> _create(
   String? categoryId,
   String? destinationAccountId,
   int amountMinorUnits = 125000,
+  DateTime? occurredAt,
 }) => useCase.execute(
   CreateTransactionInput(
     amount: Money(amountMinorUnits, 'VND'),
     type: type,
-    occurredAt: _occurredAt,
+    occurredAt: occurredAt ?? _occurredAt,
     accountId: accountId,
     categoryId: categoryId,
     destinationAccountId: destinationAccountId,

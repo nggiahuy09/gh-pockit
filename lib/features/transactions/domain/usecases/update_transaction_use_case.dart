@@ -4,23 +4,28 @@ import '../../../../core/domain/loggable.dart';
 import '../../../../core/domain/use_case.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/utils/clock.dart';
 import '../../../categories/domain/repositories/category_repository.dart';
 import '../entities/transaction_entity.dart';
 import '../repositories/transaction_repository.dart';
 import 'refusal_from_category.dart';
+import 'refusal_from_occurred_at.dart';
 
-/// ADR-0010 rule 3, judged only when the edit changes the filing: a transaction under a category deleted since must stay editable.
+/// ADR-0010 rule 3 and ADR-0022, each judged only when the edit changes what it is about: a transaction under a category deleted since, or dated
+/// ahead by another device's clock, must stay editable.
 final class UpdateTransactionUseCase with GPUseCase<UpdateTransactionInput, TransactionEntity> {
-  const UpdateTransactionUseCase(this._categoryRepository, this._transactionRepository);
+  const UpdateTransactionUseCase(this._categoryRepository, this._clock, this._transactionRepository);
 
   final CategoryRepository _categoryRepository;
+  final GPClock _clock;
   final TransactionRepository _transactionRepository;
 
   @override
   Future<GPResult<TransactionEntity>> execute(UpdateTransactionInput input) async {
     final transaction = input.transaction;
     final categoryId = transaction.categoryId;
-    if (categoryId == null) return _transactionRepository.updateTransaction(transaction);
+    final dateRefused = refusalFromOccurredAt(transaction.occurredAt, clock: _clock);
+    if (categoryId == null && dateRefused == null) return _transactionRepository.updateTransaction(transaction);
 
     final TransactionEntity? stored;
     try {
@@ -31,11 +36,15 @@ final class UpdateTransactionUseCase with GPUseCase<UpdateTransactionInput, Tran
 
     if (stored == null) return const GPErr(GPNotFoundFailure());
 
-    // A stale edit skips the rule: the version guard reports it as a conflict instead.
-    final filingChanged = stored.categoryId != categoryId || stored.type != transaction.type;
-    if (stored.version == transaction.version && filingChanged) {
-      final refused = await refusalFromCategory(_categoryRepository, type: transaction.type, categoryId: categoryId);
-      if (refused != null) return GPErr(refused);
+    // A stale edit skips both rules: the version guard reports it as a conflict instead.
+    if (stored.version == transaction.version) {
+      final filingChanged = stored.categoryId != categoryId || stored.type != transaction.type;
+      if (categoryId != null && filingChanged) {
+        final refused = await refusalFromCategory(_categoryRepository, type: transaction.type, categoryId: categoryId);
+        if (refused != null) return GPErr(refused);
+      }
+
+      if (dateRefused != null && stored.occurredAt != transaction.occurredAt) return GPErr(dateRefused);
     }
 
     return _transactionRepository.updateTransaction(transaction);

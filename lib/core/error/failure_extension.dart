@@ -23,6 +23,7 @@ extension GPFailureExtension on GPFailure {
         GPValidationCode.transactionCurrencyMismatch => errorLocale.validationTransactionCurrencyMismatch,
         GPValidationCode.transactionTransferCurrenciesDiffer => errorLocale.validationTransactionTransferCurrenciesDiffer,
         GPValidationCode.transactionCategoryTypeMismatch => errorLocale.validationTransactionCategoryTypeMismatch,
+        GPValidationCode.transactionDateInFuture => errorLocale.validationTransactionDateInFuture,
       },
       GPConflictFailure() => errorLocale.conflict,
       GPNotFoundFailure() => errorLocale.notFound,

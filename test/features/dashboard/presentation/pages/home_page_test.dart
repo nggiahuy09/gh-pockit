@@ -5,13 +5,17 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_view.dart';
+import 'package:ghpockit/features/transactions/domain/entities/category_spending.dart';
+import 'package:ghpockit/features/transactions/domain/entities/income_expense_totals.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
@@ -35,7 +39,8 @@ void main() {
     _repositories = InMemoryRepositories();
     getIt
       ..registerSingleton<AccountRepository>(_repositories.accounts)
-      ..registerSingleton<TransactionRepository>(_repositories.transactions);
+      ..registerSingleton<TransactionRepository>(_repositories.transactions)
+      ..registerSingleton<GPClock>(_repositories.clock);
   });
 
   tearDown(() async {
@@ -109,4 +114,91 @@ void main() {
     expect(find.text('Could not read local data.'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
+
+  group('the month card', () {
+    testWidgets("shows this month's income, spending and the difference; a transfer and last month count as neither", (tester) async {
+      final cash = okValue(await _repositories.accounts.createAccount(initialBalance: Money(0, 'VND'), type: AccountType.cash, name: 'Cash wallet'));
+      final bank = okValue(await _repositories.accounts.createAccount(initialBalance: Money(0, 'VND'), type: AccountType.bank, name: 'Salary'));
+      await _record(TransactionType.income, 900000, DateTime(2026, 9, 1, 8), cash.id);
+      await _record(TransactionType.expense, 45000, DateTime(2026, 9, 5), cash.id);
+      await _record(TransactionType.expense, 1, DateTime(2026, 8, 31, 23), cash.id);
+      await _record(TransactionType.transfer, 200000, DateTime(2026, 9, 6), cash.id, destinationAccountId: bank.id);
+      await _pumpApp(tester);
+
+      expect(find.text('September 2026'), findsOneWidget);
+      expect(find.text('₫855,000'), findsOneWidget);
+      expect(find.text('+₫900,000'), findsOneWidget);
+      expect(find.text('-₫45,000'), findsOneWidget);
+    });
+
+    testWidgets('a month with nothing in it reads 0, unsigned, and the breakdown says there is no spending yet', (tester) async {
+      await _seedAccount(AccountType.cash, 'Cash wallet');
+      await _pumpApp(tester);
+
+      expect(find.text('₫0'), findsNWidgets(4), reason: "net, income and spending, then the account's balance");
+      expect(find.text('+₫0'), findsNothing);
+      expect(find.text('-₫0'), findsNothing);
+      expect(find.text('No spending this month yet'), findsOneWidget);
+    });
+  });
+
+  group('spending by category', () {
+    testWidgets('lists the three largest with their share, "Uncategorised" last, and the rest on one line', (tester) async {
+      final cash = okValue(await _repositories.accounts.createAccount(initialBalance: Money(0, 'VND'), type: AccountType.cash, name: 'Cash wallet'));
+      for (final (name, amount) in [('Food', 2140000), ('Bills', 1486000), ('Transport', 962000), ('Shopping', 890000), ('Fun', 420000)]) {
+        final category = okValue(await _repositories.categories.createCategory(type: CategoryType.expense, name: name));
+        await _record(TransactionType.expense, amount, DateTime(2026, 9, 5), cash.id, categoryId: category.id);
+      }
+      await _record(TransactionType.expense, 316000, DateTime(2026, 9, 6), cash.id);
+      await _pumpApp(tester);
+
+      expect(find.text('Spending by category'), findsOneWidget);
+      expect(find.text('Food'), findsOneWidget);
+      expect(find.text('34%'), findsOneWidget);
+      expect(find.text('Transport'), findsOneWidget);
+      expect(find.text('Shopping'), findsNothing);
+      expect(find.text('Uncategorised'), findsOneWidget);
+      expect(find.text('2 more categories'), findsOneWidget);
+      expect(find.text('₫1,310,000'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Uncategorised')).dy, greaterThan(tester.getTopLeft(find.text('Transport')).dy));
+      expect(find.bySemanticsLabel("Food, ₫2,140,000, 34% of this month's spending"), findsOneWidget);
+    });
+
+    testWidgets('a breakdown that cannot be read shows its failure in place, and the rest of Home still shows', (tester) async {
+      await getIt.unregister<TransactionRepository>();
+      getIt.registerSingleton<TransactionRepository>(_FailingBreakdownRepository(_repositories.transactions));
+      await _seedAccount(AccountType.cash, 'Cash wallet');
+      await _pumpApp(tester);
+
+      expect(find.text('Could not read local data.'), findsOneWidget);
+      expect(find.text('This part comes back by itself the next time data is saved.'), findsOneWidget);
+      expect(find.text('September 2026'), findsOneWidget);
+      expect(find.text('Cash wallet'), findsOneWidget);
+    });
+  });
+}
+
+Future<void> _record(TransactionType type, int minorUnits, DateTime at, String accountId, {String? categoryId, String? destinationAccountId}) async => okValue(
+  await _repositories.transactions.createTransaction(
+    amount: Money(minorUnits, 'VND'),
+    type: type,
+    occurredAt: at,
+    accountId: accountId,
+    categoryId: categoryId,
+    destinationAccountId: destinationAccountId,
+  ),
+);
+
+/// The real repository for everything but the breakdown, so the other sections still show.
+final class _FailingBreakdownRepository extends FakeTransactionRepository {
+  _FailingBreakdownRepository(this._real) : super(_real.watchAccountBalances());
+
+  final TransactionRepository _real;
+
+  @override
+  Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to}) =>
+      _real.watchIncomeExpenseTotals(currencyCode: currencyCode, from: from, to: to);
+
+  @override
+  Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to}) => Stream.error(const GPDatabaseFailure());
 }

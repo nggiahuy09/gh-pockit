@@ -2,6 +2,8 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/money/money.dart';
 import '../../../accounts/domain/entities/account_balance.dart';
+import '../entities/category_spending.dart';
+import '../entities/income_expense_totals.dart';
 import '../entities/transaction_entity.dart';
 import '../entities/transaction_list_snapshot.dart';
 import '../entities/transaction_query.dart';
@@ -42,4 +44,10 @@ abstract class TransactionRepository {
 
   /// Every live, unarchived account with its balance, in one query so both are one snapshot (ADR-0019).
   Stream<List<AccountBalance>> watchAccountBalances();
+
+  /// Over `[from, to)`, in [currencyCode] only; zero when nothing matches (ADR-0021).
+  Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to});
+
+  /// Expenses over `[from, to)` per category, largest first, in [currencyCode] only (ADR-0021).
+  Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to});
 }

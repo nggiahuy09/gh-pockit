@@ -9,6 +9,7 @@ import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
+import 'package:ghpockit/features/transactions/domain/entities/income_expense_totals.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
@@ -21,6 +22,8 @@ import '../../../../helpers/results.dart';
 
 final _startedAt = DateTime.utc(2026, 9, 28, 9);
 final _occurredAt = DateTime.utc(2026, 9, 28, 5, 30);
+final _monthStart = DateTime.utc(2026, 9);
+final _monthEnd = DateTime.utc(2026, 10);
 const _otherOwner = 'someone-else';
 
 /// Real in-memory SQL with the real DAO, not a mock: a mock would only restate which DAO methods the repository calls.
@@ -305,6 +308,43 @@ void main() {
     });
   });
 
+  group('watchIncomeExpenseTotals', () {
+    test('returns both as Money in the asked currency, zero when nothing matches', () async {
+      okValue(await _create(repository, amount: Money(900000, 'VND'), type: TransactionType.income, categoryId: null));
+      okValue(await _create(repository, amount: Money(45000, 'VND')));
+      okValue(await _create(repository, amount: Money(1250, 'USD'), accountId: 'acc-usd', categoryId: null));
+
+      final totals = await repository.watchIncomeExpenseTotals(currencyCode: 'VND', from: _monthStart, to: _monthEnd).first;
+
+      expect(totals, IncomeExpenseTotals(income: Money(900000, 'VND'), expense: Money(45000, 'VND')));
+      expect(totals.net, Money(855000, 'VND'));
+      expect(
+        await repository.watchIncomeExpenseTotals(currencyCode: 'VND', from: _monthEnd, to: _monthEnd.add(const Duration(days: 30))).first,
+        IncomeExpenseTotals(income: Money(0, 'VND'), expense: Money(0, 'VND')),
+      );
+    });
+  });
+
+  group('watchSpendingByCategory', () {
+    test('maps each live category to its entity, and the uncategorised group to null', () async {
+      okValue(await _create(repository, amount: Money(45000, 'VND')));
+      okValue(await _create(repository, amount: Money(7000, 'VND'), categoryId: null));
+
+      final spending = await repository.watchSpendingByCategory(currencyCode: 'VND', from: _monthStart, to: _monthEnd).first;
+
+      expect(spending.map((row) => (row.category?.id, row.amount)), [('cat-food', Money(45000, 'VND')), (null, Money(7000, 'VND'))]);
+      expect(spending.first.category?.nameKey, 'category.food');
+    });
+
+    test('a category row that will not map fails the breakdown, logged by id and reason only', () async {
+      okValue(await _create(repository, amount: Money(45000, 'VND')));
+      await (db.update(db.categoriesTable)..where((c) => c.id.equals('cat-food'))).write(const CategoriesTableCompanion(type: Value('savings')));
+
+      await expectLater(repository.watchSpendingByCategory(currencyCode: 'VND', from: _monthStart, to: _monthEnd), emitsError(const GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'category', 'id': 'cat-food', 'reason': 'unknownType'});
+    });
+  });
+
   group('hasLiveTransactions', () {
     test('answers yes for either side of a transfer, and no for an account nothing touches', () async {
       okValue(await _create(repository, type: TransactionType.transfer, categoryId: null, destinationAccountId: 'acc-bank'));
@@ -409,6 +449,41 @@ void main() {
       final rejected = logger.records.where((r) => r.message == 'transaction row could not be mapped').toList();
       expect(rejected, hasLength(1));
       expect(rejected.single.fields, {'entity': 'transaction', 'id': 'tx-bad', 'reason': 'unknownType'});
+    });
+  });
+
+  group('watchTransactions, the names each item shows', () {
+    test('a live category maps to its entity, none or a deleted one to null, and the account names come through', () async {
+      final food = okValue(await _create(repository, at: _occurredAt));
+      final none = okValue(await _create(repository, at: _occurredAt.add(const Duration(minutes: 1)), categoryId: null));
+      final move = okValue(
+        await _create(repository, at: _occurredAt.add(const Duration(minutes: 2)), type: TransactionType.transfer, categoryId: null, destinationAccountId: 'acc-bank'),
+      );
+
+      final items = {for (final item in (await repository.watchTransactions(TransactionQuery(limit: 50)).first).items) item.transaction.id: item};
+
+      expect(items[food.id]?.category?.nameKey, 'category.food');
+      expect(items[food.id]?.accountName, 'acc-cash');
+      expect(items[none.id]?.category, isNull);
+      expect((items[move.id]?.accountName, items[move.id]?.destinationAccountName), ('acc-cash', 'acc-bank'));
+
+      await (db.update(db.categoriesTable)..where((c) => c.id.equals('cat-food'))).write(const CategoriesTableCompanion(deletedAt: Value(1)));
+
+      final afterDelete = (await repository.watchTransactions(TransactionQuery(limit: 50)).first).items;
+      expect(afterDelete.firstWhere((item) => item.transaction.id == food.id).category, isNull, reason: 'a deleted category reads "Uncategorised" (ADR-0010)');
+    });
+
+    test('a category row that will not map leaves the transaction listed, uncategorised, and is logged once by id and reason', () async {
+      okValue(await _create(repository));
+      await (db.update(db.categoriesTable)..where((c) => c.id.equals('cat-food'))).write(const CategoriesTableCompanion(type: Value('savings')));
+
+      final snapshot = await repository.watchTransactions(TransactionQuery(limit: 50)).first;
+
+      expect(snapshot.items.single.category, isNull);
+      expect(snapshot.unreadableCount, 0);
+      expect(logger.records.where((record) => record.fields['entity'] == 'category').map((record) => record.fields), [
+        {'entity': 'category', 'id': 'cat-food', 'reason': 'unknownType'},
+      ]);
     });
   });
 
@@ -539,6 +614,15 @@ void main() {
       expect(logger.last.fields, {'entity': 'account'});
     });
 
+    test('both aggregates report it too, logged against transactions', () async {
+      final failing = _repositoryOver(_FailingStreamTransactionDao(db, SqliteException(10, 'disk I/O error')), clock: clock, logger: logger, uuid: uuid);
+
+      await expectLater(failing.watchIncomeExpenseTotals(currencyCode: 'VND', from: _monthStart, to: _monthEnd), emitsError(const GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'transaction'});
+      await expectLater(failing.watchSpendingByCategory(currencyCode: 'VND', from: _monthStart, to: _monthEnd), emitsError(const GPDatabaseFailure()));
+      expect(logger.last.fields, {'entity': 'transaction'});
+    });
+
     test('watchTransaction reports it too, and logs the id', () async {
       await expectLater(
         _repositoryOver(_FailingStreamTransactionDao(db, SqliteException(10, 'disk I/O error')), clock: clock, logger: logger, uuid: uuid).watchTransaction('tx-1'),
@@ -652,7 +736,7 @@ final class _FailingStreamTransactionDao extends TransactionDao {
   final Object _error;
 
   @override
-  Stream<List<TransactionRow>> watchTransactions(
+  Stream<List<TransactionListRow>> watchTransactions(
     String ownerId, {
     Set<String>? accountIds,
     Set<String>? categoryIds,
@@ -667,4 +751,12 @@ final class _FailingStreamTransactionDao extends TransactionDao {
 
   @override
   Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) => Stream.error(_error);
+
+  @override
+  Stream<({int incomeMinor, int expenseMinor})> watchIncomeExpenseTotals(String ownerId, {required String currencyCode, required int fromMillis, required int toMillis}) =>
+      Stream.error(_error);
+
+  @override
+  Stream<List<({CategoryRow? category, int spentMinor})>> watchSpendingByCategory(String ownerId, {required String currencyCode, required int fromMillis, required int toMillis}) =>
+      Stream.error(_error);
 }

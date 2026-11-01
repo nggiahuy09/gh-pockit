@@ -82,4 +82,7 @@ enum GPValidationCode {
 
   /// Checked by the use cases: it needs the category row (ADR-0010).
   transactionCategoryTypeMismatch,
+
+  /// Checked by the use cases: it needs today's date (ADR-0022).
+  transactionDateInFuture,
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_list_item.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
@@ -15,9 +16,9 @@ void main() {
   });
 
   test('hands out a list that cannot be changed', () {
-    final built = TransactionListSnapshot(transactions: [_transaction('tx-1')], unreadableCount: 0, hasMore: false);
+    final built = TransactionListSnapshot(items: [_item('tx-1')], unreadableCount: 0, hasMore: false);
 
-    expect(() => built.transactions.add(_transaction('tx-3')), throwsUnsupportedError);
+    expect(() => built.items.add(_item('tx-3')), throwsUnsupportedError);
     expect(built.transactions, hasLength(1));
   });
 
@@ -38,14 +39,14 @@ void main() {
       expect(base, isNot(_snapshot(ids: const ['tx-2'])));
       expect(base, isNot(_snapshot(unreadableCount: 1)));
       expect(base, isNot(_snapshot(hasMore: true)));
-      expect(base, isNot(TransactionListSnapshot(transactions: [_transaction('tx-2', 'Bún chả'), _transaction('tx-1')], unreadableCount: 0, hasMore: false)));
+      expect(base, isNot(TransactionListSnapshot(items: [_item('tx-2', 'Bún chả'), _item('tx-1')], unreadableCount: 0, hasMore: false)));
     });
   });
 
   test('toString carries counts only — no amount and no note', () {
     final text = _snapshot(unreadableCount: 1, hasMore: true).toString();
 
-    expect(text, 'TransactionListSnapshot(transactions: 2, unreadableCount: 1, hasMore: true)');
+    expect(text, 'TransactionListSnapshot(items: 2, unreadableCount: 1, hasMore: true)');
     expect(text, isNot(contains('125000')));
     expect(text, isNot(contains('Phở')));
   });
@@ -65,4 +66,6 @@ TransactionEntity _transaction(String id, [String note = 'Phở bò']) => okValu
 );
 
 TransactionListSnapshot _snapshot({List<String> ids = const ['tx-2', 'tx-1'], int unreadableCount = 0, bool hasMore = false}) =>
-    TransactionListSnapshot(transactions: [for (final id in ids) _transaction(id)], unreadableCount: unreadableCount, hasMore: hasMore);
+    TransactionListSnapshot(items: [for (final id in ids) _item(id)], unreadableCount: unreadableCount, hasMore: hasMore);
+
+TransactionListItem _item(String id, [String note = 'Phở bò']) => TransactionListItem(transaction: _transaction(id, note), category: null, accountName: 'Ví tiền mặt');

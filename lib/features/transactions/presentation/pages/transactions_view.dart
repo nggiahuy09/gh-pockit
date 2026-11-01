@@ -167,7 +167,7 @@ final class _TransactionList extends StatelessWidget {
         slivers: [
           if (failure != null) SliverToBoxAdapter(child: TransactionListBannerWidget.error(message: failure.getMessage(locale))),
           if (snapshot.unreadableCount > 0) SliverToBoxAdapter(child: TransactionListBannerWidget.notice(message: viewLocale.unreadable(snapshot.unreadableCount))),
-          for (final day in groupByLocalDay(snapshot.transactions))
+          for (final day in groupByLocalDay(snapshot.items))
             SliverMainAxisGroup(
               slivers: [
                 TransactionDayHeaderWidget(
@@ -175,7 +175,7 @@ final class _TransactionList extends StatelessWidget {
                 ),
                 SliverToBoxAdapter(
                   child: TransactionDayCardWidget(
-                    transactions: day.transactions,
+                    items: day.items,
                     onOpen: (transaction) => unawaited(_handleOpen(context, transaction)),
                     onDelete: (transaction) => _handleDelete(context, transaction),
                   ),

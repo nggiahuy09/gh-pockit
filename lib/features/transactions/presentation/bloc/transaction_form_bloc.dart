@@ -42,9 +42,9 @@ final class TransactionFormBloc extends Bloc<TransactionFormEvent, TransactionFo
   }
 
   final GPClock _clock = getIt.get<GPClock>();
-  final _createTransaction = CreateTransactionUseCase(getIt.get<CategoryRepository>(), getIt.get<TransactionRepository>());
+  late final _createTransaction = CreateTransactionUseCase(getIt.get<CategoryRepository>(), _clock, getIt.get<TransactionRepository>());
   final _deleteTransaction = DeleteTransactionUseCase(getIt.get<TransactionRepository>());
-  final _updateTransaction = UpdateTransactionUseCase(getIt.get<CategoryRepository>(), getIt.get<TransactionRepository>());
+  late final _updateTransaction = UpdateTransactionUseCase(getIt.get<CategoryRepository>(), _clock, getIt.get<TransactionRepository>());
   final _watchAccounts = WatchAccountsUseCase(getIt.get<AccountRepository>());
   final _watchCategories = WatchCategoriesUseCase(getIt.get<CategoryRepository>());
   final _watchTransaction = WatchTransactionUseCase(getIt.get<TransactionRepository>());
@@ -163,7 +163,7 @@ final class TransactionFormBloc extends Bloc<TransactionFormEvent, TransactionFo
       emit(state._copyWith(failure: _failureAfterEdit(TransactionFormField.amount), amountMinorUnits: GPValueWrapper(minorUnits)));
 
   void _dateChangeHandler(DateTime day, Emitter<TransactionFormState> emit) =>
-      emit(state._copyWith(failure: _failureAfterEdit(null), pickedDay: DateTime(day.year, day.month, day.day)));
+      emit(state._copyWith(failure: _failureAfterEdit(TransactionFormField.date), pickedDay: DateTime(day.year, day.month, day.day)));
 
   void _noteChangeHandler(String note, Emitter<TransactionFormState> emit) => emit(state._copyWith(failure: _failureAfterEdit(TransactionFormField.note), note: note));
 

@@ -11,6 +11,7 @@ import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_list_item.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
@@ -426,7 +427,11 @@ TransactionEntity _transaction(int n) => okValue(
 TransactionListSnapshot _snapshotOf({required int limit, required int rows, int unreadable = 0}) {
   assert(rows + unreadable <= limit, 'a window never returns more rows than its limit');
 
-  return TransactionListSnapshot(transactions: [for (var i = 0; i < rows; i++) _transaction(i)], unreadableCount: unreadable, hasMore: rows + unreadable == limit);
+  return TransactionListSnapshot(
+    items: [for (var i = 0; i < rows; i++) TransactionListItem(transaction: _transaction(i), category: null, accountName: 'Ví')],
+    unreadableCount: unreadable,
+    hasMore: rows + unreadable == limit,
+  );
 }
 
 TransactionListBloc _fresh() {

@@ -126,12 +126,12 @@ final class _TransactionFormState extends State<_TransactionForm> {
     return DateTime(shown.year, shown.month, shown.day);
   }
 
-  /// A planned expense may be dated ahead; a year covers rent and insurance. Widened to the day shown, which an edit may have outside it.
+  /// Up to today: nothing is dated ahead (ADR-0022). Widened to the day shown, which an edit may have outside it.
   ({DateTime first, DateTime last}) get _dateBounds {
     final today = widget.today;
     final day = _day;
     final first = DateTime(2000);
-    final last = DateTime(today.year + 1, today.month, today.day);
+    final last = DateTime(today.year, today.month, today.day);
     return (first: day.isBefore(first) ? day : first, last: day.isAfter(last) ? day : last);
   }
 
@@ -266,10 +266,12 @@ final class _TransactionFormState extends State<_TransactionForm> {
             ),
           SizedBox(height: spacing.md),
           GPDateField(
+            focusNode: _focusNodes[TransactionFormField.date],
             firstDate: dateBounds.first,
             lastDate: dateBounds.last,
             today: widget.today,
             value: _day,
+            errorText: failedField == TransactionFormField.date ? failureMessage : null,
             label: viewLocale.fieldDate,
             onChanged: _handleDateChange,
           ),

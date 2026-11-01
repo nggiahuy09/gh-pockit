@@ -4,7 +4,10 @@ import 'package:flutter/semantics.dart';
 import '../../../../core/localization/localization_scope.dart';
 import '../../../../core/theme/theme_context.dart';
 import '../../../../core/widgets/money_text.dart';
+import '../../../categories/presentation/category_entity_extension.dart';
+import '../../../categories/presentation/widgets/category_icon_widget.dart';
 import '../../domain/entities/transaction_entity.dart';
+import '../../domain/entities/transaction_list_item.dart';
 import '../transaction_entity_extension.dart';
 
 /// Stays pinned while its day is on screen, so the rows under it always say which day they belong to.
@@ -68,9 +71,9 @@ final class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
 }
 
 final class TransactionDayCardWidget extends StatelessWidget {
-  const TransactionDayCardWidget({super.key, required this.transactions, this.onOpen, this.onDelete});
+  const TransactionDayCardWidget({super.key, required this.items, this.onOpen, this.onDelete});
 
-  final List<TransactionEntity> transactions;
+  final List<TransactionListItem> items;
   final void Function(TransactionEntity transaction)? onOpen;
 
   /// Swiping a row away, or the screen reader's delete action. Completes true once the row is deleted; false puts a swiped row back.
@@ -93,16 +96,16 @@ final class TransactionDayCardWidget extends StatelessWidget {
             type: MaterialType.transparency,
             child: Column(
               children: [
-                for (var i = 0; i < transactions.length; i++)
+                for (var i = 0; i < items.length; i++)
                   _DeletableRow(
-                    key: ValueKey(transactions[i].id),
-                    transaction: transactions[i],
+                    key: ValueKey(items[i].transaction.id),
+                    transaction: items[i].transaction,
                     onDelete: onDelete,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
                       ),
-                      child: TransactionRowWidget(transaction: transactions[i], onTap: onOpen == null ? null : () => onOpen.call(transactions[i])),
+                      child: TransactionRowWidget(item: items[i], onTap: onOpen == null ? null : () => onOpen.call(items[i].transaction)),
                     ),
                   ),
               ],
@@ -153,17 +156,28 @@ final class _DeletableRow extends StatelessWidget {
   }
 }
 
-/// Only the title is ever cut short; the amount always shows in full.
+/// The canvas's W7 row: the category's disc, the title over "category · account" (or "from → to"), and the amount. Only the two text lines are ever
+/// cut short; the amount always shows in full.
 final class TransactionRowWidget extends StatelessWidget {
-  const TransactionRowWidget({super.key, required this.transaction, this.onTap});
+  const TransactionRowWidget({super.key, required this.item, this.onTap});
 
-  final TransactionEntity transaction;
+  final TransactionListItem item;
   final void Function()? onTap;
 
-  static const minHeight = 56.0;
+  static const minHeight = 64.0;
+
+  String _subtitleOf(BuildContext context) {
+    final locale = context.l10n;
+    final destination = item.destinationAccountName;
+    if (destination != null) return '${item.accountName} → $destination';
+
+    final category = item.category;
+    return '${category == null ? locale.transactions.uncategorised : category.getTitle(locale)} · ${item.accountName}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final transaction = item.transaction;
     final colors = context.colors;
     final spacing = context.spacing;
     final textStyle = context.text.bodyLarge;
@@ -173,20 +187,38 @@ final class TransactionRowWidget extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: spacing.md, vertical: spacing.sm),
         child: Row(
+          spacing: spacing.smd,
           children: [
-            if (transaction.type.isTransfer) ...[
-              Icon(Icons.swap_horiz, size: 18.0, color: colors.onSurfaceVariant),
-              const SizedBox(width: 6.0),
-            ],
+            if (transaction.type.isTransfer)
+              SizedBox.square(
+                dimension: CategoryIconWidget.size,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
+                  child: Icon(Icons.swap_horiz, size: 20.0, color: colors.onSurfaceVariant),
+                ),
+              )
+            else
+              CategoryIconWidget(category: item.category),
             Expanded(
-              child: Text(
-                transaction.getTitle(context.l10n),
-                style: textStyle.copyWith(color: colors.onSurface),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    transaction.getTitle(context.l10n),
+                    style: textStyle.copyWith(color: colors.onSurface),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    _subtitleOf(context),
+                    style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
-            SizedBox(width: spacing.smd),
             GPMoneyText(
               style: textStyle.copyWith(fontWeight: FontWeight.w600, color: colors.onSurface),
               amount: transaction.amount,
@@ -297,9 +329,25 @@ final class TransactionListSkeletonWidget extends StatelessWidget {
                           child: Padding(
                             padding: EdgeInsets.symmetric(horizontal: spacing.md),
                             child: Row(
+                              spacing: spacing.smd,
                               children: [
-                                _SkeletonBar(height: 14.0, width: title),
-                                const Spacer(),
+                                SizedBox.square(
+                                  dimension: CategoryIconWidget.size,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(color: colors.surfaceVariant, shape: BoxShape.circle),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    spacing: spacing.xs,
+                                    children: [
+                                      _SkeletonBar(height: 14.0, width: title),
+                                      const _SkeletonBar(height: 10.0, width: 96.0),
+                                    ],
+                                  ),
+                                ),
                                 _SkeletonBar(height: 14.0, width: amount),
                               ],
                             ),

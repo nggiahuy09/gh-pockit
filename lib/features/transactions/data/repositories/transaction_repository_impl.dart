@@ -9,7 +9,12 @@ import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../../accounts/data/mapper/account_mapper.dart';
 import '../../../accounts/domain/entities/account_balance.dart';
+import '../../../categories/data/mapper/category_mapper.dart';
+import '../../../categories/domain/entities/category_entity.dart';
+import '../../domain/entities/category_spending.dart';
+import '../../domain/entities/income_expense_totals.dart';
 import '../../domain/entities/transaction_entity.dart';
+import '../../domain/entities/transaction_list_item.dart';
 import '../../domain/entities/transaction_list_snapshot.dart';
 import '../../domain/entities/transaction_query.dart';
 import '../../domain/entities/transaction_type.dart';
@@ -53,22 +58,29 @@ final class TransactionRepositoryImpl implements TransactionRepository {
           toMillis: query.to?.millisecondsSinceEpoch,
         )
         .transform(
-          StreamTransformer<List<TransactionRow>, TransactionListSnapshot>.fromHandlers(
+          StreamTransformer<List<TransactionListRow>, TransactionListSnapshot>.fromHandlers(
             handleData: (rows, sink) {
-              final transactions = <TransactionEntity>[];
+              final items = <TransactionListItem>[];
               var unreadable = 0;
               for (final row in rows) {
-                switch (row.toDomain()) {
+                switch (row.transaction.toDomain()) {
                   case MappedTransaction(:final transaction):
-                    transactions.add(transaction);
+                    items.add(
+                      TransactionListItem(
+                        transaction: transaction,
+                        category: _listedCategory(row.category, logged),
+                        accountName: row.accountName,
+                        destinationAccountName: row.destinationAccountName,
+                      ),
+                    );
                   case UnmappableTransactionRow(:final reason):
                     unreadable++;
-                    if (logged.add(row.id)) _logRejectedRow(reason, row.id);
+                    if (logged.add(row.transaction.id)) _logRejectedRow(reason, row.transaction.id);
                 }
               }
 
               // Raw row count, refused rows included: a full window with one unreadable row may still have more (ADR-0011).
-              sink.add(TransactionListSnapshot(transactions: transactions, unreadableCount: unreadable, hasMore: rows.length >= query.limit));
+              sink.add(TransactionListSnapshot(items: items, unreadableCount: unreadable, hasMore: rows.length >= query.limit));
             },
             handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'transaction list read failed'),
           ),
@@ -237,6 +249,66 @@ final class TransactionRepositoryImpl implements TransactionRepository {
                 _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, entity: 'account', message: 'account balances read failed'),
           ),
         );
+  }
+
+  @override
+  Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to}) {
+    return _dao
+        .watchIncomeExpenseTotals(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+        .transform(
+          StreamTransformer<({int incomeMinor, int expenseMinor}), IncomeExpenseTotals>.fromHandlers(
+            handleData: (row, sink) => sink.add(IncomeExpenseTotals(income: Money(row.incomeMinor, currencyCode), expense: Money(row.expenseMinor, currencyCode))),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'income and expense totals read failed'),
+          ),
+        );
+  }
+
+  @override
+  Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to}) {
+    return _dao
+        .watchSpendingByCategory(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+        .transform(
+          StreamTransformer<List<({CategoryRow? category, int spentMinor})>, List<CategorySpending>>.fromHandlers(
+            handleData: (rows, sink) {
+              final spending = <CategorySpending>[];
+              for (final row in rows) {
+                final amount = Money(row.spentMinor, currencyCode);
+                final category = row.category;
+                if (category == null) {
+                  spending.add(CategorySpending(category: null, amount: amount));
+                  continue;
+                }
+
+                switch (category.toDomain()) {
+                  case MappedCategory(category: final entity):
+                    spending.add(CategorySpending(category: entity, amount: amount));
+                  case UnmappableCategoryRow(:final reason, :final failure):
+                    // As with balances: a breakdown with one category's money silently moved elsewhere is worse than an error.
+                    _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': category.id, 'reason': reason.name});
+                    sink.addError(failure);
+                    return;
+                }
+              }
+
+              sink.add(spending);
+            },
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'spending by category read failed'),
+          ),
+        );
+  }
+
+  /// Null reads "Uncategorised": none, a tombstone (ADR-0010), or a row that will not map. The last is the category's fault, not the transaction's, so
+  /// the row still shows; it is logged once per stream, by id and reason.
+  CategoryEntity? _listedCategory(CategoryRow? row, Set<String> logged) {
+    if (row == null || row.deletedAt != null) return null;
+
+    switch (row.toDomain()) {
+      case MappedCategory(:final category):
+        return category;
+      case UnmappableCategoryRow(:final reason):
+        if (logged.add(row.id)) _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': row.id, 'reason': reason.name});
+        return null;
+    }
   }
 
   /// Null when the write may go ahead. Call only inside the write's transaction.

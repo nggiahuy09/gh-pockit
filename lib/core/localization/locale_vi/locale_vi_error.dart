@@ -52,6 +52,9 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationTransactionCategoryTypeMismatch => 'Khoản chi cần danh mục chi, khoản thu cần danh mục thu.';
 
   @override
+  String get validationTransactionDateInFuture => 'Chọn hôm nay hoặc một ngày trước đó.';
+
+  @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override

@@ -789,11 +789,11 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | Ngày | Task                                                                                                                                                                                                                                                               |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó ✅ Done (20/10) — không thiếu index, schema giữ v4; chi tiết ở _W7 T2_ dưới |
-| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart                                                                                                                                                              |
-| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009)                                                                                                   |
-| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                                                                                                   |
-| T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
-| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                                                                                                         |
+| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart ✅ Done (01/11) — `TransactionDao.watchSpendingByCategory`, ADR-0021; chi tiết ở _W8 T3_ dưới                                                                |
+| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) ✅ Done (01/11) — chỉ VND, phương án A trên Home; chi tiết ở _W8 T4_ dưới                         |
+| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010) ✅ Done (01/11) — `TransactionListItem`, ADR-0024; chi tiết ở _W8 T5_ dưới                        |
+| T6   | Chuyển DB sang background isolate ✅ Done (01/11) — đã đúng từ W2 T2 (ADR-0001); thêm test cố định cấu hình, chi tiết ở _W8 T6_ dưới                                                                                                                               |
+| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước ✅ Done (01/11) — đã có trong test của T3/T4 (tổng tính tay, số canvas, biên tháng)                                                                                                                     |
 
 ### W8 T2 — audit index bằng `EXPLAIN QUERY PLAN` (20/10, làm sớm trong slot W7 T2)
 
@@ -811,6 +811,82 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
   trong một tháng, đổi lại mỗi lần ghi phải cập nhật thêm một index rộng, và ADR-0009 quy định index đi cùng query đầu tiên đọc nó → đợi số đo 50k của W9.
 - Không có test mới: plan test của aggregate viết ở **T3/T4** cùng query (seek owner index theo khoảng ngày, không `SCAN`), như `selectTransactions`.
   Audit hôm nay chỉ là ảnh chụp tại một thời điểm, không ngăn được plan đổi về sau.
+
+### W8 T3 — chi theo category trong một khoảng (01/11, ADR-0021)
+
+> Một câu SQL `GROUP BY`, không fold trong Dart. T3 dừng ở DAO; repository, entity, use case và Home là của **T4**.
+
+- [x] `TransactionDao.spendingByCategorySql` + `watchSpendingByCategory(ownerId, fromMillis:, toMillis:)`: chỉ `expense`, khoảng `[from, to)` do
+      caller tính từ tháng local (ADR-0009 §6), `GROUP BY c.id, t.currency_code`, trả về cả dòng category (`c.*`) — `readsFrom` cả hai bảng.
+- [x] Category đã xoá → nhóm "Chưa phân loại": điều kiện `c.deleted_at IS NULL` nằm trong `ON` của `LEFT JOIN`, nên giao dịch không bị rơi mà gộp
+      vào nhóm NULL cùng giao dịch không có category (ADR-0010). Nhiều category đã xoá vẫn chỉ ra một dòng.
+- [x] ~~**Một dòng cho mỗi (category, tiền tệ)**~~ — T4 đổi thành lọc một tiền tệ do nơi gọi truyền vào (amendment ADR-0021).
+- [x] Plan (SQLite 3.54.0), đúng như audit T2 dự đoán: `SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND
+occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
+      Không index mới, schema vẫn v4.
+- [x] 10 test DAO: tổng + thứ tự, chỉ expense (income / transfer / type lạ không cộng), biên `[from, to)`, category đã xoá gộp vào nhóm NULL, map dòng
+      category, tách theo tiền tệ, bỏ tombstone và owner khác, khoảng rỗng, re-emit khi ghi transaction và khi xoá category, plan test. 941 test xanh.
+- **Để T4:** tổng thu/chi tháng (`GROUP BY type`), khoảng tháng local → instant, entity (`CategorySpending`?) + map `CategoryRow` qua mapper của
+  categories, repository `watchCategoryBreakdown()`, use case, Home.
+
+### W8 T4 — tháng này trên Home (01/11, ADR-0021 amendment)
+
+> Chốt 01/11: (1) chỉ VND; (2) chi theo danh mục theo **phương án A** — thanh ngang xếp hạng, design ở trang canvas "W8 · Trang chủ";
+> (3) app mở xuyên qua đầu tháng thì vẫn giữ tháng cũ cho tới khi Home dựng lại.
+
+- [x] **DAO**: `incomeExpenseTotalsSql` (thu và chi trong một dòng `SUM(CASE …)`, khoảng rỗng ra 0, transfer không tính); câu của T3 bỏ
+      `GROUP BY` theo tiền tệ, thay bằng tham số `?2`. Plan cả hai: seek owner index theo khoảng, không `SCAN`.
+- [x] **Domain**: `IncomeExpenseTotals` (income, expense, `net`), `CategorySpending` (category null = "Chưa phân loại"), hai method repository
+      `watchIncomeExpenseTotals` / `watchSpendingByCategory`; `WatchMonthlySummaryUseCase` (giữ hằng `currency = VND`) và
+      `WatchCategoryBreakdownUseCase` (đọc hằng đó, nên các dòng luôn cộng ra đúng ô Chi tiêu). `GPCalendarMonth` (core): tháng local → hai mốc nửa đêm.
+- [x] **Home**: `HomeMonthSummaryBloc` + `HomeCategoryBreakdownBloc` (mỗi khối lỗi riêng); khối tháng (tiêu đề tháng, "Thu − chi tháng này", ô Thu nhập /
+      Chi tiêu, số 0 không dấu); khối danh mục theo `HomeCategoryRows` — 3 danh mục lớn nhất, "Chưa phân loại" luôn cuối, dòng "N danh mục khác".
+      `CategoryIconWidget`: đĩa 40 theo `icon_key`, "Chưa phân loại" là vòng rỗng. Skeleton, trống, lỗi đều có UI; chuỗi vi + en.
+- [x] 29 test mới (970 xanh): DAO (tổng, tiền tệ, biên, plan), repository (map Money / category, lỗi map, lỗi query), use case (biên tháng local,
+      breakdown cộng ra đúng tổng chi khi có tài khoản USD), `HomeCategoryRows`, hai bloc, Home (tháng, transfer, số 0, top 3 + phần còn lại, lỗi riêng một khối).
+- [x] **Chốt 01/11 sau review thời gian**: `GPCalendarMonth` assert tháng 1–12 (`(2026, 13)` phủ đúng ngày nhưng không bằng `(2027, 1)`).
+      **Không cho giao dịch có ngày sau hôm nay** (ADR-0022): rule theo _ngày_ local, nằm ở `CreateTransactionUseCase` / `UpdateTransactionUseCase`
+      (update chỉ xét khi đổi ngày, như rule category của ADR-0010), lỗi `transactionDateInFuture` hiện ở ô Ngày, date picker dừng ở hôm nay
+      (trước đây +1 năm). Balance và tổng tháng không đổi query.
+- **Chưa làm, theo canvas**: chạm một dòng → danh sách giao dịch lọc theo danh mục + tháng (tab Giao dịch chưa nhận filter qua route); link
+  "Xem tất cả" chờ trang Phân tích W25; lời chào "Xin chào, Huy" chờ hồ sơ (W12); dòng "Tổng số dư" chưa làm. → Đã xếp (01/11): chạm dòng → W26,
+  "Xem tất cả" + "Tổng số dư" → W25, lời chào → W12.
+- [x] **Soát trên iOS simulator** (iPhone 17, 01/11): tháng trống, chỉ có "Chưa phân loại", top 3 + "Chưa phân loại" cuối + "1 danh mục khác", số
+      khớp tính tay; light / dark, vi / en. Sửa hai lỗi chỉ thấy trên máy: "100%" xuống dòng trong ô 36 pt (giờ `minWidth` + một dòng), và số tiền
+      ở cỡ chữ lớn tràn sang ô bên cạnh (giờ `FittedBox.scaleDown`, hai ô cao bằng nhau). Hai test hồi quy cho đúng hai lỗi đó; suite 979 xanh.
+
+### W8 T5 — list giao dịch đọc tên danh mục / tài khoản trong cùng một câu (01/11, ADR-0024)
+
+> Rà xong thì **không có N+1 nào để gỡ**: list chưa hiện tên danh mục hay tài khoản. T5 thành: hiện chúng theo dòng W7 trên canvas, và đọc bằng JOIN.
+
+- [x] **DAO**: `selectTransactions` thành join có kiểu — `LEFT JOIN` categories, `accounts` hai lần (`source_account`, `destination_account`), không
+      lọc `deleted_at` của bảng cha (ADR-0010). Plan: vẫn seek owner index (hoặc category index khi lọc category), không `TEMP B-TREE`; mỗi bảng cha
+      một lần tra khoá chính; không `SCAN`. Watch chạy lại khi ghi vào cả ba bảng.
+- [x] **Domain**: `TransactionListItem` (giao dịch, `CategoryEntity?`, tên tài khoản, tên tài khoản đích nếu là chuyển khoản); snapshot giữ `items`,
+      `transactions` còn lại như getter dẫn xuất. Repository: không danh mục / danh mục đã xoá / dòng danh mục không map được → null = "Chưa phân loại"
+      (lỗi map được log một lần, giao dịch vẫn hiện, không tính là unreadable).
+- [x] **UI**: dòng 64 pt — đĩa danh mục (`CategoryIconWidget`; chuyển khoản là ⇄), tiêu đề, dòng phụ "Danh mục · Tài khoản" hoặc "Từ → Đến"; skeleton theo
+      đúng khung đó. Soát trên simulator.
+- [x] Test (986 xanh): DAO (tên cha, tombstone vẫn join, re-emit khi đổi tên tài khoản, plan), repository (map / xoá / lỗi map), trang Giao dịch (dòng phụ).
+
+### W8 T6 — DB ngoài UI isolate (01/11)
+
+> Đã đúng từ W2 T2 (ADR-0001, mục 2): `drift_flutter` 0.2.8 mở DB trong isolate riêng, và `shareAcrossIsolates: true` cho isolate thứ hai (sync nền
+> P4) dùng chung instance. Không có gì để "chuyển"; việc còn thiếu là một test giữ cấu hình đó.
+
+- [x] `openAppConnection()` (`core/database/database.dart`) — đúng kết nối app dùng; tên và thư mục chỉ để test truyền vào.
+- [x] `test/core/database/app_connection_test.dart`: mở hai kết nối thật qua isolate nền cùng tên → ghi qua một cái thì watch của cái kia nhận được;
+      file `<name>.sqlite` nằm đúng thư mục. Đã thử ngược: đổi `shareAcrossIsolates` sang `false` thì test fail (timeout). 988 test xanh.
+- **Còn trên UI isolate:** chép dòng qua isolate + map row → entity, tỉ lệ với cửa sổ list (cửa sổ lớn dần khi cuộn, ADR-0011) → W9 đo scroll jank ở 50k.
+
+### W8 — ngoài kế hoạch: chạy trên iPhone (01/11, ADR-0023)
+
+- [x] Bản release đầu tiên trên iPhone 15 (iOS 27.2) **crash khi mở**: iOS 27 bắt buộc UIScene lifecycle, runner của Flutter 3.35.6 chưa có. Simulator
+      iOS 26.2 chỉ cảnh báo nên W8 T4 không thấy.
+- [x] Vá tay: `UIApplicationSceneManifest` trong `Info.plist` + `SceneDelegate` (trong `AppDelegate.swift`) đăng ký plugin lúc scene nối vào, vì lúc
+      `didFinishLaunching` chưa có window. Đã chạy: release trên iPhone (DB v4, 11 danh mục seed), debug trên simulator (dữ liệu cũ, ra nền rồi vào lại).
+- **Còn nợ:** khi nâng pin lên Flutter ≥ 3.38 thì xoá `SceneDelegate`, cho `flutter` tự migrate (đã xếp: trước W11 hoặc tuần đệm W17). W21 (`appResumed`) phải thử `AppLifecycleState`
+  trên máy thật. Cài lên iPhone bằng `xcrun devicectl device install app`, **không** dùng `flutter install` (nó gỡ app trước, mất dữ liệu).
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 
@@ -853,6 +929,10 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                   |
 | Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`                                                                           |
 
+> **Nợ từ W8 (01/11) — làm trước khi vào W11 nếu kịp, không thì tuần đệm W17:** nâng pin lên Flutter ≥ 3.38 (Dart 3.10). Xoá `SceneDelegate` và để
+> `flutter` tự migrate runner sang UIScene, đăng ký plugin qua `FlutterImplicitEngineDelegate` (ADR-0023); nâng go_router, drift + drift_flutter,
+> `very_good_analysis` mà ADR-0003 đang giữ; build simulator lại chạy được (`lipo` của Xcode 27). Đổi pin là một ADR mới; chạy đủ test + build iOS/Android.
+
 ## W12 · 23–29/11 🔴 Auth client
 
 | Ngày | Task                                                                                                                                                  |
@@ -863,6 +943,11 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T5   | `go_router` redirect guard theo auth state                                                                                                            |
 | T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) |
 | Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                      |
+
+> **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
+> `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
+> enqueue như mutation tạo mới (ADR-0001). Test: ghi offline vài ngày rồi mới đăng ký → dữ liệu còn nguyên và thuộc user. Không có bước này thì bản có
+> auth làm ẩn dữ liệu đang ghi trên máy, và T6 (logout xoá DB) xoá luôn. Cùng tuần: lời chào "Xin chào, <tên>" trên Home (canvas `W8Home`) khi đã có hồ sơ.
 
 **🏁 Milestone P3:** **Tag `v0.3-auth`.**
 
@@ -1035,6 +1120,10 @@ Nghỉ hoặc làm nhẹ. Nếu muốn động tay: quay demo video 3 phút cho 
 | T6   | Kiểm tra performance analytics trên dataset 50k                      |
 | Flex | Empty state cho chart, accessibility label                           |
 
+> **Nợ từ W8 (01/11):** T4 theo **phương án A** đã chốt (thanh ngang xếp hạng, canvas `Charts.dc.html` / `W8Home`), không phải donut; dùng lại
+> `WatchCategoryBreakdownUseCase` + `HomeCategoryRows`. Cùng tuần: link "Xem tất cả" của khối "Chi theo danh mục" trên Home trỏ về trang này, và dòng
+> "Tổng số dư" ở khối Tài khoản (canvas) — cần chốt cách cộng khi có tài khoản ngoài VND (ADR-0021 amendment).
+
 ## W26 · 01–07/03 🟡 Search / filter / pagination
 
 | Ngày | Task                                                                                                                           |
@@ -1045,6 +1134,9 @@ Nghỉ hoặc làm nhẹ. Nếu muốn động tay: quay demo video 3 phút cho 
 | T5   | Search theo note (cân nhắc FTS5 nếu chậm), debounce input                                                                      |
 | T6   | Benchmark lại list + search trên 50k, cập nhật `docs/benchmarks/`                                                              |
 | Flex | Lưu filter state qua navigation                                                                                                |
+
+> **Nợ từ W8 (01/11):** chạm một dòng trong "Chi theo danh mục" trên Home → tab Giao dịch đã lọc theo danh mục + tháng đó. Cần tab Giao dịch nhận
+> filter qua route (T4 làm filter, Flex giữ state); `TransactionQuery` đã đủ `categoryIds` + `from`/`to`.
 
 ---
 

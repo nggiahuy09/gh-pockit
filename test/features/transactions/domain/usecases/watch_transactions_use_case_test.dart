@@ -10,7 +10,7 @@ void main() {
   test('watches the query it is given and passes the stream through, errors included', () async {
     final repository = FakeTransactionRepository();
     final query = TransactionQuery(limit: 50);
-    final snapshot = TransactionListSnapshot(transactions: const [], unreadableCount: 0, hasMore: false);
+    final snapshot = TransactionListSnapshot(items: const [], unreadableCount: 0, hasMore: false);
     final received = <Object>[];
 
     final subscription = WatchTransactionsUseCase(repository).execute(WatchTransactionsInput(query)).listen(received.add, onError: received.add);

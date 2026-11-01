@@ -20,23 +20,25 @@ import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
 const _mismatch = GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionCategoryTypeMismatch));
+const _ahead = GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionDateInFuture));
 
 /// Real repositories on in-memory SQL: the rule turns on what the stored row and a real `watchCategory` answer.
 void main() {
   late GPAppDatabase db;
+  late FakeClock clock;
   late CategoryRepositoryImpl categories;
   late TransactionRepositoryImpl transactions;
   late UpdateTransactionUseCase updateTransaction;
 
   setUp(() async {
     db = GPAppDatabase.forTesting(NativeDatabase.memory());
-    final clock = FakeClock(DateTime.utc(2026, 9, 30, 9));
+    clock = FakeClock(DateTime.utc(2026, 9, 30, 9));
     final uuid = FakeUuidGenerator();
     final logger = RecordingLogger(clock);
 
     categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
     transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
-    updateTransaction = UpdateTransactionUseCase(categories, transactions);
+    updateTransaction = UpdateTransactionUseCase(categories, clock, transactions);
 
     for (final id in ['acc-cash', 'acc-bank']) {
       await db
@@ -122,6 +124,39 @@ void main() {
 
       expect(await _update(transaction.update(clearCategory: true), updateTransaction), isA<GPOk<TransactionEntity>>());
       expect((await _stored(db, transaction.id)).categoryId, isNull);
+    });
+  });
+
+  group('the date (ADR-0022)', () {
+    DateTime daysFromToday(int days) {
+      final today = clock.nowUtc().toLocal();
+      return DateTime(today.year, today.month, today.day + days);
+    }
+
+    test('moved to a day after today is refused, and the row stays as it was', () async {
+      final transaction = await _filedUnderFood(transactions);
+
+      expect(await _update(transaction.update(occurredAt: daysFromToday(1)), updateTransaction), _ahead);
+      expect((await _stored(db, transaction.id)).occurredAt, transaction.occurredAt.millisecondsSinceEpoch);
+    });
+
+    test('already ahead, as a device whose clock runs fast can leave it, stays editable until the edit moves the date', () async {
+      // Through the repository, which leaves the date to the use cases.
+      final ahead = okValue(
+        await transactions.createTransaction(amount: Money(125000, 'VND'), type: TransactionType.expense, occurredAt: daysFromToday(2), accountId: 'acc-cash'),
+      );
+
+      expect(await _update(ahead.update(note: 'Phở bò'), updateTransaction), isA<GPOk<TransactionEntity>>());
+      expect(await _update(ahead.update(occurredAt: daysFromToday(3)), updateTransaction), _ahead);
+    });
+
+    test('a stale edit is reported as a conflict, not judged by its date', () async {
+      final transaction = await _filedUnderFood(transactions);
+      await (db.update(db.transactionsTable)..where((t) => t.id.equals(transaction.id))).write(const TransactionsTableCompanion(version: Value(2)));
+
+      final result = await _update(transaction.update(occurredAt: daysFromToday(1)), updateTransaction);
+
+      expect(result, GPErr<TransactionEntity>(GPConflictFailure(entityId: transaction.id, localVersion: 1, remoteVersion: 2)));
     });
   });
 
