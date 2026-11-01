@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:meta/meta.dart';
 
 import '../../features/accounts/data/tables/accounts_table.dart';
 import '../../features/categories/data/tables/categories_table.dart';
@@ -11,7 +12,7 @@ part 'database.g.dart';
 /// The only persistent store, so golden rule 3 is one transaction; auth tokens alone go to secure storage (ADR-0001).
 @DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable])
 final class GPAppDatabase extends _$GPAppDatabase {
-  GPAppDatabase() : super(_openConnection());
+  GPAppDatabase() : super(openAppConnection());
 
   GPAppDatabase.forTesting(super.e);
 
@@ -50,8 +51,10 @@ final class GPAppDatabase extends _$GPAppDatabase {
   );
 }
 
-/// `shareAcrossIsolates`: a second isolate (background sync) joins this instance instead of racing it for the write lock (ADR-0001).
-QueryExecutor _openConnection() => driftDatabase(
-  name: 'pockit',
-  native: const DriftNativeOptions(shareAcrossIsolates: true),
+/// Off the UI isolate by `drift_flutter`'s default. `shareAcrossIsolates`: a second isolate (background sync) joins this instance instead of racing it
+/// for the write lock (ADR-0001). The parameters exist for the test that pins this; the app passes none.
+@visibleForTesting
+QueryExecutor openAppConnection({String name = 'pockit', Future<Object> Function()? databaseDirectory, Future<String?> Function()? tempDirectoryPath}) => driftDatabase(
+  name: name,
+  native: DriftNativeOptions(shareAcrossIsolates: true, databaseDirectory: databaseDirectory, tempDirectoryPath: tempDirectoryPath),
 );

@@ -792,8 +792,8 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart ✅ Done (01/11) — `TransactionDao.watchSpendingByCategory`, ADR-0021; chi tiết ở _W8 T3_ dưới                                                                |
 | T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) ✅ Done (01/11) — chỉ VND, phương án A trên Home; chi tiết ở _W8 T4_ dưới                         |
 | T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010) ✅ Done (01/11) — `TransactionListItem`, ADR-0024; chi tiết ở _W8 T5_ dưới                        |
-| T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
-| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                                                                                                         |
+| T6   | Chuyển DB sang background isolate ✅ Done (01/11) — đã đúng từ W2 T2 (ADR-0001); thêm test cố định cấu hình, chi tiết ở _W8 T6_ dưới                                                                                                                               |
+| Flex | Test aggregate query với dataset nhỏ có kết quả biết trước ✅ Done (01/11) — đã có trong test của T3/T4 (tổng tính tay, số canvas, biên tháng)                                                                                                                     |
 
 ### W8 T2 — audit index bằng `EXPLAIN QUERY PLAN` (20/10, làm sớm trong slot W7 T2)
 
@@ -867,6 +867,16 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 - [x] **UI**: dòng 64 pt — đĩa danh mục (`CategoryIconWidget`; chuyển khoản là ⇄), tiêu đề, dòng phụ "Danh mục · Tài khoản" hoặc "Từ → Đến"; skeleton theo
       đúng khung đó. Soát trên simulator.
 - [x] Test (986 xanh): DAO (tên cha, tombstone vẫn join, re-emit khi đổi tên tài khoản, plan), repository (map / xoá / lỗi map), trang Giao dịch (dòng phụ).
+
+### W8 T6 — DB ngoài UI isolate (01/11)
+
+> Đã đúng từ W2 T2 (ADR-0001, mục 2): `drift_flutter` 0.2.8 mở DB trong isolate riêng, và `shareAcrossIsolates: true` cho isolate thứ hai (sync nền
+> P4) dùng chung instance. Không có gì để "chuyển"; việc còn thiếu là một test giữ cấu hình đó.
+
+- [x] `openAppConnection()` (`core/database/database.dart`) — đúng kết nối app dùng; tên và thư mục chỉ để test truyền vào.
+- [x] `test/core/database/app_connection_test.dart`: mở hai kết nối thật qua isolate nền cùng tên → ghi qua một cái thì watch của cái kia nhận được;
+      file `<name>.sqlite` nằm đúng thư mục. Đã thử ngược: đổi `shareAcrossIsolates` sang `false` thì test fail (timeout). 988 test xanh.
+- **Còn trên UI isolate:** chép dòng qua isolate + map row → entity, tỉ lệ với cửa sổ list (cửa sổ lớn dần khi cuộn, ADR-0011) → W9 đo scroll jank ở 50k.
 
 ### W8 — ngoài kế hoạch: chạy trên iPhone (01/11, ADR-0023)
 
