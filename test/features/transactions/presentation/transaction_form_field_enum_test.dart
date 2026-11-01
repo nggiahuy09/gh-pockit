@@ -8,6 +8,7 @@ void main() {
     expect(_fieldOf(GPValidationCode.transactionCurrencyMismatch), TransactionFormField.account);
     expect(_fieldOf(GPValidationCode.transactionCategoryTypeMismatch), TransactionFormField.category);
     expect(_fieldOf(GPValidationCode.transactionNoteTooLong), TransactionFormField.note);
+    expect(_fieldOf(GPValidationCode.transactionDateInFuture), TransactionFormField.date);
   });
 
   test("puts a transfer's three refusals on the destination", () {

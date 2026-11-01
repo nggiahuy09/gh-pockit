@@ -35,17 +35,26 @@ FROM accounts a
 WHERE a.owner_id = ?1 AND a.deleted_at IS NULL AND a.is_archived = 0
 ORDER BY a.created_at, a.id''';
 
-  /// Expenses only: a transfer spends nothing (ADR-0009). The live-category test sits in the `ON`, so a deleted category's rows stay and fold into the
-  /// NULL group with the uncategorised ones (ADR-0010). Grouped by currency too: minor units of two currencies do not add (ADR-0021).
-  /// `?1` is the owner, `?2`/`?3` the range `[from, to)`.
+  /// One currency per query, since minor units of two do not add (ADR-0021). Always one row: zeros for an empty range. A transfer is neither (ADR-0009).
+  /// `?1` is the owner, `?2` the currency, `?3`/`?4` the range `[from, to)`.
+  @visibleForTesting
+  static const incomeExpenseTotalsSql = '''
+SELECT
+  COALESCE(SUM(CASE WHEN type = 'income' THEN amount_minor END), 0) AS income_minor,
+  COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_minor END), 0) AS expense_minor
+FROM transactions
+WHERE owner_id = ?1 AND currency_code = ?2 AND type IN ('income', 'expense') AND deleted_at IS NULL AND occurred_at >= ?3 AND occurred_at < ?4''';
+
+  /// Expenses only, one currency (ADR-0021). The live-category test sits in the `ON`, so a deleted category's rows stay and fold into the NULL group
+  /// with the uncategorised ones (ADR-0010). `?1` is the owner, `?2` the currency, `?3`/`?4` the range `[from, to)`.
   @visibleForTesting
   static const spendingByCategorySql = '''
-SELECT c.*, t.currency_code AS spent_currency_code, SUM(t.amount_minor) AS spent_minor
+SELECT c.*, SUM(t.amount_minor) AS spent_minor
 FROM transactions t
 LEFT JOIN categories c ON c.id = t.category_id AND c.deleted_at IS NULL
-WHERE t.owner_id = ?1 AND t.type = 'expense' AND t.deleted_at IS NULL AND t.occurred_at >= ?2 AND t.occurred_at < ?3
-GROUP BY c.id, t.currency_code
-ORDER BY t.currency_code, spent_minor DESC, c.id''';
+WHERE t.owner_id = ?1 AND t.currency_code = ?2 AND t.type = 'expense' AND t.deleted_at IS NULL AND t.occurred_at >= ?3 AND t.occurred_at < ?4
+GROUP BY c.id
+ORDER BY spent_minor DESC, c.id''';
 
   /// [accountIds] match either side of a transfer (ADR-0011); [toMillis] is exclusive.
   Stream<List<TransactionRow>> watchTransactions(
@@ -112,20 +121,23 @@ ORDER BY t.currency_code, spent_minor DESC, c.id''';
     );
   }
 
+  Stream<({int incomeMinor, int expenseMinor})> watchIncomeExpenseTotals(String ownerId, {required String currencyCode, required int fromMillis, required int toMillis}) {
+    return customSelect(
+      incomeExpenseTotalsSql,
+      variables: [Variable.withString(ownerId), Variable.withString(currencyCode), Variable.withInt(fromMillis), Variable.withInt(toMillis)],
+      readsFrom: {transactionsTable},
+    ).watchSingle().map((row) => (incomeMinor: row.read<int>('income_minor'), expenseMinor: row.read<int>('expense_minor')));
+  }
+
   /// `category` is null for the uncategorised group. Reads from both tables, so deleting a category moves its spending at once.
-  Stream<List<({CategoryRow? category, String currencyCode, int spentMinor})>> watchSpendingByCategory(String ownerId, {required int fromMillis, required int toMillis}) {
+  Stream<List<({CategoryRow? category, int spentMinor})>> watchSpendingByCategory(String ownerId, {required String currencyCode, required int fromMillis, required int toMillis}) {
     return customSelect(
       spendingByCategorySql,
-      variables: [Variable.withString(ownerId), Variable.withInt(fromMillis), Variable.withInt(toMillis)],
+      variables: [Variable.withString(ownerId), Variable.withString(currencyCode), Variable.withInt(fromMillis), Variable.withInt(toMillis)],
       readsFrom: {transactionsTable, categoriesTable},
     ).watch().map(
       (rows) => [
-        for (final row in rows)
-          (
-            category: row.readNullable<String>('id') == null ? null : categoriesTable.map(row.data),
-            currencyCode: row.read<String>('spent_currency_code'),
-            spentMinor: row.read<int>('spent_minor'),
-          ),
+        for (final row in rows) (category: row.readNullable<String>('id') == null ? null : categoriesTable.map(row.data), spentMinor: row.read<int>('spent_minor')),
       ],
     );
   }

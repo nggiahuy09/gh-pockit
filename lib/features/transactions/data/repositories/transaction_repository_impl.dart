@@ -9,6 +9,9 @@ import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../../accounts/data/mapper/account_mapper.dart';
 import '../../../accounts/domain/entities/account_balance.dart';
+import '../../../categories/data/mapper/category_mapper.dart';
+import '../../domain/entities/category_spending.dart';
+import '../../domain/entities/income_expense_totals.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../../domain/entities/transaction_list_snapshot.dart';
 import '../../domain/entities/transaction_query.dart';
@@ -235,6 +238,52 @@ final class TransactionRepositoryImpl implements TransactionRepository {
             },
             handleError: (error, stackTrace, sink) =>
                 _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, entity: 'account', message: 'account balances read failed'),
+          ),
+        );
+  }
+
+  @override
+  Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to}) {
+    return _dao
+        .watchIncomeExpenseTotals(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+        .transform(
+          StreamTransformer<({int incomeMinor, int expenseMinor}), IncomeExpenseTotals>.fromHandlers(
+            handleData: (row, sink) => sink.add(IncomeExpenseTotals(income: Money(row.incomeMinor, currencyCode), expense: Money(row.expenseMinor, currencyCode))),
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'income and expense totals read failed'),
+          ),
+        );
+  }
+
+  @override
+  Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to}) {
+    return _dao
+        .watchSpendingByCategory(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+        .transform(
+          StreamTransformer<List<({CategoryRow? category, int spentMinor})>, List<CategorySpending>>.fromHandlers(
+            handleData: (rows, sink) {
+              final spending = <CategorySpending>[];
+              for (final row in rows) {
+                final amount = Money(row.spentMinor, currencyCode);
+                final category = row.category;
+                if (category == null) {
+                  spending.add(CategorySpending(category: null, amount: amount));
+                  continue;
+                }
+
+                switch (category.toDomain()) {
+                  case MappedCategory(category: final entity):
+                    spending.add(CategorySpending(category: entity, amount: amount));
+                  case UnmappableCategoryRow(:final reason, :final failure):
+                    // As with balances: a breakdown with one category's money silently moved elsewhere is worse than an error.
+                    _logger.error('category row could not be mapped', fields: {'entity': 'category', 'id': category.id, 'reason': reason.name});
+                    sink.addError(failure);
+                    return;
+                }
+              }
+
+              sink.add(spending);
+            },
+            handleError: (error, stackTrace, sink) => _reportQueryError(error: error, sink: sink, stackTrace: stackTrace, message: 'spending by category read failed'),
           ),
         );
   }

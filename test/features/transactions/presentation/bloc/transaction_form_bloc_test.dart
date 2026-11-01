@@ -194,6 +194,21 @@ void main() {
       expect((await _stored()).single.occurredAt, DateTime(2026, 10, 10, 9, 30).toUtc());
     });
 
+    test('a day after today is refused on the date field, and picking another day clears it (ADR-0022)', () async {
+      await _account('Tiền mặt');
+      final form = await _started();
+
+      await _send([const TransactionFormAmountChangeEvent(45000), TransactionFormDateChangeEvent(DateTime(2026, 10, 13)), const TransactionFormSubmitEvent()], form);
+
+      expect(form.state.failure, const GPValidationFailure(GPValidationCode.transactionDateInFuture));
+      expect(form.state.failedField, TransactionFormField.date);
+      expect(await _stored(), isEmpty);
+
+      await _send([TransactionFormDateChangeEvent(DateTime(2026, 10, 12))], form);
+
+      expect(form.state.failure, isNull);
+    });
+
     test("nothing typed is the entity's 'not positive', and nothing is written", () async {
       await _account('Tiền mặt');
       final form = await _started();
@@ -302,6 +317,16 @@ void main() {
       await _send([TransactionFormDateChangeEvent(DateTime(2026, 10, 8)), const TransactionFormSubmitEvent()], form);
 
       expect((await _stored()).single.occurredAt, DateTime(2026, 10, 8, 19, 45).toUtc());
+    });
+
+    test('moved to today, it keeps an evening time still ahead of the clock: the rule is about the day (ADR-0022)', () async {
+      final transaction = await _expense(await _account('Tiền mặt'));
+      final form = await _started(transaction.id);
+
+      await _send([TransactionFormDateChangeEvent(DateTime(2026, 10, 12)), const TransactionFormSubmitEvent()], form);
+
+      expect(form.state.isSaved, isTrue);
+      expect((await _stored()).single.occurredAt, DateTime(2026, 10, 12, 19, 45).toUtc());
     });
 
     test('the category and the note clear when the user clears them', () async {

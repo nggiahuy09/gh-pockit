@@ -12,8 +12,12 @@ import '../../../../core/widgets/empty_state.dart';
 import '../../../accounts/domain/entities/account_balance.dart';
 import '../../../accounts/presentation/widgets/account_balance_list_widget.dart';
 import '../bloc/home_accounts_bloc.dart';
+import '../bloc/home_category_breakdown_bloc.dart';
+import '../bloc/home_month_summary_bloc.dart';
+import '../widgets/home_category_breakdown_widget.dart';
+import '../widgets/home_month_summary_widget.dart';
 
-/// The canvas's Home, as far as the data exists: the month summary and the greeting wait for their data.
+/// The canvas's Home (`W8Home`): the month card, spending by category, then the accounts. The greeting waits for a profile.
 final class HomeView extends StatelessWidget {
   const HomeView({super.key});
 
@@ -68,7 +72,15 @@ final class _HomeBody extends StatelessWidget {
     return ListView(
       // Explicit padding replaces the automatic one, so the shell's dock inset is added back by hand.
       padding: EdgeInsets.fromLTRB(spacing.md, spacing.xs, spacing.md, spacing.md + MediaQuery.paddingOf(context).bottom),
-      children: [_AccountsSection(accounts: accounts.take(HomeView.accountsShown).toList())],
+      children: [
+        BlocBuilder<HomeMonthSummaryBloc, HomeMonthSummaryState>(
+          builder: (context, state) => HomeMonthSummaryWidget(month: context.read<HomeMonthSummaryBloc>().month, state: state),
+        ),
+        SizedBox(height: spacing.lg),
+        BlocBuilder<HomeCategoryBreakdownBloc, HomeCategoryBreakdownState>(builder: (_, state) => HomeCategoryBreakdownWidget(state: state)),
+        SizedBox(height: spacing.lg),
+        _AccountsSection(accounts: accounts.take(HomeView.accountsShown).toList()),
+      ],
     );
   }
 }

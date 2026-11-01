@@ -17,7 +17,8 @@ enum AccountFormField {
       GPValidationCode.transactionNoteTooLong ||
       GPValidationCode.transactionCurrencyMismatch ||
       GPValidationCode.transactionTransferCurrenciesDiffer ||
-      GPValidationCode.transactionCategoryTypeMismatch => null,
+      GPValidationCode.transactionCategoryTypeMismatch ||
+      GPValidationCode.transactionDateInFuture => null,
     },
     GPNetworkFailure() ||
     GPTimeoutFailure() ||

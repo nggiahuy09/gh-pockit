@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
+import 'package:ghpockit/features/transactions/domain/entities/category_spending.dart';
+import 'package:ghpockit/features/transactions/domain/entities/income_expense_totals.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
@@ -59,6 +61,14 @@ base class FakeTransactionRepository extends TransactionRepository {
 
   @override
   Stream<List<AccountBalance>> watchAccountBalances() => _balances ?? Stream.value(const []);
+
+  /// An empty month, so a screen that reads it settles; a test that needs figures overrides this.
+  @override
+  Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to}) =>
+      Stream.value(IncomeExpenseTotals(income: Money.zero(currencyCode), expense: Money.zero(currencyCode)));
+
+  @override
+  Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to}) => Stream.value(const []);
 }
 
 final class FakeWatch {

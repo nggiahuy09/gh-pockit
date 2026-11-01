@@ -4,16 +4,19 @@ import '../../../../core/domain/loggable.dart';
 import '../../../../core/domain/use_case.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/money/money.dart';
+import '../../../../core/utils/clock.dart';
 import '../../../categories/domain/repositories/category_repository.dart';
 import '../entities/transaction_entity.dart';
 import '../entities/transaction_type.dart';
 import '../repositories/transaction_repository.dart';
 import 'refusal_from_category.dart';
+import 'refusal_from_occurred_at.dart';
 
 final class CreateTransactionUseCase with GPUseCase<CreateTransactionInput, TransactionEntity> {
-  const CreateTransactionUseCase(this._categoryRepository, this._transactionRepository);
+  const CreateTransactionUseCase(this._categoryRepository, this._clock, this._transactionRepository);
 
   final CategoryRepository _categoryRepository;
+  final GPClock _clock;
   final TransactionRepository _transactionRepository;
 
   @override
@@ -23,6 +26,9 @@ final class CreateTransactionUseCase with GPUseCase<CreateTransactionInput, Tran
       final refused = await refusalFromCategory(_categoryRepository, type: input.type, categoryId: categoryId);
       if (refused != null) return GPErr(refused);
     }
+
+    final refused = refusalFromOccurredAt(input.occurredAt, clock: _clock);
+    if (refused != null) return GPErr(refused);
 
     return _transactionRepository.createTransaction(
       amount: input.amount,

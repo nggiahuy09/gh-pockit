@@ -6,6 +6,7 @@ enum TransactionFormField {
   account,
   destination,
   category,
+  date,
   note;
 
   /// Null when the failure is about no field and belongs in the banner. No wildcard: a new validation code must not compile until it is placed.
@@ -24,6 +25,7 @@ enum TransactionFormField {
       GPValidationCode.transactionCurrencyMismatch => TransactionFormField.account,
       GPValidationCode.transactionTransferCurrenciesDiffer => TransactionFormField.destination,
       GPValidationCode.transactionCategoryTypeMismatch => TransactionFormField.category,
+      GPValidationCode.transactionDateInFuture => TransactionFormField.date,
     },
     GPNetworkFailure() ||
     GPTimeoutFailure() ||

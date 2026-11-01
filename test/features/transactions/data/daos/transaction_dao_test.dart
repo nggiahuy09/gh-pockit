@@ -295,13 +295,69 @@ void main() {
     });
   });
 
+  group('watchIncomeExpenseTotals', () {
+    test('sums income and expenses apart, and a transfer counts as neither', () async {
+      await dao.insertTransaction(_row(categoryId: null, id: 'tx-salary', type: 'income', amountMinor: 900000));
+      await dao.insertTransaction(_row(id: 'tx-lunch', amountMinor: 40000));
+      await dao.insertTransaction(_row(id: 'tx-dinner', amountMinor: 60000));
+      await dao.insertTransaction(_transfer(from: 'acc-cash', id: 'tx-move', to: 'acc-bank'));
+      await dao.insertTransaction(_row(categoryId: null, id: 'tx-odd', type: 'refund', amountMinor: 999));
+
+      expect(await _totals(dao), (900000, 100000));
+    });
+
+    test('is one row of zeros for a range with nothing in it', () async {
+      expect(await _totals(dao), (0, 0));
+    });
+
+    test('counts the asked currency only: minor units of two never add (ADR-0021)', () async {
+      await dao.insertTransaction(_row(id: 'tx-dong', amountMinor: 40000));
+      await dao.insertTransaction(_row(accountId: 'acc-usd', currencyCode: 'USD', id: 'tx-cents', amountMinor: 1250));
+
+      expect(await _totals(dao), (0, 40000));
+      expect(await _totals(dao, currencyCode: 'USD'), (0, 1250));
+    });
+
+    test("reads the range as [from, to), and leaves out a tombstone and another owner's", () async {
+      await dao.insertTransaction(_row(id: 'tx-before', amountMinor: 1, occurredAt: 199));
+      await dao.insertTransaction(_row(id: 'tx-from', amountMinor: 10, occurredAt: 200));
+      await dao.insertTransaction(_row(id: 'tx-to', amountMinor: 1000, occurredAt: 300));
+      await dao.insertTransaction(_row(id: 'tx-gone', amountMinor: 100, occurredAt: 250));
+      await dao.insertTransaction(_row(accountId: 'acc-theirs', id: 'tx-theirs', ownerId: _otherOwner, amountMinor: 10000, occurredAt: 250));
+      await _tombstone(db, 'tx-gone');
+
+      expect(await _totals(dao, fromMillis: 200, toMillis: 300), (0, 10));
+    });
+
+    test('re-emits on a write', () async {
+      final emitted = <(int, int)>[];
+      final subscription = dao
+          .watchIncomeExpenseTotals(localOwnerId, currencyCode: 'VND', fromMillis: 0, toMillis: _t1)
+          .listen((row) => emitted.add((row.incomeMinor, row.expenseMinor)));
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      await dao.insertTransaction(_row(amountMinor: 45000));
+      await pumpEventQueue();
+
+      expect(emitted, <(int, int)>[(0, 0), (0, 45000)]);
+    });
+
+    test('seeks the owner index by the range, never scanning', () async {
+      final plan = await _rawPlanOf(db, TransactionDao.incomeExpenseTotalsSql);
+
+      expect(plan, contains('SEARCH transactions USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND occurred_at<?)'));
+      expect(plan, isNot(contains('SCAN')));
+    });
+  });
+
   group('watchSpendingByCategory', () {
     test('sums each category, largest first', () async {
       await dao.insertTransaction(_row(id: 'tx-lunch'));
       await dao.insertTransaction(_row(id: 'tx-dinner', amountMinor: 30000));
       await dao.insertTransaction(_row(categoryId: 'cat-rent', id: 'tx-rent', amountMinor: 500000));
 
-      expect(await _spending(dao), <(String?, String, int)>[('cat-rent', 'VND', 500000), ('cat-food', 'VND', 155000)]);
+      expect(await _spending(dao), <(String?, int)>[('cat-rent', 500000), ('cat-food', 155000)]);
     });
 
     test('counts expenses only: income, a transfer and a type outside the three add nothing', () async {
@@ -310,7 +366,7 @@ void main() {
       await dao.insertTransaction(_transfer(from: 'acc-cash', id: 'tx-move', to: 'acc-bank'));
       await dao.insertTransaction(_row(categoryId: null, id: 'tx-odd', type: 'refund', amountMinor: 999));
 
-      expect(await _spending(dao), <(String?, String, int)>[('cat-food', 'VND', 40000)]);
+      expect(await _spending(dao), <(String?, int)>[('cat-food', 40000)]);
     });
 
     test('reads the range as [from, to) — from inclusive, to exclusive', () async {
@@ -319,7 +375,7 @@ void main() {
       await dao.insertTransaction(_row(id: 'tx-inside', amountMinor: 100, occurredAt: 299));
       await dao.insertTransaction(_row(id: 'tx-to', amountMinor: 1000, occurredAt: 300));
 
-      expect(await _spending(dao, fromMillis: 200, toMillis: 300), <(String?, String, int)>[('cat-food', 'VND', 110)]);
+      expect(await _spending(dao, fromMillis: 200, toMillis: 300), <(String?, int)>[('cat-food', 110)]);
     });
 
     test('a deleted category folds into the uncategorised group, one row for both (ADR-0010)', () async {
@@ -328,23 +384,24 @@ void main() {
       await dao.insertTransaction(_row(id: 'tx-food', amountMinor: 20000));
       await _deleteCategory(db, 'cat-rent');
 
-      expect(await _spending(dao), <(String?, String, int)>[(null, 'VND', 57000), ('cat-food', 'VND', 20000)]);
+      expect(await _spending(dao), <(String?, int)>[(null, 57000), ('cat-food', 20000)]);
     });
 
     test('maps the live category row, not just its id', () async {
       await dao.insertTransaction(_row());
 
-      final rows = await dao.watchSpendingByCategory(localOwnerId, fromMillis: 0, toMillis: _t1).first;
+      final rows = await dao.watchSpendingByCategory(localOwnerId, currencyCode: 'VND', fromMillis: 0, toMillis: _t1).first;
 
       expect(rows.single.category?.nameKey, 'category.cat-food');
       expect(rows.single.category?.deletedAt, isNull);
     });
 
-    test('one row per currency: minor units of two currencies never add', () async {
+    test('counts the asked currency only: minor units of two never add (ADR-0021)', () async {
       await dao.insertTransaction(_row(id: 'tx-dong'));
       await dao.insertTransaction(_row(accountId: 'acc-usd', currencyCode: 'USD', id: 'tx-cents', amountMinor: 1250));
 
-      expect(await _spending(dao), <(String?, String, int)>[('cat-food', 'USD', 1250), ('cat-food', 'VND', 125000)]);
+      expect(await _spending(dao), <(String?, int)>[('cat-food', 125000)]);
+      expect(await _spending(dao, currencyCode: 'USD'), <(String?, int)>[('cat-food', 1250)]);
     });
 
     test("leaves out a deleted transaction and another owner's", () async {
@@ -353,7 +410,7 @@ void main() {
       await dao.insertTransaction(_row(accountId: 'acc-theirs', id: 'tx-theirs', ownerId: _otherOwner, amountMinor: 20000));
       await _tombstone(db, 'tx-gone');
 
-      expect(await _spending(dao), <(String?, String, int)>[('cat-food', 'VND', 100)]);
+      expect(await _spending(dao), <(String?, int)>[('cat-food', 100)]);
     });
 
     test('is empty for a range with no expense', () async {
@@ -363,10 +420,10 @@ void main() {
     });
 
     test('re-emits on a transaction write and on a category delete', () async {
-      final emitted = <List<(String?, String, int)>>[];
+      final emitted = <List<(String?, int)>>[];
       final subscription = dao
-          .watchSpendingByCategory(localOwnerId, fromMillis: 0, toMillis: _t1)
-          .listen((rows) => emitted.add([for (final row in rows) (row.category?.id, row.currencyCode, row.spentMinor)]));
+          .watchSpendingByCategory(localOwnerId, currencyCode: 'VND', fromMillis: 0, toMillis: _t1)
+          .listen((rows) => emitted.add([for (final row in rows) (row.category?.id, row.spentMinor)]));
       addTearDown(subscription.cancel);
       await pumpEventQueue();
 
@@ -375,22 +432,15 @@ void main() {
       await _deleteCategory(db, 'cat-food');
       await pumpEventQueue();
 
-      expect(emitted, <List<(String?, String, int)>>[
+      expect(emitted, <List<(String?, int)>>[
         [],
-        [('cat-food', 'VND', 45000)],
-        [(null, 'VND', 45000)],
+        [('cat-food', 45000)],
+        [(null, 45000)],
       ]);
     });
 
     test('seeks the owner index by the range, never scanning, and finds each category by its key', () async {
-      final rows = await db
-          .customSelect(
-            'EXPLAIN QUERY PLAN ${TransactionDao.spendingByCategorySql}',
-            variables: [Variable.withString(localOwnerId), Variable.withInt(0), Variable.withInt(_t1)],
-          )
-          .get();
-      final plan = rows.map((r) => r.read<String>('detail')).join('\n');
-      printOnFailure(plan);
+      final plan = await _rawPlanOf(db, TransactionDao.spendingByCategorySql);
 
       expect(plan, contains('SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND occurred_at<?)'));
       expect(plan, contains('SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?)'));
@@ -656,9 +706,17 @@ Future<List<String>> _idsOf(TransactionDao dao, {Set<String>? accountIds, Set<St
 
 Future<Map<String, int>> _balances(TransactionDao dao) async => {for (final row in await dao.watchAccountBalances(localOwnerId).first) row.account.id: row.balanceMinor};
 
-/// `(category id, currency, spent)`, in the order the query returns them. The default range holds `_t0` and not `_t1`.
-Future<List<(String?, String, int)>> _spending(TransactionDao dao, {int fromMillis = 0, int toMillis = _t1}) async => [
-  for (final row in await dao.watchSpendingByCategory(localOwnerId, fromMillis: fromMillis, toMillis: toMillis).first) (row.category?.id, row.currencyCode, row.spentMinor),
+/// `(income, expense)`. The default range holds `_t0` and not `_t1`.
+Future<(int, int)> _totals(TransactionDao dao, {String currencyCode = 'VND', int fromMillis = 0, int toMillis = _t1}) async {
+  final row = await dao.watchIncomeExpenseTotals(localOwnerId, currencyCode: currencyCode, fromMillis: fromMillis, toMillis: toMillis).first;
+
+  return (row.incomeMinor, row.expenseMinor);
+}
+
+/// `(category id, spent)`, in the order the query returns them. The default range holds `_t0` and not `_t1`.
+Future<List<(String?, int)>> _spending(TransactionDao dao, {String currencyCode = 'VND', int fromMillis = 0, int toMillis = _t1}) async => [
+  for (final row in await dao.watchSpendingByCategory(localOwnerId, currencyCode: currencyCode, fromMillis: fromMillis, toMillis: toMillis).first)
+    (row.category?.id, row.spentMinor),
 ];
 
 Future<void> _deleteCategory(GPAppDatabase db, String id) =>
@@ -669,6 +727,15 @@ Future<void> _setAccount(GPAppDatabase db, AccountsTableCompanion patch, String 
 Future<String> _planOf(GPAppDatabase db, SimpleSelectStatement<$TransactionsTableTable, TransactionRow> statement) async {
   final query = statement.constructQuery();
   final rows = await db.customSelect('EXPLAIN QUERY PLAN ${query.sql}', variables: query.introducedVariables).get();
+
+  return rows.map((row) => row.read<String>('detail')).join('\n');
+}
+
+/// For the aggregates, which bind `?1` owner, `?2` currency, `?3`/`?4` the range.
+Future<String> _rawPlanOf(GPAppDatabase db, String sql) async {
+  final rows = await db
+      .customSelect('EXPLAIN QUERY PLAN $sql', variables: [Variable.withString(localOwnerId), Variable.withString('VND'), Variable.withInt(0), Variable.withInt(_t1)])
+      .get();
 
   return rows.map((row) => row.read<String>('detail')).join('\n');
 }

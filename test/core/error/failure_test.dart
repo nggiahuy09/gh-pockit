@@ -26,6 +26,7 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.transactionCurrencyMismatch),
   GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer),
   GPValidationFailure(GPValidationCode.transactionCategoryTypeMismatch),
+  GPValidationFailure(GPValidationCode.transactionDateInFuture),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),
