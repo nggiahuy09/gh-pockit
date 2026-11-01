@@ -790,7 +790,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó ✅ Done (20/10) — không thiếu index, schema giữ v4; chi tiết ở _W7 T2_ dưới |
 | T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart ✅ Done (01/11) — `TransactionDao.watchSpendingByCategory`, ADR-0021; chi tiết ở _W8 T3_ dưới                                                                |
-| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009)                                                                                                   |
+| T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) ✅ Done (01/11) — chỉ VND, phương án A trên Home; chi tiết ở _W8 T4_ dưới                         |
 | T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                                                                                                   |
 | T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
 | Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                                                                                                         |
@@ -820,14 +820,39 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
       caller tính từ tháng local (ADR-0009 §6), `GROUP BY c.id, t.currency_code`, trả về cả dòng category (`c.*`) — `readsFrom` cả hai bảng.
 - [x] Category đã xoá → nhóm "Chưa phân loại": điều kiện `c.deleted_at IS NULL` nằm trong `ON` của `LEFT JOIN`, nên giao dịch không bị rơi mà gộp
       vào nhóm NULL cùng giao dịch không có category (ADR-0010). Nhiều category đã xoá vẫn chỉ ra một dòng.
-- [x] **Một dòng cho mỗi (category, tiền tệ)** — minor unit của VND và USD không cộng được. Màn hình hiển thị tiền tệ nào là quyết định của T4.
+- [x] ~~**Một dòng cho mỗi (category, tiền tệ)**~~ — T4 đổi thành lọc một tiền tệ do nơi gọi truyền vào (amendment ADR-0021).
 - [x] Plan (SQLite 3.54.0), đúng như audit T2 dự đoán: `SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND
-      occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
+    occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
       Không index mới, schema vẫn v4.
 - [x] 10 test DAO: tổng + thứ tự, chỉ expense (income / transfer / type lạ không cộng), biên `[from, to)`, category đã xoá gộp vào nhóm NULL, map dòng
       category, tách theo tiền tệ, bỏ tombstone và owner khác, khoảng rỗng, re-emit khi ghi transaction và khi xoá category, plan test. 941 test xanh.
 - **Để T4:** tổng thu/chi tháng (`GROUP BY type`), khoảng tháng local → instant, entity (`CategorySpending`?) + map `CategoryRow` qua mapper của
   categories, repository `watchCategoryBreakdown()`, use case, Home.
+
+### W8 T4 — tháng này trên Home (01/11, ADR-0021 amendment)
+
+> Chốt 01/11: (1) chỉ VND; (2) chi theo danh mục theo **phương án A** — thanh ngang xếp hạng, design ở trang canvas "W8 · Trang chủ";
+> (3) app mở xuyên qua đầu tháng thì vẫn giữ tháng cũ cho tới khi Home dựng lại.
+
+- [x] **DAO**: `incomeExpenseTotalsSql` (thu và chi trong một dòng `SUM(CASE …)`, khoảng rỗng ra 0, transfer không tính); câu của T3 bỏ
+      `GROUP BY` theo tiền tệ, thay bằng tham số `?2`. Plan cả hai: seek owner index theo khoảng, không `SCAN`.
+- [x] **Domain**: `IncomeExpenseTotals` (income, expense, `net`), `CategorySpending` (category null = "Chưa phân loại"), hai method repository
+      `watchIncomeExpenseTotals` / `watchSpendingByCategory`; `WatchMonthlySummaryUseCase` (giữ hằng `currency = VND`) và
+      `WatchCategoryBreakdownUseCase` (đọc hằng đó, nên các dòng luôn cộng ra đúng ô Chi tiêu). `GPCalendarMonth` (core): tháng local → hai mốc nửa đêm.
+- [x] **Home**: `HomeMonthSummaryBloc` + `HomeCategoryBreakdownBloc` (mỗi khối lỗi riêng); khối tháng (tiêu đề tháng, "Thu − chi tháng này", ô Thu nhập /
+      Chi tiêu, số 0 không dấu); khối danh mục theo `HomeCategoryRows` — 3 danh mục lớn nhất, "Chưa phân loại" luôn cuối, dòng "N danh mục khác".
+      `CategoryIconWidget`: đĩa 40 theo `icon_key`, "Chưa phân loại" là vòng rỗng. Skeleton, trống, lỗi đều có UI; chuỗi vi + en.
+- [x] 29 test mới (970 xanh): DAO (tổng, tiền tệ, biên, plan), repository (map Money / category, lỗi map, lỗi query), use case (biên tháng local,
+      breakdown cộng ra đúng tổng chi khi có tài khoản USD), `HomeCategoryRows`, hai bloc, Home (tháng, transfer, số 0, top 3 + phần còn lại, lỗi riêng một khối).
+- [x] **Chốt 01/11 sau review thời gian**: `GPCalendarMonth` assert tháng 1–12 (`(2026, 13)` phủ đúng ngày nhưng không bằng `(2027, 1)`).
+      **Không cho giao dịch có ngày sau hôm nay** (ADR-0022): rule theo _ngày_ local, nằm ở `CreateTransactionUseCase` / `UpdateTransactionUseCase`
+      (update chỉ xét khi đổi ngày, như rule category của ADR-0010), lỗi `transactionDateInFuture` hiện ở ô Ngày, date picker dừng ở hôm nay
+      (trước đây +1 năm). Balance và tổng tháng không đổi query.
+- **Chưa làm, theo canvas**: chạm một dòng → danh sách giao dịch lọc theo danh mục + tháng (tab Giao dịch chưa nhận filter qua route); link
+  "Xem tất cả" chờ trang Phân tích W25; lời chào "Xin chào, Huy" chờ hồ sơ (W12); dòng "Tổng số dư" chưa làm.
+- [x] **Soát trên iOS simulator** (iPhone 17, 01/11): tháng trống, chỉ có "Chưa phân loại", top 3 + "Chưa phân loại" cuối + "1 danh mục khác", số
+      khớp tính tay; light / dark, vi / en. Sửa hai lỗi chỉ thấy trên máy: "100%" xuống dòng trong ô 36 pt (giờ `minWidth` + một dòng), và số tiền
+      ở cỡ chữ lớn tràn sang ô bên cạnh (giờ `FittedBox.scaleDown`, hai ô cao bằng nhau). Hai test hồi quy cho đúng hai lỗi đó; suite 979 xanh.
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 
