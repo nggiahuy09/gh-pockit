@@ -791,7 +791,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó ✅ Done (20/10) — không thiếu index, schema giữ v4; chi tiết ở _W7 T2_ dưới |
 | T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart ✅ Done (01/11) — `TransactionDao.watchSpendingByCategory`, ADR-0021; chi tiết ở _W8 T3_ dưới                                                                |
 | T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009) ✅ Done (01/11) — chỉ VND, phương án A trên Home; chi tiết ở _W8 T4_ dưới                         |
-| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                                                                                                   |
+| T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010) ✅ Done (01/11) — `TransactionListItem`, ADR-0024; chi tiết ở _W8 T5_ dưới                        |
 | T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
 | Flex | Test aggregate query với dataset nhỏ có kết quả biết trước                                                                                                                                                                                                         |
 
@@ -822,7 +822,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
       vào nhóm NULL cùng giao dịch không có category (ADR-0010). Nhiều category đã xoá vẫn chỉ ra một dòng.
 - [x] ~~**Một dòng cho mỗi (category, tiền tệ)**~~ — T4 đổi thành lọc một tiền tệ do nơi gọi truyền vào (amendment ADR-0021).
 - [x] Plan (SQLite 3.54.0), đúng như audit T2 dự đoán: `SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND
-    occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
+  occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
       Không index mới, schema vẫn v4.
 - [x] 10 test DAO: tổng + thứ tự, chỉ expense (income / transfer / type lạ không cộng), biên `[from, to)`, category đã xoá gộp vào nhóm NULL, map dòng
       category, tách theo tiền tệ, bỏ tombstone và owner khác, khoảng rỗng, re-emit khi ghi transaction và khi xoá category, plan test. 941 test xanh.
@@ -853,6 +853,29 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 - [x] **Soát trên iOS simulator** (iPhone 17, 01/11): tháng trống, chỉ có "Chưa phân loại", top 3 + "Chưa phân loại" cuối + "1 danh mục khác", số
       khớp tính tay; light / dark, vi / en. Sửa hai lỗi chỉ thấy trên máy: "100%" xuống dòng trong ô 36 pt (giờ `minWidth` + một dòng), và số tiền
       ở cỡ chữ lớn tràn sang ô bên cạnh (giờ `FittedBox.scaleDown`, hai ô cao bằng nhau). Hai test hồi quy cho đúng hai lỗi đó; suite 979 xanh.
+
+### W8 T5 — list giao dịch đọc tên danh mục / tài khoản trong cùng một câu (01/11, ADR-0024)
+
+> Rà xong thì **không có N+1 nào để gỡ**: list chưa hiện tên danh mục hay tài khoản. T5 thành: hiện chúng theo dòng W7 trên canvas, và đọc bằng JOIN.
+
+- [x] **DAO**: `selectTransactions` thành join có kiểu — `LEFT JOIN` categories, `accounts` hai lần (`source_account`, `destination_account`), không
+      lọc `deleted_at` của bảng cha (ADR-0010). Plan: vẫn seek owner index (hoặc category index khi lọc category), không `TEMP B-TREE`; mỗi bảng cha
+      một lần tra khoá chính; không `SCAN`. Watch chạy lại khi ghi vào cả ba bảng.
+- [x] **Domain**: `TransactionListItem` (giao dịch, `CategoryEntity?`, tên tài khoản, tên tài khoản đích nếu là chuyển khoản); snapshot giữ `items`,
+      `transactions` còn lại như getter dẫn xuất. Repository: không danh mục / danh mục đã xoá / dòng danh mục không map được → null = "Chưa phân loại"
+      (lỗi map được log một lần, giao dịch vẫn hiện, không tính là unreadable).
+- [x] **UI**: dòng 64 pt — đĩa danh mục (`CategoryIconWidget`; chuyển khoản là ⇄), tiêu đề, dòng phụ "Danh mục · Tài khoản" hoặc "Từ → Đến"; skeleton theo
+      đúng khung đó. Soát trên simulator.
+- [x] Test (986 xanh): DAO (tên cha, tombstone vẫn join, re-emit khi đổi tên tài khoản, plan), repository (map / xoá / lỗi map), trang Giao dịch (dòng phụ).
+
+### W8 — ngoài kế hoạch: chạy trên iPhone (01/11, ADR-0023)
+
+- [x] Bản release đầu tiên trên iPhone 15 (iOS 27.2) **crash khi mở**: iOS 27 bắt buộc UIScene lifecycle, runner của Flutter 3.35.6 chưa có. Simulator
+      iOS 26.2 chỉ cảnh báo nên W8 T4 không thấy.
+- [x] Vá tay: `UIApplicationSceneManifest` trong `Info.plist` + `SceneDelegate` (trong `AppDelegate.swift`) đăng ký plugin lúc scene nối vào, vì lúc
+      `didFinishLaunching` chưa có window. Đã chạy: release trên iPhone (DB v4, 11 danh mục seed), debug trên simulator (dữ liệu cũ, ra nền rồi vào lại).
+- **Còn nợ:** khi nâng pin lên Flutter ≥ 3.38 thì xoá `SceneDelegate`, cho `flutter` tự migrate. W21 (`appResumed`) phải thử `AppLifecycleState`
+  trên máy thật. Cài lên iPhone bằng `xcrun devicectl device install app`, **không** dùng `flutter install` (nó gỡ app trước, mất dữ liệu).
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 

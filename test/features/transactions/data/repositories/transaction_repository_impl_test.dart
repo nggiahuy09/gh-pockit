@@ -452,6 +452,41 @@ void main() {
     });
   });
 
+  group('watchTransactions, the names each item shows', () {
+    test('a live category maps to its entity, none or a deleted one to null, and the account names come through', () async {
+      final food = okValue(await _create(repository, at: _occurredAt));
+      final none = okValue(await _create(repository, at: _occurredAt.add(const Duration(minutes: 1)), categoryId: null));
+      final move = okValue(
+        await _create(repository, at: _occurredAt.add(const Duration(minutes: 2)), type: TransactionType.transfer, categoryId: null, destinationAccountId: 'acc-bank'),
+      );
+
+      final items = {for (final item in (await repository.watchTransactions(TransactionQuery(limit: 50)).first).items) item.transaction.id: item};
+
+      expect(items[food.id]?.category?.nameKey, 'category.food');
+      expect(items[food.id]?.accountName, 'acc-cash');
+      expect(items[none.id]?.category, isNull);
+      expect((items[move.id]?.accountName, items[move.id]?.destinationAccountName), ('acc-cash', 'acc-bank'));
+
+      await (db.update(db.categoriesTable)..where((c) => c.id.equals('cat-food'))).write(const CategoriesTableCompanion(deletedAt: Value(1)));
+
+      final afterDelete = (await repository.watchTransactions(TransactionQuery(limit: 50)).first).items;
+      expect(afterDelete.firstWhere((item) => item.transaction.id == food.id).category, isNull, reason: 'a deleted category reads "Uncategorised" (ADR-0010)');
+    });
+
+    test('a category row that will not map leaves the transaction listed, uncategorised, and is logged once by id and reason', () async {
+      okValue(await _create(repository));
+      await (db.update(db.categoriesTable)..where((c) => c.id.equals('cat-food'))).write(const CategoriesTableCompanion(type: Value('savings')));
+
+      final snapshot = await repository.watchTransactions(TransactionQuery(limit: 50)).first;
+
+      expect(snapshot.items.single.category, isNull);
+      expect(snapshot.unreadableCount, 0);
+      expect(logger.records.where((record) => record.fields['entity'] == 'category').map((record) => record.fields), [
+        {'entity': 'category', 'id': 'cat-food', 'reason': 'unknownType'},
+      ]);
+    });
+  });
+
   group('watchTransaction', () {
     test('emits the transaction, then null once it is deleted', () async {
       final created = okValue(await _create(repository));
@@ -701,7 +736,7 @@ final class _FailingStreamTransactionDao extends TransactionDao {
   final Object _error;
 
   @override
-  Stream<List<TransactionRow>> watchTransactions(
+  Stream<List<TransactionListRow>> watchTransactions(
     String ownerId, {
     Set<String>? accountIds,
     Set<String>? categoryIds,

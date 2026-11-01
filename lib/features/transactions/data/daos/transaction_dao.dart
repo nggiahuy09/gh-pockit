@@ -8,6 +8,9 @@ import '../tables/transactions_table.dart';
 
 part 'transaction_dao.g.dart';
 
+/// A list row with the names it shows: `category` is the joined row, tombstone included; `destinationAccountName` is null unless a transfer.
+typedef TransactionListRow = ({TransactionRow transaction, CategoryRow? category, String accountName, String? destinationAccountName});
+
 /// Every local write stamps `sync_status` to [pendingSyncStatus], whatever the companion carried (ADR-0009): a write that forgot would look already pushed.
 @DriftAccessor(tables: [TransactionsTable, AccountsTable, CategoriesTable])
 base class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionDaoMixin {
@@ -56,8 +59,12 @@ WHERE t.owner_id = ?1 AND t.currency_code = ?2 AND t.type = 'expense' AND t.dele
 GROUP BY c.id
 ORDER BY spent_minor DESC, c.id''';
 
-  /// [accountIds] match either side of a transfer (ADR-0011); [toMillis] is exclusive.
-  Stream<List<TransactionRow>> watchTransactions(
+  late final $AccountsTableTable _sourceAccounts = alias(accountsTable, 'source_account');
+  late final $AccountsTableTable _destinationAccounts = alias(accountsTable, 'destination_account');
+
+  /// [accountIds] match either side of a transfer (ADR-0011); [toMillis] is exclusive. Each row comes with what the list shows of its parents, read in
+  /// the same statement (ADR-0024), and a write to any of the three tables re-runs it.
+  Stream<List<TransactionListRow>> watchTransactions(
     String ownerId, {
     Set<String>? accountIds,
     Set<String>? categoryIds,
@@ -65,11 +72,22 @@ ORDER BY spent_minor DESC, c.id''';
     int? fromMillis,
     required int limit,
     int? toMillis,
-  }) => selectTransactions(ownerId, accountIds: accountIds, categoryIds: categoryIds, types: types, fromMillis: fromMillis, limit: limit, toMillis: toMillis).watch();
+  }) => selectTransactions(ownerId, accountIds: accountIds, categoryIds: categoryIds, types: types, fromMillis: fromMillis, limit: limit, toMillis: toMillis).watch().map(
+    (rows) => [
+      for (final row in rows)
+        (
+          transaction: row.readTable(transactionsTable),
+          category: row.readTableOrNull(categoriesTable),
+          // Never missing: the foreign key keeps the account, and a soft delete keeps its row (ADR-0009 §4).
+          accountName: row.readTable(_sourceAccounts).name,
+          destinationAccountName: row.readTableOrNull(_destinationAccounts)?.name,
+        ),
+    ],
+  );
 
   /// Exposed so the plan test explains the SQL this DAO really sends.
   @visibleForTesting
-  SimpleSelectStatement<$TransactionsTableTable, TransactionRow> selectTransactions(
+  JoinedSelectStatement<HasResultSet, dynamic> selectTransactions(
     String ownerId, {
     Set<String>? accountIds,
     Set<String>? categoryIds,
@@ -78,16 +96,23 @@ ORDER BY spent_minor DESC, c.id''';
     required int limit,
     int? toMillis,
   }) {
-    final query = select(transactionsTable)..where((t) => t.ownerId.equals(ownerId) & t.deletedAt.isNull());
+    final t = transactionsTable;
+    // LEFT joins with no `deleted_at` test on a parent: a tombstone still names the row (ADR-0010), and `transactions` stays the outer loop, so the
+    // owner index still serves the ORDER BY.
+    final query = select(t).join([
+      leftOuterJoin(categoriesTable, categoriesTable.id.equalsExp(t.categoryId)),
+      leftOuterJoin(_sourceAccounts, _sourceAccounts.id.equalsExp(t.accountId)),
+      leftOuterJoin(_destinationAccounts, _destinationAccounts.id.equalsExp(t.destinationAccountId)),
+    ])..where(t.ownerId.equals(ownerId) & t.deletedAt.isNull());
 
-    if (accountIds != null) query.where((t) => t.accountId.isIn(accountIds) | t.destinationAccountId.isIn(accountIds));
-    if (categoryIds != null) query.where((t) => t.categoryId.isIn(categoryIds));
-    if (types != null) query.where((t) => t.type.isIn(types));
-    if (fromMillis != null) query.where((t) => t.occurredAt.isBiggerOrEqualValue(fromMillis));
-    if (toMillis != null) query.where((t) => t.occurredAt.isSmallerThanValue(toMillis));
+    if (accountIds != null) query.where(t.accountId.isIn(accountIds) | t.destinationAccountId.isIn(accountIds));
+    if (categoryIds != null) query.where(t.categoryId.isIn(categoryIds));
+    if (types != null) query.where(t.type.isIn(types));
+    if (fromMillis != null) query.where(t.occurredAt.isBiggerOrEqualValue(fromMillis));
+    if (toMillis != null) query.where(t.occurredAt.isSmallerThanValue(toMillis));
 
     return query
-      ..orderBy([(t) => OrderingTerm.desc(t.occurredAt), (t) => OrderingTerm.desc(t.id)])
+      ..orderBy([OrderingTerm.desc(t.occurredAt), OrderingTerm.desc(t.id)])
       ..limit(limit);
   }
 

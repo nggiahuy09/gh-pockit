@@ -6,7 +6,9 @@ import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
+import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_list_item.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
@@ -222,11 +224,48 @@ void main() {
       expect(find.text('-₫45,000'), findsOneWidget);
       expect(find.text('Today'), findsOneWidget);
     });
+
+    testWidgets('each row says its category and account, and a transfer where the money went (ADR-0024)', (tester) async {
+      final repos = InMemoryRepositories(_clock);
+      addTearDown(repos.close);
+      await getIt.unregister<TransactionRepository>();
+      getIt.registerSingleton<TransactionRepository>(repos.transactions);
+      final cash = okValue(await repos.accounts.createAccount(initialBalance: Money.zero('VND'), type: AccountType.cash, name: 'Cash'));
+      final bank = okValue(await repos.accounts.createAccount(initialBalance: Money.zero('VND'), type: AccountType.bank, name: 'Bank'));
+      final food = okValue(await repos.categories.createCategory(type: CategoryType.expense, name: 'Food'));
+      final now = _clock.nowUtc();
+      for (final (minutesAgo, type, categoryId, destination) in [
+        (0, TransactionType.expense, food.id, null),
+        (1, TransactionType.expense, null, null),
+        (2, TransactionType.transfer, null, bank.id),
+      ]) {
+        okValue(
+          await repos.transactions.createTransaction(
+            amount: Money(45000, 'VND'),
+            type: type,
+            occurredAt: now.subtract(Duration(minutes: minutesAgo)),
+            accountId: cash.id,
+            categoryId: categoryId,
+            destinationAccountId: destination,
+          ),
+        );
+      }
+
+      await _pumpPage(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Food · Cash'), findsOneWidget);
+      expect(find.text('Uncategorised · Cash'), findsOneWidget);
+      expect(find.text('Cash → Bank'), findsOneWidget);
+    });
   });
 }
 
-TransactionListSnapshot _snapshot(List<TransactionEntity> rows, {int unreadable = 0, bool hasMore = false}) =>
-    TransactionListSnapshot(transactions: rows, unreadableCount: unreadable, hasMore: hasMore);
+TransactionListSnapshot _snapshot(List<TransactionEntity> rows, {int unreadable = 0, bool hasMore = false}) => TransactionListSnapshot(
+  items: [for (final row in rows) TransactionListItem(transaction: row, category: null, accountName: 'Ví tiền mặt')],
+  unreadableCount: unreadable,
+  hasMore: hasMore,
+);
 
 TransactionEntity _transaction({TransactionType type = TransactionType.expense, required DateTime at, String? note, int amount = 45000}) => okValue(
   TransactionEntity.create(
