@@ -789,7 +789,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | Ngày | Task                                                                                                                                                                                                                                                               |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Audit index bằng `EXPLAIN QUERY PLAN` cho aggregate mới; thêm cái còn thiếu (bump schema + migration test). Index của list có từ W4 T3 — ADR-0009 tạo index cùng query đầu tiên đọc nó ✅ Done (20/10) — không thiếu index, schema giữ v4; chi tiết ở _W7 T2_ dưới |
-| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart                                                                                                                                                              |
+| T3   | Aggregate query: spend theo category / tháng — viết bằng SQL thật, không load hết rồi fold trong Dart ✅ Done (01/11) — `TransactionDao.watchSpendingByCategory`, ADR-0021; chi tiết ở _W8 T3_ dưới                                                                |
 | T4   | `watchMonthlySummary()`, `watchCategoryBreakdown()` — **+ tổng thu/chi tháng này trên Home** (dời từ W6 Flex, 16/10); transfer không tính vào thu/chi (ADR-0009)                                                                                                   |
 | T5   | Rà N+1: list transaction có join category/account trong 1 query — join **không** lọc `deleted_at` của bảng cha; category đã xoá hiện "Chưa phân loại" (ADR-0010)                                                                                                   |
 | T6   | Chuyển DB sang background isolate                                                                                                                                                                                                                                  |
@@ -811,6 +811,23 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
   trong một tháng, đổi lại mỗi lần ghi phải cập nhật thêm một index rộng, và ADR-0009 quy định index đi cùng query đầu tiên đọc nó → đợi số đo 50k của W9.
 - Không có test mới: plan test của aggregate viết ở **T3/T4** cùng query (seek owner index theo khoảng ngày, không `SCAN`), như `selectTransactions`.
   Audit hôm nay chỉ là ảnh chụp tại một thời điểm, không ngăn được plan đổi về sau.
+
+### W8 T3 — chi theo category trong một khoảng (01/11, ADR-0021)
+
+> Một câu SQL `GROUP BY`, không fold trong Dart. T3 dừng ở DAO; repository, entity, use case và Home là của **T4**.
+
+- [x] `TransactionDao.spendingByCategorySql` + `watchSpendingByCategory(ownerId, fromMillis:, toMillis:)`: chỉ `expense`, khoảng `[from, to)` do
+      caller tính từ tháng local (ADR-0009 §6), `GROUP BY c.id, t.currency_code`, trả về cả dòng category (`c.*`) — `readsFrom` cả hai bảng.
+- [x] Category đã xoá → nhóm "Chưa phân loại": điều kiện `c.deleted_at IS NULL` nằm trong `ON` của `LEFT JOIN`, nên giao dịch không bị rơi mà gộp
+      vào nhóm NULL cùng giao dịch không có category (ADR-0010). Nhiều category đã xoá vẫn chỉ ra một dòng.
+- [x] **Một dòng cho mỗi (category, tiền tệ)** — minor unit của VND và USD không cộng được. Màn hình hiển thị tiền tệ nào là quyết định của T4.
+- [x] Plan (SQLite 3.54.0), đúng như audit T2 dự đoán: `SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND
+      occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
+      Không index mới, schema vẫn v4.
+- [x] 10 test DAO: tổng + thứ tự, chỉ expense (income / transfer / type lạ không cộng), biên `[from, to)`, category đã xoá gộp vào nhóm NULL, map dòng
+      category, tách theo tiền tệ, bỏ tombstone và owner khác, khoảng rỗng, re-emit khi ghi transaction và khi xoá category, plan test. 941 test xanh.
+- **Để T4:** tổng thu/chi tháng (`GROUP BY type`), khoảng tháng local → instant, entity (`CategorySpending`?) + map `CategoryRow` qua mapper của
+  categories, repository `watchCategoryBreakdown()`, use case, Home.
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 

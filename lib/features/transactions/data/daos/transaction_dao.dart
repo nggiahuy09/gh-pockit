@@ -3,12 +3,13 @@ import 'package:meta/meta.dart';
 
 import '../../../../core/database/database.dart';
 import '../../../accounts/data/tables/accounts_table.dart';
+import '../../../categories/data/tables/categories_table.dart';
 import '../tables/transactions_table.dart';
 
 part 'transaction_dao.g.dart';
 
 /// Every local write stamps `sync_status` to [pendingSyncStatus], whatever the companion carried (ADR-0009): a write that forgot would look already pushed.
-@DriftAccessor(tables: [TransactionsTable, AccountsTable])
+@DriftAccessor(tables: [TransactionsTable, AccountsTable, CategoriesTable])
 base class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$TransactionDaoMixin {
   TransactionDao(super.attachedDatabase);
 
@@ -33,6 +34,18 @@ SELECT a.*,
 FROM accounts a
 WHERE a.owner_id = ?1 AND a.deleted_at IS NULL AND a.is_archived = 0
 ORDER BY a.created_at, a.id''';
+
+  /// Expenses only: a transfer spends nothing (ADR-0009). The live-category test sits in the `ON`, so a deleted category's rows stay and fold into the
+  /// NULL group with the uncategorised ones (ADR-0010). Grouped by currency too: minor units of two currencies do not add (ADR-0021).
+  /// `?1` is the owner, `?2`/`?3` the range `[from, to)`.
+  @visibleForTesting
+  static const spendingByCategorySql = '''
+SELECT c.*, t.currency_code AS spent_currency_code, SUM(t.amount_minor) AS spent_minor
+FROM transactions t
+LEFT JOIN categories c ON c.id = t.category_id AND c.deleted_at IS NULL
+WHERE t.owner_id = ?1 AND t.type = 'expense' AND t.deleted_at IS NULL AND t.occurred_at >= ?2 AND t.occurred_at < ?3
+GROUP BY c.id, t.currency_code
+ORDER BY t.currency_code, spent_minor DESC, c.id''';
 
   /// [accountIds] match either side of a transfer (ADR-0011); [toMillis] is exclusive.
   Stream<List<TransactionRow>> watchTransactions(
@@ -96,6 +109,24 @@ ORDER BY a.created_at, a.id''';
   Stream<List<({AccountRow account, int balanceMinor})>> watchAccountBalances(String ownerId) {
     return customSelect(accountBalancesSql, variables: [Variable.withString(ownerId)], readsFrom: {accountsTable, transactionsTable}).watch().map(
       (rows) => [for (final row in rows) (account: accountsTable.map(row.data), balanceMinor: row.read<int>('balance_minor'))],
+    );
+  }
+
+  /// `category` is null for the uncategorised group. Reads from both tables, so deleting a category moves its spending at once.
+  Stream<List<({CategoryRow? category, String currencyCode, int spentMinor})>> watchSpendingByCategory(String ownerId, {required int fromMillis, required int toMillis}) {
+    return customSelect(
+      spendingByCategorySql,
+      variables: [Variable.withString(ownerId), Variable.withInt(fromMillis), Variable.withInt(toMillis)],
+      readsFrom: {transactionsTable, categoriesTable},
+    ).watch().map(
+      (rows) => [
+        for (final row in rows)
+          (
+            category: row.readNullable<String>('id') == null ? null : categoriesTable.map(row.data),
+            currencyCode: row.read<String>('spent_currency_code'),
+            spentMinor: row.read<int>('spent_minor'),
+          ),
+      ],
     );
   }
 
