@@ -26,7 +26,7 @@ GoRouter createRouter([String initialLocation = Routes.initial]) => GoRouter(
             GoRoute(
               path: Routes.home,
               name: RouteNames.home,
-              builder: (_, _) => const HomePage(),
+              builder: (_, _) => HomePage(clock: getIt.get<GPClock>()),
               routes: [GoRoute(path: 'settings', name: RouteNames.settings, builder: (_, _) => const SettingsPage())],
             ),
           ],

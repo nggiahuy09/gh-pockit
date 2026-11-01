@@ -69,8 +69,20 @@ Future<DateTimeRange?> showGPDateRangePicker({required BuildContext context, Dat
 }
 
 final class GPDateField extends StatefulWidget {
-  const GPDateField({super.key, this.firstDate, this.lastDate, required this.today, required this.value, this.errorText, this.helperText, this.label, required this.onChanged});
+  const GPDateField({
+    super.key,
+    this.focusNode,
+    this.firstDate,
+    this.lastDate,
+    required this.today,
+    required this.value,
+    this.errorText,
+    this.helperText,
+    this.label,
+    required this.onChanged,
+  });
 
+  final FocusNode? focusNode;
   final DateTime? firstDate;
   final DateTime? lastDate;
   final DateTime today;
@@ -99,6 +111,7 @@ final class _GPDateFieldState extends State<GPDateField> {
 
   @override
   Widget build(BuildContext context) => GPPickerField(
+    focusNode: widget.focusNode,
     leading: Icons.calendar_today_outlined,
     errorText: widget.errorText,
     helperText: widget.helperText,

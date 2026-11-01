@@ -52,6 +52,9 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationTransactionCategoryTypeMismatch => 'Pick an expense category for an expense, and an income category for income.';
 
   @override
+  String get validationTransactionDateInFuture => 'Pick today or an earlier day.';
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override
