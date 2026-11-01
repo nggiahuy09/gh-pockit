@@ -822,7 +822,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
       vào nhóm NULL cùng giao dịch không có category (ADR-0010). Nhiều category đã xoá vẫn chỉ ra một dòng.
 - [x] ~~**Một dòng cho mỗi (category, tiền tệ)**~~ — T4 đổi thành lọc một tiền tệ do nơi gọi truyền vào (amendment ADR-0021).
 - [x] Plan (SQLite 3.54.0), đúng như audit T2 dự đoán: `SEARCH t USING INDEX transactions_owner_id_occurred_at_id (owner_id=? AND occurred_at>? AND
-  occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
+occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) LEFT-JOIN` → `TEMP B-TREE` cho `GROUP BY` và `ORDER BY` (vài nhóm).
       Không index mới, schema vẫn v4.
 - [x] 10 test DAO: tổng + thứ tự, chỉ expense (income / transfer / type lạ không cộng), biên `[from, to)`, category đã xoá gộp vào nhóm NULL, map dòng
       category, tách theo tiền tệ, bỏ tombstone và owner khác, khoảng rỗng, re-emit khi ghi transaction và khi xoá category, plan test. 941 test xanh.
@@ -849,7 +849,8 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
       (update chỉ xét khi đổi ngày, như rule category của ADR-0010), lỗi `transactionDateInFuture` hiện ở ô Ngày, date picker dừng ở hôm nay
       (trước đây +1 năm). Balance và tổng tháng không đổi query.
 - **Chưa làm, theo canvas**: chạm một dòng → danh sách giao dịch lọc theo danh mục + tháng (tab Giao dịch chưa nhận filter qua route); link
-  "Xem tất cả" chờ trang Phân tích W25; lời chào "Xin chào, Huy" chờ hồ sơ (W12); dòng "Tổng số dư" chưa làm.
+  "Xem tất cả" chờ trang Phân tích W25; lời chào "Xin chào, Huy" chờ hồ sơ (W12); dòng "Tổng số dư" chưa làm. → Đã xếp (01/11): chạm dòng → W26,
+  "Xem tất cả" + "Tổng số dư" → W25, lời chào → W12.
 - [x] **Soát trên iOS simulator** (iPhone 17, 01/11): tháng trống, chỉ có "Chưa phân loại", top 3 + "Chưa phân loại" cuối + "1 danh mục khác", số
       khớp tính tay; light / dark, vi / en. Sửa hai lỗi chỉ thấy trên máy: "100%" xuống dòng trong ô 36 pt (giờ `minWidth` + một dòng), và số tiền
       ở cỡ chữ lớn tràn sang ô bên cạnh (giờ `FittedBox.scaleDown`, hai ô cao bằng nhau). Hai test hồi quy cho đúng hai lỗi đó; suite 979 xanh.
@@ -884,7 +885,7 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
       iOS 26.2 chỉ cảnh báo nên W8 T4 không thấy.
 - [x] Vá tay: `UIApplicationSceneManifest` trong `Info.plist` + `SceneDelegate` (trong `AppDelegate.swift`) đăng ký plugin lúc scene nối vào, vì lúc
       `didFinishLaunching` chưa có window. Đã chạy: release trên iPhone (DB v4, 11 danh mục seed), debug trên simulator (dữ liệu cũ, ra nền rồi vào lại).
-- **Còn nợ:** khi nâng pin lên Flutter ≥ 3.38 thì xoá `SceneDelegate`, cho `flutter` tự migrate. W21 (`appResumed`) phải thử `AppLifecycleState`
+- **Còn nợ:** khi nâng pin lên Flutter ≥ 3.38 thì xoá `SceneDelegate`, cho `flutter` tự migrate (đã xếp: trước W11 hoặc tuần đệm W17). W21 (`appResumed`) phải thử `AppLifecycleState`
   trên máy thật. Cài lên iPhone bằng `xcrun devicectl device install app`, **không** dùng `flutter install` (nó gỡ app trước, mất dữ liệu).
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
@@ -928,6 +929,10 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                   |
 | Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`                                                                           |
 
+> **Nợ từ W8 (01/11) — làm trước khi vào W11 nếu kịp, không thì tuần đệm W17:** nâng pin lên Flutter ≥ 3.38 (Dart 3.10). Xoá `SceneDelegate` và để
+> `flutter` tự migrate runner sang UIScene, đăng ký plugin qua `FlutterImplicitEngineDelegate` (ADR-0023); nâng go_router, drift + drift_flutter,
+> `very_good_analysis` mà ADR-0003 đang giữ; build simulator lại chạy được (`lipo` của Xcode 27). Đổi pin là một ADR mới; chạy đủ test + build iOS/Android.
+
 ## W12 · 23–29/11 🔴 Auth client
 
 | Ngày | Task                                                                                                                                                  |
@@ -938,6 +943,11 @@ không sửa). Đây vừa là input cho style guide, vừa là phần "học đ
 | T5   | `go_router` redirect guard theo auth state                                                                                                            |
 | T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) |
 | Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                      |
+
+> **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
+> `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
+> enqueue như mutation tạo mới (ADR-0001). Test: ghi offline vài ngày rồi mới đăng ký → dữ liệu còn nguyên và thuộc user. Không có bước này thì bản có
+> auth làm ẩn dữ liệu đang ghi trên máy, và T6 (logout xoá DB) xoá luôn. Cùng tuần: lời chào "Xin chào, <tên>" trên Home (canvas `W8Home`) khi đã có hồ sơ.
 
 **🏁 Milestone P3:** **Tag `v0.3-auth`.**
 
@@ -1110,6 +1120,10 @@ Nghỉ hoặc làm nhẹ. Nếu muốn động tay: quay demo video 3 phút cho 
 | T6   | Kiểm tra performance analytics trên dataset 50k                      |
 | Flex | Empty state cho chart, accessibility label                           |
 
+> **Nợ từ W8 (01/11):** T4 theo **phương án A** đã chốt (thanh ngang xếp hạng, canvas `Charts.dc.html` / `W8Home`), không phải donut; dùng lại
+> `WatchCategoryBreakdownUseCase` + `HomeCategoryRows`. Cùng tuần: link "Xem tất cả" của khối "Chi theo danh mục" trên Home trỏ về trang này, và dòng
+> "Tổng số dư" ở khối Tài khoản (canvas) — cần chốt cách cộng khi có tài khoản ngoài VND (ADR-0021 amendment).
+
 ## W26 · 01–07/03 🟡 Search / filter / pagination
 
 | Ngày | Task                                                                                                                           |
@@ -1120,6 +1134,9 @@ Nghỉ hoặc làm nhẹ. Nếu muốn động tay: quay demo video 3 phút cho 
 | T5   | Search theo note (cân nhắc FTS5 nếu chậm), debounce input                                                                      |
 | T6   | Benchmark lại list + search trên 50k, cập nhật `docs/benchmarks/`                                                              |
 | Flex | Lưu filter state qua navigation                                                                                                |
+
+> **Nợ từ W8 (01/11):** chạm một dòng trong "Chi theo danh mục" trên Home → tab Giao dịch đã lọc theo danh mục + tháng đó. Cần tab Giao dịch nhận
+> filter qua route (T4 làm filter, Flex giữ state); `TransactionQuery` đã đủ `categoryIds` + `from`/`to`.
 
 ---
 
