@@ -139,6 +139,7 @@ docs/
 ├── system-design.md
 ├── adr/            # 0001-xxx.md
 ├── patterns/       # portable notes, not Pockit-specific (keep names generic)
+├── proposals/      # feature designs not on the roadmap yet; nothing in one is decided until its ADR is written
 └── benchmarks/
 ```
 

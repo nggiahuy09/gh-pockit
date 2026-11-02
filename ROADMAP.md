@@ -1179,6 +1179,7 @@ Chỉ làm sau khi §51 đã tick đủ.
 | W32     | Recurring rules + occurrence generation + idempotency (không sinh trùng khi chạy 2 lần)                                                                                                                |
 | W33–W36 | 🔥 Thay Supabase bằng **NestJS + Postgres** backend tự viết. Đây là bước biến project từ "Flutter portfolio" thành "full-stack portfolio", và repository abstraction ở P1 sẽ chứng minh giá trị của nó |
 | W37+    | Multi-currency, shared wallet, device management, audit history, import/export                                                                                                                         |
+| W29+    | Tổng kết tháng (Monthly Review): báo cáo tháng, PDF, review bằng AI qua Edge Function — thiết kế ở `docs/proposals/monthly-review.md`; slice MR1 (báo cáo tháng) có thể gộp vào W25                    |
 
 ---
 
