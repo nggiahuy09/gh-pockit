@@ -890,16 +890,38 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 
-| Ngày | Task                                                                             |
-| ---- | -------------------------------------------------------------------------------- |
-| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế                |
-| T3   | Benchmark harness: đo cold start, list first frame, scroll jank, dashboard query |
-| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md`                         |
-| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                   |
-| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại          |
-| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                      |
+| Ngày | Task                                                                                                                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới |
+| T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query                                                         |
+| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md`                                                                                                   |
+| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                                                                                             |
+| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại                                                                                    |
+| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                                                                                                |
 
 **Soundbite:** _"Dashboard query từ 480ms xuống 12ms trên 50k rows sau khi thêm composite index."_ ← số thật, đo được, đây là thứ tạo khác biệt trong phỏng vấn.
+
+### W9 T2 — data generator (02/11, ADR-0025)
+
+> Chốt 02/11: dữ liệu luôn trải **24 tháng tới hôm nay** (blueprint §55), mật độ tăng theo kích thước — 50k ≈ 2.100 dòng/tháng, ~68 dòng/ngày.
+> Aggregate tháng vì vậy được đo ở mức nặng nhất; tháng của người dùng thật nhẹ hơn.
+
+- [x] `BenchmarkDatasetGenerator` (`transactions/data/seed/`): một `Random` có seed, cùng seed cùng ngày → cùng dữ liệu. 5 tài khoản (một USD),
+      11 danh mục mặc định; 9 khoản cố định mỗi tháng (lương mùng 5, tiền nhà, 4 hoá đơn, nạp ví, rút tiền, trả thẻ); phần còn lại rải theo ngày
+      (cuối tuần ×1,3), 17 loại có giờ / khoảng tiền / tài khoản / ghi chú riêng. ~5% chi không danh mục, ~2% tombstone, ~40% có ghi chú, không
+      có ngày sau hôm nay (ADR-0022), id cấp theo thứ tự ngày như người dùng thật.
+- [x] `BenchmarkDatasetSeeder`: ghi thẳng qua DAO trong **một transaction** (`TransactionDao.insertTransactions` là một batch), chỉ khi owner chưa
+      có giao dịch nào. Không đi qua `createTransaction`: 1k dòng theo đường đó mất 358 ms, có một watch số dư mở thì 816 ms và watch chạy lại 1.000 lần.
+- [x] Nạp trên máy: `--dart-define=DATASET=1k|10k|50k`, chặn bằng `!kReleaseMode` (benchmark chạy profile, ở đó `kDebugMode` là false). Bootstrap
+      log cỡ, số dòng và `elapsed_ms` — chính là "DB seed time" của blueprint.
+- [x] **Phát hiện:** `Random.secure` trong `GPUuidGeneratorImpl.v7()` tốn ~0,1 ms mỗi id → 50k id mất 5,0 s, gần hết thời gian seed. Seeder dùng
+      generator riêng trên `Random` có seed (19 ms cho 50k id); seed 50k còn ~0,9 s trên test host (in-memory). App chỉ cấp một id mỗi thao tác nên
+      không đáng kể — ghi lại cho T5/T6, và cho P4 nếu có chỗ cấp id hàng loạt.
+- [x] Test (1015 xanh): generator (đủ số dòng mỗi cỡ, khoảng ngày, tháng nào cũng có dòng, cùng seed cùng dữ liệu, thứ tự, tiền tệ theo tài khoản,
+      chuyển khoản, danh mục đúng loại, ~5% không danh mục, lương mùng 5, ~2% tombstone, cuối tuần nhiều hơn, thiếu danh mục không lỗi), seeder (ghi
+      đủ, đúng danh mục, không nạp lần hai, watch chỉ chạy lại một lần), DAO (`insertTransactions`, `hasAnyTransaction`), DI.
+- **Còn lại:** số dư âm sâu ở 50k (68 dòng/ngày tiêu vượt một suất lương) — đúng cho việc đo thời gian, lạ trên màn hình. Chưa nạp trên máy thật —
+  việc của T3/T4. Nút "Nạp bộ dữ liệu mẫu" trong Settings vẫn là bộ mẫu viết tay; review #23 (widget test cho snackbar) chưa đụng.
 
 ## W10 · 09–15/11 🔴 Migration
 

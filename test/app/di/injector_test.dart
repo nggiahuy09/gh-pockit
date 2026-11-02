@@ -18,6 +18,7 @@ import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
+import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 void main() {
@@ -152,6 +153,13 @@ void main() {
     test('hands out one TransactionDao, bound to the database the core module registered', () {
       expect(container.get<TransactionDao>(), same(container.get<TransactionDao>()));
       expect(container.get<TransactionDao>().attachedDatabase, same(container.get<GPAppDatabase>()));
+    });
+
+    test('builds the benchmark seeder once the accounts and categories modules are configured too', () {
+      configureAccountsDependencies(container);
+      configureCategoriesDependencies(container);
+
+      expect(container.get<BenchmarkDatasetSeeder>(), isA<BenchmarkDatasetSeeder>());
     });
   });
 }
