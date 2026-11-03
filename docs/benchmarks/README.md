@@ -1,7 +1,8 @@
 # Benchmarks
 
-How Pockit is measured at 1k, 10k and 50k transactions. The dataset is described in ADR-0025, and the harness in ADR-0026. Results land here
-from W9 T4 onwards.
+How Pockit is measured at 1k, 10k and 50k transactions. The dataset is described in ADR-0025, and the harness in ADR-0026.
+
+Results: [10k](10k.md) (W9 T4).
 
 ## The dataset
 
@@ -20,8 +21,8 @@ fvm flutter test test/benchmark --dart-define=DATASET=10k
 ```
 
 - It opens the app's connection, a file on a background isolate, and seeds it.
-- It times eight cases: the list (newest 50, 500 and 2,000), the list filtered by account and by category, the month totals, the spending by
-  category, and the balances.
+- It times ten cases: the list (newest 50, 500 and 2,000); the list filtered by the busiest account, the quietest account, an account with
+  3 rows, and the busiest category; the month totals; the spending by category; and the balances.
 - Each case is timed at two layers: the SQL statement, and the repository's first emission.
 - The report goes to `build/benchmarks/queries-10k.md`, with each case's `EXPLAIN QUERY PLAN`.
 - The Dart side runs in JIT here, so compare these numbers only with other host runs.

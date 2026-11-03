@@ -39,7 +39,8 @@ void main() {
   late GPAppDatabase db;
   late TransactionDao dao;
   late TransactionRepositoryImpl repository;
-  late String accountId;
+  late String busiestAccountId;
+  late String quietestAccountId;
   late String categoryId;
   late GPCalendarMonth month;
   late List<Variable<Object>> monthVariables;
@@ -53,12 +54,13 @@ void main() {
         repository: () => repository.watchTransactions(TransactionQuery(limit: limit)).first,
         plan: () => _planOf(db, dao.selectTransactions(localOwnerId, limit: limit)),
       ),
-    (
-      name: 'list, busiest account, newest 50',
-      sql: () => dao.selectTransactions(localOwnerId, accountIds: {accountId}, limit: 50).get(),
-      repository: () => repository.watchTransactions(TransactionQuery(accountIds: {accountId}, limit: 50)).first,
-      plan: () => _planOf(db, dao.selectTransactions(localOwnerId, accountIds: {accountId}, limit: 50)),
-    ),
+    for (final (label, accountId) in [('busiest account', () => busiestAccountId), ('quietest account', () => quietestAccountId), (_newAccountLabel, () => _newAccountId)])
+      (
+        name: 'list, $label, newest 50',
+        sql: () => dao.selectTransactions(localOwnerId, accountIds: {accountId.call()}, limit: 50).get(),
+        repository: () => repository.watchTransactions(TransactionQuery(accountIds: {accountId.call()}, limit: 50)).first,
+        plan: () => _planOf(db, dao.selectTransactions(localOwnerId, accountIds: {accountId.call()}, limit: 50)),
+      ),
     (
       name: 'list, busiest category, newest 50',
       sql: () => dao.selectTransactions(localOwnerId, categoryIds: {categoryId}, limit: 50).get(),
@@ -117,8 +119,10 @@ void main() {
       uuidGenerator: GPUuidGeneratorImpl(clock: clock),
       ownerId: localOwnerId,
     );
-    accountId = await _busiest(db, 'account_id');
+    busiestAccountId = await _accountByTraffic(db, busiest: true);
+    quietestAccountId = await _accountByTraffic(db, busiest: false);
     categoryId = await _busiest(db, 'category_id');
+    await _addNewAccount(AccountDao(db), dao, clock.nowEpochMillis());
     final today = clock.nowUtc().toLocal();
     // The last whole month: the current one holds only as many days as today's date.
     month = GPCalendarMonth.of(DateTime(today.year, today.month - 1));
@@ -143,6 +147,7 @@ void main() {
       '- Run ${today.toIso8601String()} on ${Platform.operatingSystem} ${Platform.operatingSystemVersion}; SQLite ${sqliteVersion.read<String>('v')}.',
       '- Dart ${Platform.version.split(' ').first} in JIT (`flutter test`): the Dart side runs slower here than in a profile build.',
       '- ${size.count} transactions, ${tombstones.read<int>('n')} of them tombstones, over 24 months (ADR-0025); seeded in $seedMillis ms.',
+      '- Plus an account opened this week with $_newAccountRows transactions: too few to fill a page, so its list walks the whole owner index.',
       '- The month cases read ${month.year}-${month.month.toString().padLeft(2, '0')}, the last whole month.',
       '- Each case: 5 warm-up runs, then 30 measured. Milliseconds.',
       '',
@@ -180,6 +185,55 @@ void main() {
 /// The connection the app opens: a file, on a background isolate, so every result pays the copy across isolates as it does on a phone. Top-level
 /// because the path callbacks are sent to that isolate, and a closure inside `main` would drag the whole test state along.
 QueryExecutor _openConnection(String path) => openAppConnection(name: 'bench', databaseDirectory: () async => Directory(path), tempDirectoryPath: () async => path);
+
+const _newAccountId = 'benchmark-new-account';
+const _newAccountLabel = 'account with 3 rows';
+const _newAccountRows = 3;
+
+/// Counts both sides of a transfer, as the account filter does.
+Future<String> _accountByTraffic(GPAppDatabase db, {required bool busiest}) async {
+  final row = await db
+      .customSelect(
+        'SELECT a.id FROM accounts a ORDER BY (SELECT COUNT(*) FROM transactions t WHERE t.account_id = a.id OR t.destination_account_id = a.id) '
+        '${busiest ? 'DESC' : 'ASC'} LIMIT 1',
+      )
+      .getSingle();
+
+  return row.read<String>('id');
+}
+
+Future<void> _addNewAccount(AccountDao accountDao, TransactionDao transactionDao, int now) async {
+  await accountDao.insertAccount(
+    AccountsTableCompanion.insert(
+      id: _newAccountId,
+      ownerId: localOwnerId,
+      name: 'Tài khoản mới',
+      type: 'bank',
+      currencyCode: 'VND',
+      initialBalance: 0,
+      isArchived: false,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    ),
+  );
+  await transactionDao.insertTransactions([
+    for (var i = 0; i < _newAccountRows; i++)
+      TransactionsTableCompanion.insert(
+        id: '$_newAccountId-$i',
+        ownerId: localOwnerId,
+        type: 'expense',
+        accountId: _newAccountId,
+        amountMinor: 50000,
+        currencyCode: 'VND',
+        occurredAt: now - Duration(days: i).inMilliseconds,
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        syncStatus: TransactionDao.pendingSyncStatus,
+      ),
+  ]);
+}
 
 Future<String> _busiest(GPAppDatabase db, String column) async {
   final row = await db.customSelect('SELECT $column AS id FROM transactions WHERE $column IS NOT NULL GROUP BY $column ORDER BY COUNT(*) DESC LIMIT 1').getSingle();

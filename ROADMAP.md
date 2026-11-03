@@ -894,7 +894,7 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới                         |
 | T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query ✅ Done (02/11, làm sớm) — hai tầng, DB riêng, ADR-0026; chi tiết ở _W9 T3_ dưới |
-| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md`                                                                                                                           |
+| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md` ✅ Done (03/11) — iPhone 15 + host; build p99 44 ms, 51 frame lỡ; chi tiết ở _W9 T4_ dưới                                  |
 | T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                                                                                                                     |
 | T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại                                                                                                            |
 | Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                                                                                                                        |
@@ -949,6 +949,25 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 - **Manh mối cho T5:** `pumpAndSettle` sau khi list hiện dòng đầu chờ đủ 10 phút mà không settle → khi đứng yên vẫn có thứ xin frame liên tục (nghi
   spinner footer hoặc skeleton). Nếu đúng trên máy thật thì đó là pin bị tiêu khi app đứng yên — kiểm bằng DevTools ở T4/T5.
 - **Còn lại:** chưa chạy trên máy thật (iPhone 15 cần cắm cáp) — T4. iOS sẽ thêm pod `integration_test` ở lần build kế tiếp.
+
+### W9 T4 — 10k trên iPhone 15 và trên host (03/11)
+
+> Số "before": chưa tối ưu gì. Bảng đầy đủ ở `docs/benchmarks/10k.md`; trên máy là median của 3 lần đo sau một lần seed (bỏ).
+
+- [x] **Trên máy (iPhone 15, iOS 27.2, profile, 60 Hz):** cold start 402 ms tới frame đầu (371–429); bootstrap → Home có dữ liệu 133 ms; chạm tab →
+      dòng đầu 39 ms; seed 10k trên máy ~130 ms. Cuộn 30 lần fling: build trung bình 3,05 ms nhưng **p99 44 ms, tệ nhất 108 ms, 51/≈3.240 frame lỡ
+      ngân sách**; raster trung bình 1,6 ms, p99 2,9 ms, không frame nào lỡ. GC: ~580 lần young, ~100 lần old.
+- [x] **Trên host:** list 50 dòng 2,3 ms, cửa sổ 2.000 dòng **85 ms** mỗi emission (78 ms là SQL + chép qua isolate); tổng tháng 0,33 ms, chi theo
+      danh mục 0,52 ms, số dư 2,8 ms; tài khoản 3 dòng 2,9 ms (đi hết owner index).
+- [x] **Bộ đo:** case lọc tài khoản trước chỉ đo tài khoản bận nhất (best case). Thêm tài khoản thưa nhất và một tài khoản 3 dòng do bộ đo tự tạo
+      (amendment ADR-0026). Ở 10k cả hai vẫn ~3 ms — chưa phải nút thắt.
+- [x] **An toàn dữ liệu thật:** sao lưu `Documents/` của app trước khi đo; đo xong cài lại bản release bằng `xcrun devicectl device install app`, chép
+      lại và so — `pockit.sqlite` giống bản sao lưu từng byte (2 tài khoản, 9 giao dịch). `pockit_bench_10k_v1.sqlite` (5,5 MB) nằm riêng, để lại cho T6.
+- **Đọc số:** (1) raster không có vấn đề — số raster nặng ở emulator là của emulator, blur dock (ADR-0014) không tốn gì ở 10k. (2) UI thread đều nhưng
+  có gai; nghi phạm là cửa sổ list lớn dần (ADR-0011): mỗi load more và mỗi lần ghi đọc lại và dựng lại cả cửa sổ — **chưa chứng minh**, T5 phải
+  khớp các gai với lúc load more. (3) Covering index cho aggregate tháng (ADR-0021) không cần. (4) Số dư và lọc tài khoản thưa tăng theo lịch sử →
+  T5 ở 50k quyết covering index ADR-0019 và `UNION ALL` W4 T5.
+- Mỗi lần `flutter drive` / `flutter run` trên iOS 27 mất ~3–4 phút cài và mở app (devicectl); một vòng 10k (seed + 3 lần + 3 cold start) ≈ 30 phút.
 
 ## W10 · 09–15/11 🔴 Migration
 

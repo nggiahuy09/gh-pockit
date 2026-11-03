@@ -30,9 +30,10 @@ Two constraints shape the harness:
 - It opens the app's own connection (`openAppConnection`), a file on a background isolate. Every result therefore pays the copy across
   isolates, as it does on a phone.
 - It seeds with the T2 seeder.
-- It measures eight cases:
+- It measures ten cases:
   - the list at 50, 500 and 2,000 rows;
-  - the list filtered by the busiest account;
+  - the list filtered by the busiest account, by the quietest account, and by an account with 3 rows. The harness adds that account itself,
+    since a page it cannot fill makes the owner index walk to its end (amended in W9 T4);
   - the list filtered by the busiest category;
   - the month totals and the month's spending by category, for the last whole month;
   - the account balances.
