@@ -38,7 +38,8 @@ transactions through one `TransactionDao.insertTransactions` batch, which stamps
 with no transaction, tombstones included, so a restart does not double the dataset.
 
 **`--dart-define=DATASET=1k|10k|50k` triggers it on any non-release build.** The gate is `!kReleaseMode`, not `kDebugMode`, because benchmarks
-run in profile. Bootstrap logs the size, the count and the elapsed milliseconds, which is the blueprint's "DB seed time".
+run in profile. Bootstrap logs the size, the count and the elapsed milliseconds, which is the blueprint's "DB seed time". Since ADR-0026,
+such a run opens a database file of its own, so the seed never lands beside real data.
 
 **The seeder's ids come from its own `GPUuidGeneratorImpl` on a seeded `Random`,** not the app's singleton. `Random.secure` costs about
 0.1 ms per id on the test host: 5.0 s of 50k ids, against 19 ms seeded. Two v7 generators can interleave ids minted in the same millisecond.

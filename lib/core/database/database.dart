@@ -12,7 +12,8 @@ part 'database.g.dart';
 /// The only persistent store, so golden rule 3 is one transaction; auth tokens alone go to secure storage (ADR-0001).
 @DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable])
 final class GPAppDatabase extends _$GPAppDatabase {
-  GPAppDatabase() : super(openAppConnection());
+  /// [name] is the file's: a benchmark run opens its own, so it never touches the real data (ADR-0026).
+  GPAppDatabase({String name = 'pockit'}) : super(openAppConnection(name: name));
 
   GPAppDatabase.forTesting(super.e);
 

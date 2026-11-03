@@ -22,6 +22,9 @@ final class BenchmarkDatasetGenerator {
   static const defaultSeed = 42;
   static const months = 24;
 
+  /// Bump on any change to the rows: a device's benchmark database is named after it, so a bump seeds a fresh one (ADR-0026).
+  static const version = 1;
+
   static const _notePercent = 40;
 
   // A weekend day gets 30% more rows than a weekday.

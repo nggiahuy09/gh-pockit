@@ -890,14 +890,14 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 
-| Ngày | Task                                                                                                                                                       |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới |
-| T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query                                                         |
-| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md`                                                                                                   |
-| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                                                                                             |
-| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại                                                                                    |
-| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                                                                                                |
+| Ngày | Task                                                                                                                                                                               |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới                         |
+| T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query ✅ Done (02/11, làm sớm) — hai tầng, DB riêng, ADR-0026; chi tiết ở _W9 T3_ dưới |
+| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md`                                                                                                                           |
+| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                                                                                                                     |
+| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại                                                                                                            |
+| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                                                                                                                        |
 
 **Soundbite:** _"Dashboard query từ 480ms xuống 12ms trên 50k rows sau khi thêm composite index."_ ← số thật, đo được, đây là thứ tạo khác biệt trong phỏng vấn.
 
@@ -922,6 +922,33 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
       đủ, đúng danh mục, không nạp lần hai, watch chỉ chạy lại một lần), DAO (`insertTransactions`, `hasAnyTransaction`), DI.
 - **Còn lại:** số dư âm sâu ở 50k (68 dòng/ngày tiêu vượt một suất lương) — đúng cho việc đo thời gian, lạ trên màn hình. Chưa nạp trên máy thật —
   việc của T3/T4. Nút "Nạp bộ dữ liệu mẫu" trong Settings vẫn là bộ mẫu viết tay; review #23 (widget test cho snackbar) chưa đụng.
+
+### W9 T3 — bộ đo hai tầng (02/11, làm sớm trong buổi T2, ADR-0026)
+
+> `flutter test` chỉ đo được query (JIT, không có frame thật); frame phải đo trên điện thoại ở profile mode. Nên tách hai tầng; cold start không cần code.
+
+- [x] **Tầng 1 — query trên máy dev:** `test/benchmark/query_benchmark_test.dart`, chạy `fvm flutter test test/benchmark --dart-define=DATASET=10k`.
+      Mở đúng kết nối của app (file, isolate nền) nên tính cả chi phí chép dòng qua isolate; seed bằng seeder T2. 8 case — list 50 / 500 / 2.000,
+      lọc tài khoản bận nhất, lọc danh mục bận nhất, tổng tháng, chi theo danh mục, số dư — mỗi case đo hai lớp (câu SQL `get()`, emission đầu của
+      repository), 5 lần làm nóng + 30 lần đo, median / p90 / max, kèm `EXPLAIN QUERY PLAN`; báo cáo ở `build/benchmarks/queries-<size>.md`. Không có
+      define thì chỉ là một test skip, CI không chạy.
+- [x] **Tầng 2 — frame trên điện thoại:** thêm `integration_test` + `flutter_driver` (dev, từ SDK; dry-run rồi `pub get`: thêm 6 package, không đổi
+      package nào). `integration_test/app_benchmark_test.dart` (frame policy `benchmarkLive`): `home_data_ms` (bootstrap → Home có dữ liệu),
+      `transactions_first_rows_ms` (chạm tab → dòng đầu), `transactions_scroll` (`watchPerformance` qua 30 lần fling có load more). Driver ghi
+      `build/integration_response_data.json`. Cold start: `flutter run --profile --trace-startup` → `build/start_up_info.json`.
+- [x] **DB riêng:** build không phải release có `DATASET` thì mở `pockit_bench_<size>_v<version>` thay vì `pockit` — dữ liệu thật trên iPhone không bị
+      đụng; lần đầu seed, các lần sau dùng lại. `BenchmarkDatasetGenerator.version` tăng khi dữ liệu sinh ra đổi → file mới, khỏi gỡ app.
+- [x] Chạy thử tầng 1 ở 1k (host): chạy hết 8 case, plan đúng như audit W8 (seek owner index / category index, không `SCAN`); số chưa ghi — việc của T4.
+- [x] `docs/benchmarks/README.md`: dataset + cách chạy ba lệnh; phần before/after để Flex.
+- [x] **Phát hiện khi chạy thử trên emulator:** `flutter drive` mặc định **gỡ app khi test xong**, kể cả khi fail (`DriveService.stop`, flutter_tools
+      3.35.6) — trên iPhone là mất dữ liệu thật. Mọi lệnh drive (README, CLAUDE.md §9) đều kèm `--keep-app-running`. Thêm `--no-dds`: `watchPerformance`
+      tự nối vào VM Service của app để đọc số GC, DDS chặn kết nối đó.
+- [x] **Chạy trọn tầng 2 trên emulator `Pixel_10`, 1k, profile** (chỉ để chứng minh bộ đo chạy được, số không đại diện): `home_data_ms` 212,
+      `transactions_first_rows_ms` 119; 30 lần fling → build trung bình 1,65 ms (p99 5,4), raster trung bình 10,2 ms (p90 17,0), 897/3.268 frame lỡ
+      ngân sách raster. Raster nặng hơn build nhiều — ứng viên đầu tiên cần xem trên máy thật là blur của dock (ADR-0014).
+- **Manh mối cho T5:** `pumpAndSettle` sau khi list hiện dòng đầu chờ đủ 10 phút mà không settle → khi đứng yên vẫn có thứ xin frame liên tục (nghi
+  spinner footer hoặc skeleton). Nếu đúng trên máy thật thì đó là pin bị tiêu khi app đứng yên — kiểm bằng DevTools ở T4/T5.
+- **Còn lại:** chưa chạy trên máy thật (iPhone 15 cần cắm cáp) — T4. iOS sẽ thêm pod `integration_test` ở lần build kế tiếp.
 
 ## W10 · 09–15/11 🔴 Migration
 

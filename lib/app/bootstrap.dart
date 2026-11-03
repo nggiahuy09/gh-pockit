@@ -10,7 +10,6 @@ import '../features/accounts/domain/repositories/account_repository.dart';
 import '../features/categories/data/seed/category_seeder.dart';
 import '../features/settings/presentation/debug/sample_data.dart';
 import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
-import '../features/transactions/data/seed/benchmark_dataset_size_enum.dart';
 import '../features/transactions/domain/repositories/transaction_repository.dart';
 import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
 import 'di/injector.dart';
@@ -59,9 +58,9 @@ Future<void> bootstrap(Widget Function() builder) async {
     }
   }
 
-  // `--dart-define=DATASET=50k` (or 1k, 10k): the benchmark dataset, into an empty database (ADR-0025). Not `kDebugMode`: benchmarks run in profile.
-  final datasetSize = BenchmarkDatasetSize.fromKey(const String.fromEnvironment('DATASET'));
-  if (!kReleaseMode && datasetSize != null) {
+  // Seeds the benchmark database once; later launches find it full (ADR-0025). Not `kDebugMode`: benchmarks run in profile.
+  final datasetSize = benchmarkDatasetSize;
+  if (datasetSize != null) {
     final stopwatch = Stopwatch()..start();
     try {
       final count = await getIt.get<BenchmarkDatasetSeeder>().seed(datasetSize);
