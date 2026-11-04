@@ -73,6 +73,15 @@ Two constraints shape the harness:
 **The reference numbers come from a physical phone.** An emulator or a simulator only shows that the harness runs. The iOS simulator cannot
 build in profile mode at all.
 
+Amended on 2026-11-04 (W9 T5–T6): to finish the week, the 50k runs and the before/after of T6 used the Android emulator (`Pixel_10`, profile)
+instead of the iPhone. That was the user's call.
+
+- Those numbers compare only with each other. They vary up to three times from one run to the next.
+- The verdict therefore rests on what the noise cannot hide: how many new windows are followed by a slow frame, and how that frame's build
+  time grows with the window.
+- To support that, the device test matches each frame to the list snapshot before it, on the `Timeline.now` clock, and reports
+  `clock_lead_ms` to show that the two clocks agree.
+
 The two dependencies, through CLAUDE.md §5's questions:
 
 1. They make the frame timings repeatable on a real phone.
