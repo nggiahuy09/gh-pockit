@@ -70,6 +70,7 @@ final class _DayHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+/// A day's rows on one rounded card. A sliver, so only the rows near the screen are built: a new window rebuilds a screenful, not every row (ADR-0028).
 final class TransactionDayCardWidget extends StatelessWidget {
   const TransactionDayCardWidget({super.key, required this.items, this.onOpen, this.onDelete});
 
@@ -79,47 +80,76 @@ final class TransactionDayCardWidget extends StatelessWidget {
   /// Swiping a row away, or the screen reader's delete action. Completes true once the row is deleted; false puts a swiped row back.
   final Future<bool> Function(TransactionEntity transaction)? onDelete;
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final radius = context.radii.borderLg;
-    final onOpen = this.onOpen;
+  int? _indexOf(Key key) => switch (key) {
+    ValueKey<String>(:final value) => switch (items.indexWhere((item) => item.transaction.id == value)) {
+      -1 => null,
+      final index => index,
+    },
+    _ => null,
+  };
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: context.spacing.md),
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: colors.surface, borderRadius: radius, boxShadow: context.shadows.small),
-        child: ClipRRect(
-          borderRadius: radius,
-          // Transparent, so the ripple draws above the card's colour rather than under it on the page's Material.
-          child: Material(
-            type: MaterialType.transparency,
-            child: Column(
-              children: [
-                for (var i = 0; i < items.length; i++)
-                  _DeletableRow(
-                    key: ValueKey(items[i].transaction.id),
-                    transaction: items[i].transaction,
-                    onDelete: onDelete,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: i == 0 ? null : Border(top: BorderSide(color: colors.outlineVariant)),
-                      ),
-                      child: TransactionRowWidget(item: items[i], onTap: onOpen == null ? null : () => onOpen.call(items[i].transaction)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+  @override
+  Widget build(BuildContext context) => SliverPadding(
+    padding: EdgeInsets.symmetric(horizontal: context.spacing.md),
+    sliver: DecoratedSliver(
+      decoration: BoxDecoration(color: context.colors.surface, borderRadius: context.radii.borderLg, boxShadow: context.shadows.small),
+      sliver: SliverList.builder(
+        itemCount: items.length,
+        // By id, so a row keeps its swipe state when a write above it shifts the indexes.
+        findChildIndexCallback: _indexOf,
+        itemBuilder: (_, index) => _DayCardRow(
+          key: ValueKey(items[index].transaction.id),
+          item: items[index],
+          isFirst: index == 0,
+          isLast: index == items.length - 1,
+          onOpen: onOpen,
+          onDelete: onDelete,
         ),
       ),
+    ),
+  );
+}
+
+final class _DayCardRow extends StatelessWidget {
+  const _DayCardRow({super.key, required this.item, required this.isFirst, required this.isLast, required this.onOpen, required this.onDelete});
+
+  final TransactionListItem item;
+  final bool isFirst;
+  final bool isLast;
+  final void Function(TransactionEntity transaction)? onOpen;
+  final Future<bool> Function(TransactionEntity transaction)? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = context.radii.borderLg;
+    final onOpen = this.onOpen;
+    // Transparent, so the ripple draws above the card's colour rather than under it on the page's Material.
+    final row = Material(
+      type: MaterialType.transparency,
+      child: _DeletableRow(
+        transaction: item.transaction,
+        onDelete: onDelete,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: isFirst ? null : Border(top: BorderSide(color: context.colors.outlineVariant)),
+          ),
+          child: TransactionRowWidget(item: item, onTap: onOpen == null ? null : () => onOpen.call(item.transaction)),
+        ),
+      ),
+    );
+    if (!isFirst && !isLast) return row;
+
+    // Only the card's ends are rounded, so only they clip the ripple and the swipe background.
+    return ClipRRect(
+      borderRadius: BorderRadius.vertical(top: isFirst ? radius.topLeft : Radius.zero, bottom: isLast ? radius.bottomLeft : Radius.zero),
+      child: row,
     );
   }
 }
 
 /// Swipe towards the start to delete. The delete is written before the row goes, so the list's next snapshot is what removes it (ADR-0017).
 final class _DeletableRow extends StatelessWidget {
-  const _DeletableRow({super.key, required this.transaction, required this.onDelete, required this.child});
+  const _DeletableRow({required this.transaction, required this.onDelete, required this.child});
 
   final TransactionEntity transaction;
   final Future<bool> Function(TransactionEntity transaction)? onDelete;

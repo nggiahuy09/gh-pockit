@@ -168,8 +168,19 @@ void main() {
       await tester.drag(find.byType(CustomScrollView), const Offset(0.0, -600.0));
       await tester.pump();
 
-      expect(tester.getTopLeft(find.text('Row 0')).dy, lessThan(pinnedAt), reason: 'the rows must have scrolled past the header');
+      // The first rows scrolled up past the header, and the lazy list dropped them once they left the cache extent.
+      expect(find.text('Row 0'), findsNothing);
+      expect(find.byType(TransactionRowWidget), findsWidgets);
       expect(tester.getTopLeft(find.text('Today')).dy, closeTo(pinnedAt, 1.0));
+    });
+
+    testWidgets('a large window builds only the rows near the screen, not all of them (ADR-0028)', (tester) async {
+      await _pumpPage(tester);
+      _watch().emit(_snapshot(_today(300)));
+      await _flush(tester);
+
+      expect(find.text('Row 0'), findsOneWidget);
+      expect(find.byType(TransactionRowWidget).evaluate().length, lessThan(30), reason: 'a screenful plus the cache extent, not 300');
     });
 
     testWidgets('a full window shows the footer, and scrolling near it asks for the next window', (tester) async {

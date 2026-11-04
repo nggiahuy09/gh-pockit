@@ -173,12 +173,10 @@ final class _TransactionList extends StatelessWidget {
                 TransactionDayHeaderWidget(
                   label: getDayLabel(locale: locale, date: day.date, today: today),
                 ),
-                SliverToBoxAdapter(
-                  child: TransactionDayCardWidget(
-                    items: day.items,
-                    onOpen: (transaction) => unawaited(_handleOpen(context, transaction)),
-                    onDelete: (transaction) => _handleDelete(context, transaction),
-                  ),
+                TransactionDayCardWidget(
+                  items: day.items,
+                  onOpen: (transaction) => unawaited(_handleOpen(context, transaction)),
+                  onDelete: (transaction) => _handleDelete(context, transaction),
                 ),
               ],
             ),
