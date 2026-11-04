@@ -323,12 +323,12 @@ void main() {
       expect(emitted, <int>[0, -45000]);
     });
 
-    test('each side reads through its own index, never the whole table', () async {
+    test('each side reads only its own account index, which covers it: no row of the table is read (ADR-0027)', () async {
       final rows = await db.customSelect('EXPLAIN QUERY PLAN ${TransactionDao.accountBalancesSql}', variables: [Variable.withString(localOwnerId)]).get();
       final plan = rows.map((r) => r.read<String>('detail')).join('\n');
 
-      expect(plan, contains('transactions_account_id_occurred_at_id (account_id=?)'));
-      expect(plan, contains('transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
+      expect(plan, contains('USING COVERING INDEX transactions_account_id_occurred_at_id (account_id=?)'));
+      expect(plan, contains('USING COVERING INDEX transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
       expect(plan, isNot(contains('SCAN t')));
     });
   });

@@ -3,6 +3,7 @@ import 'package:drift/native.dart' show SqliteException;
 import 'package:drift_dev/api/migrations_native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
+import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 
 import 'generated/schema.dart';
 
@@ -203,6 +204,77 @@ void main() {
       }
     });
   });
+
+  group('v4 → v5 (the account indexes cover the balance, ADR-0027)', () {
+    test('migrates into the schema a fresh v5 install has', () async {
+      final connection = await _verifier.startAt(4);
+      final db = GPAppDatabase.forTesting(connection);
+
+      await _verifier.migrateAndValidate(db, 5);
+
+      await db.close();
+    });
+
+    test('keeps every v4 transaction, and the balances read the same over the rebuilt indexes', () async {
+      final db = await _upgradedFromV4WithTransactions();
+
+      final balances = await db.customSelect(TransactionDao.accountBalancesSql, variables: [Variable.withString('local')]).get();
+
+      expect(await db.select(db.transactionsTable).get(), hasLength(3));
+      expect({for (final row in balances) row.read<String>('id'): row.read<int>('balance_minor')}, {'a1': 1500000 - 125000 - 300000, 'a2': 300000});
+
+      await db.close();
+    });
+
+    test('rebuilds both account indexes wide enough that the balance never reads the table', () async {
+      final db = await _upgradedFromV4WithTransactions();
+
+      final plan = await db.customSelect('EXPLAIN QUERY PLAN ${TransactionDao.accountBalancesSql}', variables: [Variable.withString('local')]).get();
+
+      expect(
+        plan.map((row) => row.read<String>('detail')),
+        containsAll(<String>[
+          'SEARCH t USING COVERING INDEX transactions_account_id_occurred_at_id (account_id=?)',
+          'SEARCH t USING COVERING INDEX transactions_destination_account_id_occurred_at_id (destination_account_id=?)',
+        ]),
+      );
+
+      await db.close();
+    });
+
+    test('walks v3, v2 and v1 → v5 for devices that skipped releases', () async {
+      for (final from in [3, 2, 1]) {
+        final connection = await _verifier.startAt(from);
+        final db = GPAppDatabase.forTesting(connection);
+
+        await _verifier.migrateAndValidate(db, 5);
+
+        await db.close();
+      }
+    });
+  });
+}
+
+/// Two accounts, an expense, a transfer between them and a tombstone, written as v4 SQL.
+Future<GPAppDatabase> _upgradedFromV4WithTransactions() async {
+  final schema = await _verifier.schemaAt(4);
+  const columns = '(id, owner_id, type, account_id, destination_account_id, amount_minor, currency_code, occurred_at, created_at, updated_at, version, deleted_at, sync_status)';
+  schema.rawDatabase
+    ..execute(
+      'INSERT INTO accounts (id, owner_id, name, type, currency_code, initial_balance, is_archived, created_at, updated_at, version) VALUES '
+      "('a1', 'local', 'Ví tiền mặt', 'cash', 'VND', 1500000, 0, 1757800000000, 1757800000000, 1), "
+      "('a2', 'local', 'Ví điện tử', 'e_wallet', 'VND', 0, 0, 1757800000000, 1757800000000, 1)",
+    )
+    ..execute(
+      'INSERT INTO transactions $columns VALUES '
+      "('t1', 'local', 'expense', 'a1', NULL, 125000, 'VND', 1790573400000, 1790573400000, 1790573400000, 1, NULL, 'pending'), "
+      "('t2', 'local', 'transfer', 'a1', 'a2', 300000, 'VND', 1790573500000, 1790573500000, 1790573500000, 1, NULL, 'pending'), "
+      "('t3', 'local', 'expense', 'a2', NULL, 99000, 'VND', 1790573600000, 1790573600000, 1790573700000, 1, 1790573700000, 'pending')",
+    );
+
+  final db = GPAppDatabase.forTesting(schema.newConnection());
+  await _verifier.migrateAndValidate(db, 5);
+  return db;
 }
 
 Future<GPAppDatabase> _upgradedFromV3WithParents() async {
