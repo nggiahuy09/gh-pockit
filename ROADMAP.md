@@ -175,8 +175,8 @@ sửa được. Sửa một trong hai là làm hỏng mọi transaction đã n�
 | CI chưa có bước `build`                                                                | `ci.yml` hoãn tới khi có flavor, mà flavor chưa có lịch; lệnh `flutter run --flavor dev --dart-define-from-file=env/dev.json` ở CLAUDE.md §9 hiện không chạy (không có flavor, không có `env/`) | Chốt ở T2                            | ✅ 27/09 (Q15) — bước build + JDK 17, giữ tên job vì đó là required check; `flutter build apk --debug` chạy local 49s; lần chạy CI đầu tiên là ở PR W4             |
 | Chưa có ghi nhận app chạy thật từ khi có Drift                                         | W3 flex: iOS `pod install` lỗi CDN; không ghi lần chạy Android nào                                                                                                                              | T2 — máy có sẵn emulator `Pixel_10`  | ✅ 27/09 — debug APK trên emulator `Pixel_10`: Home, Accounts (empty state đọc từ Drift), Settings; tiếng Việt đủ dấu; ngôn ngữ còn nguyên sau force-stop + mở lại |
 | Comment trỏ sai tuần                                                                   | Cụm P4: "pull cursor W12 T2" → W14 T2, applier/pull "W13" → W14, "audited at W12 T3" → W15 T3; `TransactionDao (W5 T4)` → W4 T5; `money.dart` "W4's aggregates" → W6 T6/W7                      | T2, một lượt grep                    | ✅ 27/09 — 19 file (11 lib, 8 test). Để nguyên `money.dart` "revisiting at W13": câu đó nói về DTO đầu tiên đọc currency từ wire, có thể đúng là push              |
-| Bảng W3 không render trên GitHub                                                       | Dấu `\|` trong `` `ownerId\|nameKey` `` (row T5) tách cell thành 4 cột, lệch với header 3 cột                                                                                                   | T2                                   | ✅ 27/09 — escape thành `\|`, căn lại bảng                                                                                                                         |
-| W10 lỗi thời                                                                           | Dump v1 xong từ W2; v1→v2/v2→v3 và `version`/`deleted_at` đã có; migration test đã chạy trong CI                                                                                                | Viết lại trước W10 (W9 flex)         | Hẹn W9 flex                                                                                                                                                        |
+| Bảng W3 không render trên GitHub                                                       | Dấu `\                                                                                                                                                                                          | ` trong `` `ownerId\                 | nameKey` `` (row T5) tách cell thành 4 cột, lệch với header 3 cột                                                                                                  |
+| W10 lỗi thời                                                                           | Dump v1 xong từ W2; v1→v2/v2→v3 và `version`/`deleted_at` đã có; migration test đã chạy trong CI                                                                                                | Viết lại trước W10 (W9 flex)         | ✅ 04/11 — viết lại, xem _W10_                                                                                                                                     |
 | Nút đổi theme (`GPThemeModeStore`)                                                     | ADR-0005 _Owed_, chưa tuần nào nhận                                                                                                                                                             | Issue `later`                        | Chờ tạo issue — cần bạn đồng ý đăng lên GitHub                                                                                                                     |
 | Row hỏng chưa có đường chữa (quarantine)                                               | ADR-0006                                                                                                                                                                                        | P4/P7 — W4 T6 chỉ quyết policy đọc   | Hẹn P4/P7                                                                                                                                                          |
 | "1 dòng học được gì" của W1–W3                                                         | Luật chơi 5; repo chưa có dòng nào                                                                                                                                                              | Tự viết (bỏ qua nếu đã ghi chỗ khác) | Bạn tự viết                                                                                                                                                        |
@@ -890,14 +890,14 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 
 ## W9 · 02–08/11 🟡 Seed + benchmark
 
-| Ngày | Task                                                                                                                                                                               |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới                         |
-| T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query ✅ Done (02/11, làm sớm) — hai tầng, DB riêng, ADR-0026; chi tiết ở _W9 T3_ dưới |
-| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md` ✅ Done (03/11) — iPhone 15 + host; build p99 44 ms, 51 frame lỡ; chi tiết ở _W9 T4_ dưới                                  |
-| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN`                                                                                                                     |
-| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại                                                                                                            |
-| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể                                                                                                                        |
+| Ngày | Task                                                                                                                                                                                                |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Data generator: 1k / 10k / 50k transactions, phân bố ngày thực tế ✅ Done (02/11) — 24 tháng, một batch ngoài repository, ADR-0025; chi tiết ở _W9 T2_ dưới                                         |
+| T3   | Bộ đo hiệu năng (benchmark harness): đo cold start, list first frame, scroll jank, dashboard query ✅ Done (02/11, làm sớm) — hai tầng, DB riêng, ADR-0026; chi tiết ở _W9 T3_ dưới                 |
+| T4   | Chạy benchmark 10k → ghi số vào `docs/benchmarks/10k.md` ✅ Done (03/11) — iPhone 15 + host; build p99 44 ms, 51 frame lỡ; chi tiết ở _W9 T4_ dưới                                                  |
+| T5   | Chạy benchmark 50k → tìm query chậm nhất, `EXPLAIN QUERY PLAN` ✅ Done (04/11) — số dư 26,8 ms (đọc từng dòng bảng); emulator Android theo quyết định của bạn; chi tiết ở _W9 T5_ dưới              |
+| T6   | Fix nút thắt (thường là thiếu index hoặc query trên UI isolate), đo lại ✅ Done (04/11) — covering index số dư (v5, ADR-0027) 26,8 → 5,0 ms; thẻ ngày lười (ADR-0028), frame tệ nhất 1,9 s → 0,13 s |
+| Flex | Viết `docs/benchmarks/README.md`: before/after có số cụ thể ✅ Done (04/11) — bảng before/after + `50k.md`; viết lại W10 còn chờ bạn chốt                                                           |
 
 **Soundbite:** _"Dashboard query từ 480ms xuống 12ms trên 50k rows sau khi thêm composite index."_ ← số thật, đo được, đây là thứ tạo khác biệt trong phỏng vấn.
 
@@ -969,18 +969,68 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
   T5 ở 50k quyết covering index ADR-0019 và `UNION ALL` W4 T5.
 - Mỗi lần `flutter drive` / `flutter run` trên iOS 27 mất ~3–4 phút cài và mở app (devicectl); một vòng 10k (seed + 3 lần + 3 cold start) ≈ 30 phút.
 
+### W9 T5 — 50k: query chậm nhất và gai frame (04/11)
+
+> Theo quyết định của bạn, tầng thiết bị chạy trên emulator Android `Pixel_10` thay iPhone để kịp tuần (amendment ADR-0026). Số emulator nhiễu tới 3 lần
+> giữa các lần chạy, nên kết luận dựa vào thứ nhiễu không che được: gai frame khớp với snapshot nào, và build time tăng theo cỡ cửa sổ ra sao.
+
+- [x] **Host 50k:** query chậm nhất là **số dư, 26,8 ms** (p90 35,5); ở 10k chỉ 2,8 ms — dữ liệu ×5, thời gian ×10. Plan: seek index tài khoản rồi đọc dòng
+      bảng lấy `type`/`amount_minor`/`deleted_at`; file 27 MB, cache 8 MB nên trượt cache. Probe: cache 64 MB còn 12,9 ms, covering index còn 4,5 ms →
+      chi phí là đọc dòng bảng. Thứ hai: tài khoản 3 dòng 15 ms (đi hết owner index) — "before" cho `UNION ALL`, chưa gấp. Tổng tháng 0,65 ms, chi theo
+      danh mục 1,7 ms: không cần covering index (ADR-0021).
+- [x] **Bộ đo khớp gai:** test trên máy ghi mọi `FrameTiming` và mọi snapshot list trên đồng hồ `Timeline.now`, báo frame build chậm nào bắt đầu trong
+      50 ms sau một snapshot, kèm cỡ cửa sổ; `clock_lead_ms` (103–558 ms) xác nhận hai đồng hồ khớp.
+- [x] **Emulator 50k (before):** 19–28 trên 26–29 snapshot kéo theo một frame chậm; build của frame đó tăng theo cửa sổ: 33 ms ở 100 dòng → 2.496 ms
+      ở 1.250 dòng. Đọc code ra nguyên nhân: mỗi ngày là `SliverToBoxAdapter` bọc `Column` toàn bộ dòng → cả cửa sổ được build + layout mỗi snapshot.
+      Cold start emulator ~3,4 s.
+
+### W9 T6 — hai bản sửa, đo lại (04/11)
+
+- [x] **Covering index số dư (ADR-0027, schema v4 → v5):** nới rộng hai index tài khoản sẵn có thành `(…, occurred_at, id, type, amount_minor,
+    deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ hơn 3 MB, không thêm index phải ghi). Migration drop + tạo lại; bước v4 giờ
+      tạo đúng hình dạng v4 và bước v5 chỉ chạy khi `to >= 5`, để migration dừng ở v4 vẫn ra đúng schema v4. Dump `drift_schema_v5.json`; test
+      v4 → v5 (giữ dữ liệu, số dư như cũ, ghim plan covering), v3/v2/v1 → v5. Host 50k: **26,8 → 5,0 ms**, p90 35,5 → 5,4; seed 985 → 991 ms.
+- [x] **Thẻ ngày lười (ADR-0028):** `TransactionDayCardWidget` thành sliver — `DecoratedSliver` vẽ thẻ, `SliverList.builder` dựng dòng, key theo id + `findChildIndexCallback`, chỉ dòng đầu/cuối clip góc. Emulator 50k: build trung bình 29,4 → 5,9 ms, p99 599 → 42 ms, tệ nhất 1.921 → 132 ms,
+      frame lỡ 301/1.166 → 131/1.818; frame sau snapshot phẳng 17–58 ms từ 200 tới 1.900 dòng. Soát bằng mắt trên emulator: thẻ, bóng, đường kẻ, header ghim.
+- [x] Test (1020 xanh + 1 skip): migration v5, plan covering của DAO, test lười (cửa sổ 300 dòng dựng < 30 dòng); test header ghim viết lại vì dòng
+      ra khỏi cache giờ bị bỏ.
+
+### W9 Flex — before/after (04/11)
+
+- [x] `docs/benchmarks/README.md` có bảng before/after; `docs/benchmarks/50k.md` có số host + emulator, plan của query chậm nhất, và hai soundbite thật:
+      _"Số dư trên 50k giao dịch từ 27 ms xuống 5 ms nhờ nới hai index sẵn có thành covering, không thêm index nào phải ghi"_ và _"frame tệ nhất của list
+      ở 50k từ ~1,9 s xuống ~0,13 s nhờ thẻ ngày thành sliver lười"_.
+- [x] Viết lại W10 (04/11) — xem _W10_ bên dưới.
+- **Còn lại:** chạy "after" trên iPhone 15 khi cắm máy. Cold start "after" chưa đo lại (T6 không đụng gì trước frame đầu).
+
 ## W10 · 09–15/11 🔴 Migration
 
-| Ngày | Task                                                                                                   |
-| ---- | ------------------------------------------------------------------------------------------------------ |
-| T2   | Setup `drift_dev schema dump` workflow, export schema v1                                               |
-| T3   | Migration v1→v2: thêm `transactions.receipt_id`                                                        |
-| T4   | Migration v2→v3: thêm `version` + `deleted_at` (backfill giá trị mặc định)                             |
-| T5   | Migration test với fixture DB v1 → assert data cũ còn nguyên                                           |
-| T6   | Đưa migration test vào CI                                                                              |
-| Flex | ADR _Soft delete for synchronized entities_. Viết checklist "khi đổi schema phải làm gì" vào CLAUDE.md |
+| Ngày | Task                                                                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR            |
+| T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô |
+| T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR                                                                |
+| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng                                                   |
+| T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5                                            |
+| Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag               |
 
-**🏁 Milestone P2:** DB đủ chất lượng production. **Tag `v0.2-db`.**
+**🏁 Milestone P2:** DB đủ chất lượng production. **Tag `v0.2-db`** (và `v0.1-local` còn nợ từ P1 — cả hai cần PR `dev` → `main`).
+
+### W10 — viết lại (04/11, nợ từ W4 T2)
+
+> Bảng cũ là kế hoạch của blueprint §21 trước khi có code. Năm dòng của nó đã xong ở chỗ khác hoặc không còn áp dụng; tuần này dành cho phần một DB
+> "production" còn thiếu: migration không được để DB nửa vời, có quy tắc khi version đi lùi, và được thử trên máy thật với dữ liệu thật.
+
+- **Bảng cũ đi đâu:** dump schema — có từ W2 (v1–v5 trong `drift_schemas/`); `receipt_id` — chưa có receipt nào, thuộc OCR (W29+); `version` + `deleted_at`
+  — có trong mọi bảng đồng bộ từ ngày đầu, không cần backfill; migration test với fixture — mỗi bước từ W2 tới W9 T6; test trong CI — `flutter test` chạy
+  trên mọi PR từ W1.
+- **Vì sao T2 đứng đầu:** drift 2.31 **không** bọc migration trong transaction (`_runMigrations` trong `engines.dart`); version chỉ được ghi sau khi
+  migration xong. App bị kill giữa bước v4, sau khi đã tạo vài index → lần mở sau chạy lại cả bước: `createTable` có `IF NOT EXISTS` nên qua, nhưng
+  `createIndex` thì không → "index already exists" → crash mỗi lần mở. DDL của SQLite có transaction, nên bọc lại là đủ; test phải chứng minh được.
+- **Vì sao T3:** W9 T6 là lần đầu một entity đã có bị đổi định nghĩa, và lộ ra điểm yếu của `if (from < N)` viết tay: bước cũ dùng định nghĩa hiện tại.
+  Bản vá (`_v4AccountIndex`, `to >= 5`) đúng nhưng mỗi lần đổi sau sẽ lặp lại; `stepByStep` sinh schema theo từng version để bước nào dùng đúng của nó.
+- **Vì sao T4:** drift gọi `onUpgrade` cả khi version đi lùi (`from = 5, to = 4`); code hiện không làm gì rồi ghi `user_version = 4` — DB v5 bị gọi là v4.
+- **T5 dùng lại quy trình W9 T4:** sao lưu `Documents/` bằng `devicectl`, cài, chép lại, so; `flutter drive` luôn kèm `--keep-app-running`.
 
 ---
 

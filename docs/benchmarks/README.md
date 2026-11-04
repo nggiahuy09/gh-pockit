@@ -2,7 +2,24 @@
 
 How Pockit is measured at 1k, 10k and 50k transactions. The dataset is described in ADR-0025, and the harness in ADR-0026.
 
-Results: [10k](10k.md) (W9 T4).
+Results: [10k](10k.md) (W9 T4, iPhone 15), [50k](50k.md) (W9 T5–T6, before and after).
+
+## Before / after — W9 T6
+
+Two changes came out of the 50k run. Each one fixes the slowest thing its tier found.
+
+| What | Where measured | Before | After | Change |
+| ---- | -------------- | -----: | ----: | ------ |
+| Account balances, 50k | host, repository median | 26.8 ms | **5.0 ms** | the two account indexes widened to cover the query, schema v5 ([ADR-0027](../adr/0027-account-indexes-cover-the-balance-query.md)) |
+| … p90 | host | 35.5 ms | 5.4 ms | |
+| Seeding 50k rows (write cost) | host | 985 ms | 991 ms | unchanged |
+| List scroll, worst build frame, 50k | Android emulator, profile | 1,921 ms | **132 ms** | each day card became a lazy sliver ([ADR-0028](../adr/0028-day-card-is-a-lazy-sliver.md)) |
+| … p99 build frame | emulator | 599 ms | 42 ms | |
+| … frames over the build budget | emulator | 301 / 1,166 | 131 / 1,818 | |
+| … build time of the frame after a new 1,000+-row window | emulator | 1–2.5 s, growing with the window | 17–58 ms, flat | |
+
+Host numbers are JIT and emulator numbers are noisy, so each one is compared only with its own kind. The iPhone 15 numbers at 10k
+([10k.md](10k.md)) are the "before" on real hardware. The "after" on the iPhone has not been run yet.
 
 ## The dataset
 
@@ -40,7 +57,10 @@ fvm flutter drive --profile --keep-app-running --no-dds --driver=test_driver/int
 - It writes `build/integration_response_data.json`:
   - `home_data_ms`: from bootstrap to Home showing data;
   - `transactions_first_rows_ms`: from the tab tap to the first row;
-  - `transactions_scroll`: build and raster time per frame over 30 flings, and the frames that missed their budget.
+  - `transactions_scroll`: build and raster time per frame over 30 flings, and the frames that missed their budget;
+  - `slow_build_frames_after_a_snapshot` (with its `_detail`): the slow frames whose build began within 50 ms of a new list window, each
+    with the window's size. This shows whether the spikes come from the list's rebuild;
+  - `clock_lead_ms`: small and positive when the frame clock and `Timeline.now` agree. The matching above relies on that.
 - The run uses its own database, `pockit_bench_<size>_v<version>`, and never touches the real data.
 - The first run of a size seeds that database. Throw that run's numbers away, then take the median of three or more runs.
 
