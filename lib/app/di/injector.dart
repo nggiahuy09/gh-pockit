@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
 import '../../core/database/database.dart';
@@ -18,10 +20,16 @@ import '../../features/categories/data/seed/category_seeder.dart';
 import '../../features/categories/domain/repositories/category_repository.dart';
 import '../../features/transactions/data/daos/transaction_dao.dart';
 import '../../features/transactions/data/repositories/transaction_repository_impl.dart';
+import '../../features/transactions/data/seed/benchmark_dataset_generator.dart';
+import '../../features/transactions/data/seed/benchmark_dataset_seeder.dart';
+import '../../features/transactions/data/seed/benchmark_dataset_size_enum.dart';
 import '../../features/transactions/domain/repositories/transaction_repository.dart';
 
 /// Use cases are never registered here: blocs build them from repositories resolved through this (ADR-0013).
 final GetIt getIt = GetIt.instance;
+
+/// `--dart-define=DATASET=1k|10k|50k` on a non-release build: the run opens a database file of its own for that size and seeds it (ADR-0025, ADR-0026).
+final BenchmarkDatasetSize? benchmarkDatasetSize = kReleaseMode ? null : BenchmarkDatasetSize.fromKey(const String.fromEnvironment('DATASET'));
 
 /// [container] lets a test register into a fresh `GetIt()` instead of the global one.
 void configureCoreDependencies([GetIt? container]) {
@@ -29,7 +37,13 @@ void configureCoreDependencies([GetIt? container]) {
 
   c
     // `dispose` is for tests: resetting the locator without closing leaks the sqlite connection, and with `shareAcrossIsolates` its isolate too.
-    ..registerLazySingleton<GPAppDatabase>(GPAppDatabase.new, dispose: (db) => db.close())
+    ..registerLazySingleton<GPAppDatabase>(
+      () => switch (benchmarkDatasetSize) {
+        final size? => GPAppDatabase(name: 'pockit_bench_${size.key}_v${BenchmarkDatasetGenerator.version}'),
+        null => GPAppDatabase(),
+      },
+      dispose: (db) => db.close(),
+    )
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
     ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c.get<GPClock>()))
@@ -88,6 +102,20 @@ void configureTransactionsDependencies([GetIt? container]) {
         dao: c.get<TransactionDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
+        ownerId: localOwnerId,
+      ),
+    )
+    // Built only when a non-release run passes `--dart-define=DATASET`.
+    ..registerLazySingleton<BenchmarkDatasetSeeder>(
+      () => BenchmarkDatasetSeeder(
+        accountDao: c.get<AccountDao>(),
+        categoryDao: c.get<CategoryDao>(),
+        clock: c.get<GPClock>(),
+        // Not the singleton: `Random.secure` costs ~0.1 ms an id, nearly all of a 50k seed. Safe because nothing else mints a v7 while it runs.
+        generator: BenchmarkDatasetGenerator(
+          uuidGenerator: GPUuidGeneratorImpl(clock: c.get<GPClock>(), random: Random(BenchmarkDatasetGenerator.defaultSeed)),
+        ),
+        transactionDao: c.get<TransactionDao>(),
         ownerId: localOwnerId,
       ),
     );

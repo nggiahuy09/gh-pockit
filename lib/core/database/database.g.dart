@@ -2529,11 +2529,11 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
   );
   late final Index transactionsAccountIdOccurredAtId = Index(
     'transactions_account_id_occurred_at_id',
-    'CREATE INDEX transactions_account_id_occurred_at_id ON transactions (account_id, occurred_at, id)',
+    'CREATE INDEX transactions_account_id_occurred_at_id ON transactions (account_id, occurred_at, id, type, amount_minor, deleted_at)',
   );
   late final Index transactionsDestinationAccountIdOccurredAtId = Index(
     'transactions_destination_account_id_occurred_at_id',
-    'CREATE INDEX transactions_destination_account_id_occurred_at_id ON transactions (destination_account_id, occurred_at, id)',
+    'CREATE INDEX transactions_destination_account_id_occurred_at_id ON transactions (destination_account_id, occurred_at, id, type, amount_minor, deleted_at)',
   );
   late final Index transactionsCategoryIdOccurredAtId = Index(
     'transactions_category_id_occurred_at_id',

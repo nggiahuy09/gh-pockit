@@ -323,12 +323,12 @@ void main() {
       expect(emitted, <int>[0, -45000]);
     });
 
-    test('each side reads through its own index, never the whole table', () async {
+    test('each side reads only its own account index, which covers it: no row of the table is read (ADR-0027)', () async {
       final rows = await db.customSelect('EXPLAIN QUERY PLAN ${TransactionDao.accountBalancesSql}', variables: [Variable.withString(localOwnerId)]).get();
       final plan = rows.map((r) => r.read<String>('detail')).join('\n');
 
-      expect(plan, contains('transactions_account_id_occurred_at_id (account_id=?)'));
-      expect(plan, contains('transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
+      expect(plan, contains('USING COVERING INDEX transactions_account_id_occurred_at_id (account_id=?)'));
+      expect(plan, contains('USING COVERING INDEX transactions_destination_account_id_occurred_at_id (destination_account_id=?)'));
       expect(plan, isNot(contains('SCAN t')));
     });
   });
@@ -534,6 +534,44 @@ void main() {
 
       expect(stored.syncStatus, TransactionDao.pendingSyncStatus);
       expect(stored.syncStatus, 'pending');
+    });
+  });
+
+  group('insertTransactions', () {
+    test("writes every row, each stamped 'pending' whatever its companion carried", () async {
+      await dao.insertTransactions([_row(), _row(id: 'tx-2')]);
+
+      final stored = await db.select(db.transactionsTable).get();
+
+      expect(stored.map((row) => row.id), unorderedEquals(['tx-1', 'tx-2']));
+      expect(stored.where((row) => row.syncStatus != 'pending'), isEmpty);
+    });
+
+    test('wakes an open watch once for the batch, not once per row', () async {
+      final emissions = <int>[];
+      final subscription = dao.watchTransactions(localOwnerId, limit: 50).listen((rows) => emissions.add(rows.length));
+
+      await pumpEventQueue();
+      await dao.insertTransactions([_row(), _row(id: 'tx-2'), _row(id: 'tx-3')]);
+      await pumpEventQueue();
+      await subscription.cancel();
+
+      expect(emissions, [0, 3]);
+    });
+  });
+
+  group('hasAnyTransaction', () {
+    test('is false for an owner with none, whatever another owner has', () async {
+      await dao.insertTransaction(_row(accountId: 'acc-theirs', ownerId: _otherOwner));
+
+      expect(await dao.hasAnyTransaction(localOwnerId), isFalse);
+    });
+
+    test('is true once the owner has one, a tombstone included', () async {
+      await dao.insertTransaction(_row());
+      await _tombstone(db, 'tx-1');
+
+      expect(await dao.hasAnyTransaction(localOwnerId), isTrue);
     });
   });
 

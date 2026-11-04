@@ -9,6 +9,7 @@ import '../core/utils/clock.dart';
 import '../features/accounts/domain/repositories/account_repository.dart';
 import '../features/categories/data/seed/category_seeder.dart';
 import '../features/settings/presentation/debug/sample_data.dart';
+import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../features/transactions/domain/repositories/transaction_repository.dart';
 import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
 import 'di/injector.dart';
@@ -54,6 +55,18 @@ Future<void> bootstrap(Widget Function() builder) async {
         logger.info('seeded sample data', fields: {'count': value});
       case GPErr(:final failure):
         logger.error('sample data seed failed', fields: {'failure': failure.runtimeType.toString()});
+    }
+  }
+
+  // Seeds the benchmark database once; later launches find it full (ADR-0025). Not `kDebugMode`: benchmarks run in profile.
+  final datasetSize = benchmarkDatasetSize;
+  if (datasetSize != null) {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final count = await getIt.get<BenchmarkDatasetSeeder>().seed(datasetSize);
+      logger.info('seeded benchmark dataset', fields: {'size': datasetSize.key, 'count': count, 'elapsed_ms': stopwatch.elapsedMilliseconds});
+    } on Exception catch (error, stackTrace) {
+      logger.error('benchmark dataset seed failed', fields: {'size': datasetSize.key}, error: error, stackTrace: stackTrace);
     }
   }
 

@@ -139,6 +139,7 @@ docs/
 ├── system-design.md
 ├── adr/            # 0001-xxx.md
 ├── patterns/       # portable notes, not Pockit-specific (keep names generic)
+├── proposals/      # feature designs not on the roadmap yet; nothing in one is decided until its ADR is written
 └── benchmarks/
 ```
 
@@ -148,28 +149,29 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 
 ## 5. Tech stack (pinned versions, do not auto-upgrade)
 
-| Concern        | Package                                 | Version snapshot 2026-09-06 |
-| -------------- | --------------------------------------- | --------------------------- |
-| Navigation     | `go_router`                             | 17.2.3 ⚠️                   |
-| Localization   | hand-written + `flutter_localizations`  | SDK (ADR-0004)              |
-| State          | `flutter_bloc`                          | 9.1.1                       |
-| DI             | `get_it`                                | 9.2.1                       |
-| Local DB       | `drift` + `drift_flutter`               | 2.31.0 / 0.2.8 ⚠️           |
-| Codegen        | `build_runner` + `drift_dev`            | 2.15.1 / 2.31.0             |
-| HTTP           | `dio`                                   | 5.11.1                      |
-| Backend        | `supabase_flutter`                      | 2.17.2                      |
-| Immutable      | `freezed`, `json_serializable`          | — / 6.14.1                  |
-| Equality       | `equatable`                             | 2.1.0 (ADR-0020)            |
-| Annotations    | `meta`                                  | 1.16.0                      |
-| Secure storage | `flutter_secure_storage`                | —                           |
-| Biometric      | `local_auth`                            | 3.0.2                       |
-| Connectivity   | `connectivity_plus`                     | 7.3.1                       |
-| Background     | `workmanager`                           | —                           |
-| UUID           | `uuid`                                  | 4.6.0                       |
-| Charts         | `fl_chart`                              | 1.2.0                       |
-| OCR            | `google_mlkit_text_recognition`         | 0.17.1                      |
-| Crash          | `sentry_flutter`                        | 9.29.0                      |
-| Test           | `mocktail` 1.0.5, `bloc_test`, `patrol` | — / `bloc_test` ⚠️          |
+| Concern          | Package                                     | Version snapshot 2026-09-06 |
+| ---------------- | ------------------------------------------- | --------------------------- |
+| Navigation       | `go_router`                                 | 17.2.3 ⚠️                   |
+| Localization     | hand-written + `flutter_localizations`      | SDK (ADR-0004)              |
+| State            | `flutter_bloc`                              | 9.1.1                       |
+| DI               | `get_it`                                    | 9.2.1                       |
+| Local DB         | `drift` + `drift_flutter`                   | 2.31.0 / 0.2.8 ⚠️           |
+| Codegen          | `build_runner` + `drift_dev`                | 2.15.1 / 2.31.0             |
+| HTTP             | `dio`                                       | 5.11.1                      |
+| Backend          | `supabase_flutter`                          | 2.17.2                      |
+| Immutable        | `freezed`, `json_serializable`              | — / 6.14.1                  |
+| Equality         | `equatable`                                 | 2.1.0 (ADR-0020)            |
+| Annotations      | `meta`                                      | 1.16.0                      |
+| Secure storage   | `flutter_secure_storage`                    | —                           |
+| Biometric        | `local_auth`                                | 3.0.2                       |
+| Connectivity     | `connectivity_plus`                         | 7.3.1                       |
+| Background       | `workmanager`                               | —                           |
+| UUID             | `uuid`                                      | 4.6.0                       |
+| Charts           | `fl_chart`                                  | 1.2.0                       |
+| OCR              | `google_mlkit_text_recognition`             | 0.17.1                      |
+| Crash            | `sentry_flutter`                            | 9.29.0                      |
+| Test             | `mocktail` 1.0.5, `bloc_test`, `patrol`     | — / `bloc_test` ⚠️          |
+| Device benchmark | `integration_test` + `flutter_driver` (dev) | SDK (ADR-0026)              |
 
 **Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
@@ -187,8 +189,8 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 - Every synced entity must have: `id`, `owner_id`, `created_at`, `updated_at`, `version`, `deleted_at`.
 - Required indexes — each one is created **in the change that adds the first query reading it**, never ahead of it (ADR-0009):
   - `transactions(owner_id, occurred_at DESC)`
-  - `transactions(account_id, occurred_at DESC)`
-  - `transactions(destination_account_id, occurred_at DESC)` — the transfer-in side of every balance
+  - `transactions(account_id, occurred_at DESC)` — also carries `type, amount_minor, deleted_at`, so the balance query reads no table row (ADR-0027)
+  - `transactions(destination_account_id, occurred_at DESC)` — the transfer-in side of every balance; carries the same three columns
   - `transactions(category_id, occurred_at DESC)`
   - `transactions(sync_status)`, `transactions(updated_at)` — P4, with the queries that filter on them
   - `sync_mutations(status, next_attempt_at)`
@@ -263,8 +265,10 @@ flutter test --coverage && genhtml coverage/lcov.info -o coverage/html
 dart run drift_dev schema dump lib/core/database/database.dart drift_schemas/
 dart run drift_dev schema generate drift_schemas/ test/core/database/generated/
 
-# benchmark
-flutter test test/benchmark --dart-define=DATASET=50k
+# benchmark (docs/benchmarks/README.md; ADR-0025, ADR-0026) — a DATASET run opens its own DB file, never the real one
+fvm flutter test test/benchmark --dart-define=DATASET=50k  # queries, on the host → build/benchmarks/queries-50k.md
+fvm flutter drive --profile --keep-app-running --no-dds --driver=test_driver/integration_test.dart --target=integration_test/app_benchmark_test.dart --dart-define=DATASET=50k -d <phone>
+fvm flutter run --profile --trace-startup --dart-define=DATASET=50k -d <phone>   # cold start → build/start_up_info.json
 
 # run — until the dev/prod flavors land at W11, with the Supabase env (there is no `env/` yet)
 fvm flutter run
@@ -392,13 +396,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Current phase        | **P2 — Database quality** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                                                   |
-| Week                 | **W8 done** (26/10–01/11) — T3–T5 01/11: month and category aggregates in SQL, VND only, on Home (ADR-0021); no day after today (ADR-0022); list names in one join (ADR-0024); T6: DB off the UI isolate since W2 (ADR-0001), now pinned by a test; iOS 27 runs on a hand-adopted UIScene (ADR-0023). Next: W9 (02/11) seed + benchmark; `task/W8` → `dev` PR due                    |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                                                         |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                                  |
-| Drift schema version | 4 — `settings` + `accounts` + `categories` + `transactions`; v1–v4 dumped to `drift_schemas/`, every step and v1→v4, v2→v4 tested                                                                                                                                                                                                                                                    |
-| Backend              | not set up yet                                                                                                                                                                                                                                                                                                                                                                       |
-| Latest ADR           | 0024 — a list row carries its category and account names, read in the same joined statement (01/11, W8 T5); 0023 — iOS runs on the UIScene lifecycle, adopted by hand on Flutter 3.35.6 until the pin reaches 3.38 (01/11); 0022 — no transaction is dated after today: a day-level rule in the create/update use cases, judged on an update only when the date moves (01/11, W8 T4) |
-| Blocker              | —                                                                                                                                                                                                                                                                                                                                                                                    |
+| Field                | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase        | **P2 — Database quality** (P1 complete; `v0.1-local` not tagged yet — needs the `dev` → `main` PR)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Week                 | **W9 in progress** (02–08/11) — T2 generator (ADR-0025), T3 two-tier harness (ADR-0026), T4 10k on the iPhone 15 (`docs/benchmarks/10k.md`). T5–T6 04/11, on the Android emulator by choice: 50k; balances 26.8 → 5.0 ms with covering account indexes (schema v5, ADR-0027); the list builds only the rows near the screen (ADR-0028). Flex: README before/after (`docs/benchmarks/`). W10 (09/11) rewritten: migrations that survive a kill, `stepByStep`, a downgrade policy, v4 → v5 on a device |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                                                                                                                                                                         |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Drift schema version | 5 — `settings` + `accounts` + `categories` + `transactions`; v5 widens the two account indexes to cover the balance (ADR-0027); v1–v5 dumped to `drift_schemas/`, every step, v1→v4/v5 and v4→v5 with data tested                                                                                                                                                                                                                                                                                    |
+| Backend              | not set up yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Latest ADR           | 0028 — a day card is a lazy sliver, so a new window rebuilds a screenful, not every row (04/11, W9 T6); 0027 — the two account indexes cover the balance query, schema v5 (04/11, W9 T6); 0026 — the benchmark harness: a query tier on the host, a frame tier on a phone, its own DB file (02/11, W9 T3)                                                                                                                                                                                            |
+| Blocker              | —                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |

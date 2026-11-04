@@ -167,7 +167,20 @@ ORDER BY spent_minor DESC, c.id''';
     );
   }
 
+  /// Tombstones count: only an owner who never wrote a transaction has none.
+  Future<bool> hasAnyTransaction(String ownerId) async {
+    final query = select(transactionsTable)
+      ..where((t) => t.ownerId.equals(ownerId))
+      ..limit(1);
+
+    return await query.getSingleOrNull() != null;
+  }
+
   Future<void> insertTransaction(TransactionsTableCompanion row) => into(transactionsTable).insert(row.copyWith(syncStatus: const Value(pendingSyncStatus)));
+
+  /// One batch, so the watches re-run once rather than once per row.
+  Future<void> insertTransactions(List<TransactionsTableCompanion> rows) =>
+      batch((batch) => batch.insertAll(transactionsTable, [for (final row in rows) row.copyWith(syncStatus: const Value(pendingSyncStatus))]));
 
   /// Never writes `version`, the server's. Skips tombstones, whose `updated_at` moving would resurrect them at the next sync.
   Future<int> updateTransaction(String id, {required TransactionsTableCompanion patch, required int baseVersion, required int now}) {

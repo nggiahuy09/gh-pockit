@@ -8,8 +8,9 @@ import '../../../categories/data/tables/categories_table.dart';
 // Each index ends `occurred_at, id` so the list's ORDER BY needs no sort; `id` must be listed, the rowid of a TEXT key is not `id`. Not partial on
 // `deleted_at IS NULL`: SQLite uses a partial index only when the query repeats its condition.
 @TableIndex(name: 'transactions_owner_id_occurred_at_id', columns: {#ownerId, #occurredAt, #id})
-@TableIndex(name: 'transactions_account_id_occurred_at_id', columns: {#accountId, #occurredAt, #id})
-@TableIndex(name: 'transactions_destination_account_id_occurred_at_id', columns: {#destinationAccountId, #occurredAt, #id})
+// The two account indexes also carry every column a balance reads, so the balance query never touches the table (ADR-0027).
+@TableIndex(name: 'transactions_account_id_occurred_at_id', columns: {#accountId, #occurredAt, #id, #type, #amountMinor, #deletedAt})
+@TableIndex(name: 'transactions_destination_account_id_occurred_at_id', columns: {#destinationAccountId, #occurredAt, #id, #type, #amountMinor, #deletedAt})
 @TableIndex(name: 'transactions_category_id_occurred_at_id', columns: {#categoryId, #occurredAt, #id})
 // Not final: drift generates a subclass in another library.
 class TransactionsTable extends Table {
