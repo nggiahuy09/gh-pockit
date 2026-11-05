@@ -71,4 +71,16 @@ final class GPLocaleViError implements GPLocaleBaseError {
 
   @override
   String get routeNotFoundBody => 'Liên kết này không dẫn tới đâu trong Pockit.';
+
+  @override
+  String get databaseTooNewTitle => 'Hãy cập nhật Pockit để mở dữ liệu';
+
+  @override
+  String get databaseTooNewBody => 'Dữ liệu của bạn được lưu bởi một phiên bản Pockit mới hơn bản này. Không có gì bị thay đổi hay xóa. Hãy cài bản mới nhất để dùng tiếp.';
+
+  @override
+  String get databaseOpenFailedTitle => 'Pockit chưa mở được dữ liệu';
+
+  @override
+  String get databaseOpenFailedBody => 'Dữ liệu vẫn còn trên máy và không có gì bị xóa. Hãy đóng hẳn ứng dụng rồi mở lại. Nếu vẫn gặp lỗi này, hãy cập nhật Pockit.';
 }

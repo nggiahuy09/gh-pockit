@@ -4,6 +4,9 @@
 
 Accepted — 2026-11-04 (W9 T6). Schema v5.
 
+Amended 2026-11-05 by ADR-0029: the migration no longer needs the `to >= 5` guard or the hand-kept v4 index definitions. Each step
+now runs on its own version's generated schema.
+
 ## Context
 
 ADR-0019 computes every balance in one query. Each account runs two correlated subqueries:
@@ -16,9 +19,9 @@ index. ADR-0019 left the covering index to W9: "whether that saves enough to pay
 
 W9 measured it on the host, in JIT, with the same harness throughout (ADR-0026):
 
-| Balances, repository median | 1k | 10k | 50k |
-| --------------------------- | -: | --: | --: |
-| v4 indexes | 0.50 ms | 2.84 ms | **26.8 ms** (p90 35.5) |
+| Balances, repository median |      1k |     10k |                    50k |
+| --------------------------- | ------: | ------: | ---------------------: |
+| v4 indexes                  | 0.50 ms | 2.84 ms | **26.8 ms** (p90 35.5) |
 
 Five times the rows cost ten times the time. The 50k file is 27 MB against an 8 MB page cache, so the row reads stop hitting the cache.
 Raising the cache to 64 MB took a probe from 19.2 ms to 12.9 ms. A covering index took it to 4.5 ms. The reads are the cost, and the cache
@@ -38,11 +41,11 @@ columns the balance reads:
 The balance plan becomes `SEARCH t USING COVERING INDEX …` on both sides, so no row of the table is read. A probe compared the two options
 at 50k:
 
-| Option | Balances (SQL) | DB file | One insert |
-| ------ | -------------: | ------: | ---------: |
-| v4 | 22.0 ms | 26.9 MB | 0.94 ms |
-| A — two more indexes `(account_id, deleted_at, type, amount_minor)` | 4.0 ms | 31.3 MB | 0.73 ms |
-| B — widen the two account indexes | 4.9 ms | 28.1 MB | 0.60 ms |
+| Option                                                              | Balances (SQL) | DB file | One insert |
+| ------------------------------------------------------------------- | -------------: | ------: | ---------: |
+| v4                                                                  |        22.0 ms | 26.9 MB |    0.94 ms |
+| A — two more indexes `(account_id, deleted_at, type, amount_minor)` |         4.0 ms | 31.3 MB |    0.73 ms |
+| B — widen the two account indexes                                   |         4.9 ms | 28.1 MB |    0.60 ms |
 
 B is within a millisecond of A, uses 3 MB less, and adds no index to maintain on a write. It also keeps the `(account_id, occurred_at, id)`
 prefix that a `UNION ALL` account filter (W4 T5) would seek. The single-insert times are within noise for all three: a write is dominated

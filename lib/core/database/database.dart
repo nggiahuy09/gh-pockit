@@ -5,6 +5,8 @@ import 'package:meta/meta.dart';
 import '../../features/accounts/data/tables/accounts_table.dart';
 import '../../features/categories/data/tables/categories_table.dart';
 import '../../features/transactions/data/tables/transactions_table.dart';
+import 'database.steps.dart';
+import 'database_too_new_exception.dart';
 import 'tables/settings_table.dart';
 
 part 'database.g.dart';
@@ -17,7 +19,7 @@ final class GPAppDatabase extends _$GPAppDatabase {
 
   GPAppDatabase.forTesting(super.e);
 
-  /// A bump needs a case in `_upgradeTo`, a migration test and a dump in `drift_schemas/` (§6).
+  /// A bump needs a dump in `drift_schemas/`, a regenerated `database.steps.dart`, a `fromNToM` step and a migration test (§6, §9).
   @override
   int get schemaVersion => 5;
 
@@ -27,8 +29,10 @@ final class GPAppDatabase extends _$GPAppDatabase {
 
     // One step per version, in order, so a device that skipped releases runs every step it missed; each commits on its own (ADR-0029).
     onUpgrade: (m, from, to) async {
-      for (var version = from + 1; version <= to; version++) {
-        await _commitAt(version, () => _upgradeTo(version, m));
+      // Drift calls this on a downgrade too, then writes `to` over a schema it does not know. Refuse before any statement (ADR-0030).
+      if (from > to) throw GPDatabaseTooNewException(fileVersion: from, appVersion: to);
+      for (var version = from; version < to; version++) {
+        await _commitAt(version + 1, () => _upgradeFrom(version, this));
       }
     },
     beforeOpen: (details) async {
@@ -37,49 +41,46 @@ final class GPAppDatabase extends _$GPAppDatabase {
     },
   );
 
+  /// Drift opens on the first query, so this is that query: a migration that fails surfaces here, in the bootstrap, not under a screen (ADR-0030).
+  Future<void> open() async {
+    await customSelect('SELECT 1').get();
+  }
+
   /// Drift writes `user_version` only after the whole migration returns, outside any transaction: a kill in between re-runs a step that
   /// already committed, and its `CREATE INDEX` then fails on every launch (ADR-0029).
   Future<void> _commitAt(int version, Future<void> Function() step) => transaction(() async {
     await step();
     await customStatement('PRAGMA user_version = $version');
   });
-
-  Future<void> _upgradeTo(int version, Migrator m) async {
-    switch (version) {
-      case 2:
-        // `createTable` skips `@TableIndex` indexes, so each is created here or upgraded devices would lack it.
-        await m.createTable(accountsTable);
-        await m.createIndex(accountsOwnerIdIsArchived);
-      case 3:
-        await m.createTable(categoriesTable);
-        await m.createIndex(categoriesOwnerIdType);
-        await m.createIndex(categoriesOwnerIdNameKey);
-      case 4:
-        await m.createTable(transactionsTable);
-        await m.createIndex(transactionsOwnerIdOccurredAtId);
-        // As v4 shipped them, not as declared now: a migration that stops at 4 must leave the v4 schema.
-        await m.createIndex(_v4AccountIndex);
-        await m.createIndex(_v4DestinationAccountIndex);
-        await m.createIndex(transactionsCategoryIdOccurredAtId);
-      case 5:
-        // Same names, wider columns (ADR-0027). SQLite cannot alter an index, so each is dropped and rebuilt from the rows already there.
-        await m.drop(transactionsAccountIdOccurredAtId);
-        await m.drop(transactionsDestinationAccountIdOccurredAtId);
-        await m.createIndex(transactionsAccountIdOccurredAtId);
-        await m.createIndex(transactionsDestinationAccountIdOccurredAtId);
-      default:
-        throw StateError('No migration step to v$version');
-    }
-  }
 }
 
-final _v4AccountIndex = Index(
-  'transactions_account_id_occurred_at_id',
-  'CREATE INDEX transactions_account_id_occurred_at_id ON transactions (account_id, occurred_at, id)',
-);
-final _v4DestinationAccountIndex = Index(
-  'transactions_destination_account_id_occurred_at_id',
-  'CREATE INDEX transactions_destination_account_id_occurred_at_id ON transactions (destination_account_id, occurred_at, id)',
+/// Not drift's `stepByStep`, which runs the whole chain outside any transaction. Each step sees the schema of the version it reaches, never
+/// the current one, so an entity redefined later cannot leak into an older step (ADR-0029).
+final Future<int> Function(int from, GeneratedDatabase database) _upgradeFrom = migrationSteps(
+  from1To2: (m, schema) async {
+    // `createTable` skips `@TableIndex` indexes, so each is created here or upgraded devices would lack it.
+    await m.createTable(schema.accounts);
+    await m.createIndex(schema.accountsOwnerIdIsArchived);
+  },
+  from2To3: (m, schema) async {
+    await m.createTable(schema.categories);
+    await m.createIndex(schema.categoriesOwnerIdType);
+    await m.createIndex(schema.categoriesOwnerIdNameKey);
+  },
+  from3To4: (m, schema) async {
+    await m.createTable(schema.transactions);
+    await m.createIndex(schema.transactionsOwnerIdOccurredAtId);
+    await m.createIndex(schema.transactionsAccountIdOccurredAtId);
+    await m.createIndex(schema.transactionsDestinationAccountIdOccurredAtId);
+    await m.createIndex(schema.transactionsCategoryIdOccurredAtId);
+  },
+  from4To5: (m, schema) async {
+    // Same names, wider columns (ADR-0027). SQLite cannot alter an index, so each is dropped and rebuilt from the rows already there.
+    await m.drop(schema.transactionsAccountIdOccurredAtId);
+    await m.drop(schema.transactionsDestinationAccountIdOccurredAtId);
+    await m.createIndex(schema.transactionsAccountIdOccurredAtId);
+    await m.createIndex(schema.transactionsDestinationAccountIdOccurredAtId);
+  },
 );
 
 /// Off the UI isolate by `drift_flutter`'s default. `shareAcrossIsolates`: a second isolate (background sync) joins this instance instead of racing it

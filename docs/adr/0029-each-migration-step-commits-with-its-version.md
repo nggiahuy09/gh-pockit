@@ -4,6 +4,11 @@
 
 Accepted — 2026-11-05 (W10 T2, started early). No schema change; `schemaVersion` stays 5.
 
+Amended 2026-11-05 (W10 T3): the steps come from drift's generated `migrationSteps`, one schema per version. See the amendment at the end;
+`_upgradeTo`, its `StateError` and `_v4AccountIndex` below are gone.
+
+Amended 2026-11-05 by ADR-0030: what the user sees when a step fails every time is decided there.
+
 ## Context
 
 Drift 2.31 runs a migration with no transaction around it. `DelegatedDatabase._runMigrations` (`engines.dart`) does three things in
@@ -113,3 +118,47 @@ The statements are generated, too, so they are not ours to edit.
 
 **Catching the failure and recreating the database.** It breaks golden rule 7, never wipe on a schema change. Every unsynced row would be
 lost, and before P4 that is every row there is.
+
+## Amended 2026-11-05 (W10 T3) — each step sees its own version's schema
+
+W9 T6 was the first time an entity that already shipped changed its definition. It showed the weak point of hand-written steps: an old step
+reads the _current_ definition. The v4 step created the account indexes as declared now, in their v5 shape. The patch was right, but it was
+a hand-kept copy (`_v4AccountIndex`, `_v4DestinationAccountIndex`), and every later redefinition would need another one.
+
+**The steps now come from `lib/core/database/database.steps.dart`.** `drift_dev schema steps` generates it from the dumps in
+`drift_schemas/`. It holds a `SchemaN` per version, each with that version's tables and indexes, and a `migrationSteps(from1To2: …,
+from4To5: …)` that hands each step the schema of the version it reaches. The v4 step creates `Schema4`'s account indexes, which are the
+v4 shape. The copies are gone.
+
+```dart
+onUpgrade: (m, from, to) async {
+  for (var version = from; version < to; version++) {
+    await _commitAt(version + 1, () => _upgradeFrom(version, this));
+  }
+},
+
+final Future<int> Function(int from, GeneratedDatabase database) _upgradeFrom = migrationSteps(
+  from3To4: (m, schema) async {
+    await m.createTable(schema.transactions);
+    await m.createIndex(schema.transactionsAccountIdOccurredAtId); // v4's shape
+    // …
+  },
+  // …
+);
+```
+
+- **`migrationSteps`, not `stepByStep()`.** `stepByStep()` wraps the same steps in `VersionedSchema.stepByStepHelper`, which loops over
+  the whole chain inside `onUpgrade` with no transaction. That would undo the decision above. The loop and `_commitAt` stay, and call
+  `migrationSteps` one version at a time.
+- **A version with no step** now throws drift's own `ArgumentError` ("Unknown migration from N") instead of our `StateError`. It still
+  throws inside `_commitAt`, so the step rolls back as before.
+- **The two drift commands, not `make-migrations`.** `make-migrations` runs both, but it wants a `databases:` entry in `build.yaml` and
+  its own layout: `drift_schemas/<db>/` and `test/drift/<db>/`. Using it would move five dumps and the generated test schemas, and rewrite
+  §9, for nothing the two commands do not already give on the current layout.
+- **Typed fixtures.** `schema generate --data-classes --companions` adds a `DatabaseAtVN` and companions to each `schema_vN.dart`. A row
+  written into a v3 file goes through `v3.AccountsCompanion`, so the compiler checks it against v3's columns. Before, raw SQL was checked
+  only when the test ran, and only by SQLite. In `migration_test.dart`, raw SQL is now left only for the planted fault and for reads of
+  `sqlite_schema` and `user_version`.
+
+Cost: `database.steps.dart` is 768 generated lines, committed, and must be regenerated after every new dump (CLAUDE.md §9). Its
+`// dart format width=80` marker keeps `dart format .` from reflowing it to 180.

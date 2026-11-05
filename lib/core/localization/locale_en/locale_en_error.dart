@@ -71,4 +71,16 @@ final class GPLocaleEnError implements GPLocaleBaseError {
 
   @override
   String get routeNotFoundBody => 'That link does not point anywhere in Pockit.';
+
+  @override
+  String get databaseTooNewTitle => 'Update Pockit to open your data';
+
+  @override
+  String get databaseTooNewBody => 'Your data was saved by a newer version of Pockit than this one. Nothing has been changed or deleted. Install the latest version to carry on.';
+
+  @override
+  String get databaseOpenFailedTitle => 'Pockit could not open your data';
+
+  @override
+  String get databaseOpenFailedBody => 'Your data is still on this device, and nothing was deleted. Close the app fully and open it again. If this keeps happening, update Pockit.';
 }

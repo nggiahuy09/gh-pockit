@@ -28,4 +28,10 @@ abstract class GPLocaleBaseError {
   String get unknown;
   String get routeNotFoundTitle;
   String get routeNotFoundBody;
+
+  /// Shown before the app itself, when the database will not open (ADR-0030). Both bodies say the data is still there.
+  String get databaseTooNewTitle;
+  String get databaseTooNewBody;
+  String get databaseOpenFailedTitle;
+  String get databaseOpenFailedBody;
 }

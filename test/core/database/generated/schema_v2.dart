@@ -4,7 +4,7 @@
 //
 import 'package:drift/drift.dart';
 
-class Settings extends Table with TableInfo {
+class Settings extends Table with TableInfo<Settings, SettingsData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -43,8 +43,22 @@ class Settings extends Table with TableInfo {
   @override
   Set<GeneratedColumn> get $primaryKey => {key};
   @override
-  Never map(Map<String, dynamic> data, {String? tablePrefix}) {
-    throw UnsupportedError('TableInfo.map in schema verification code');
+  SettingsData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SettingsData(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
   }
 
   @override
@@ -58,7 +72,166 @@ class Settings extends Table with TableInfo {
   bool get dontWriteConstraints => true;
 }
 
-class Accounts extends Table with TableInfo {
+class SettingsData extends DataClass implements Insertable<SettingsData> {
+  final String key;
+  final String value;
+  final int updatedAt;
+  const SettingsData({
+    required this.key,
+    required this.value,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    map['updated_at'] = Variable<int>(updatedAt);
+    return map;
+  }
+
+  SettingsCompanion toCompanion(bool nullToAbsent) {
+    return SettingsCompanion(
+      key: Value(key),
+      value: Value(value),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory SettingsData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SettingsData(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+    };
+  }
+
+  SettingsData copyWith({String? key, String? value, int? updatedAt}) =>
+      SettingsData(
+        key: key ?? this.key,
+        value: value ?? this.value,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  SettingsData copyWithCompanion(SettingsCompanion data) {
+    return SettingsData(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SettingsData(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SettingsData &&
+          other.key == this.key &&
+          other.value == this.value &&
+          other.updatedAt == this.updatedAt);
+}
+
+class SettingsCompanion extends UpdateCompanion<SettingsData> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> updatedAt;
+  final Value<int> rowid;
+  const SettingsCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SettingsCompanion.insert({
+    required String key,
+    required String value,
+    required int updatedAt,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value),
+       updatedAt = Value(updatedAt);
+  static Insertable<SettingsData> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? updatedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SettingsCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? updatedAt,
+    Value<int>? rowid,
+  }) {
+    return SettingsCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      updatedAt: updatedAt ?? this.updatedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SettingsCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class Accounts extends Table with TableInfo<Accounts, AccountsData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -173,8 +346,54 @@ class Accounts extends Table with TableInfo {
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  Never map(Map<String, dynamic> data, {String? tablePrefix}) {
-    throw UnsupportedError('TableInfo.map in schema verification code');
+  AccountsData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AccountsData(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      ownerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}owner_id'],
+      )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      )!,
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
+      )!,
+      currencyCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency_code'],
+      )!,
+      initialBalance: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}initial_balance'],
+      )!,
+      isArchived: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_archived'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      version: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}version'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
   }
 
   @override
@@ -186,6 +405,373 @@ class Accounts extends Table with TableInfo {
   List<String> get customConstraints => const ['PRIMARY KEY(id)'];
   @override
   bool get dontWriteConstraints => true;
+}
+
+class AccountsData extends DataClass implements Insertable<AccountsData> {
+  final String id;
+  final String ownerId;
+  final String name;
+  final String type;
+  final String currencyCode;
+  final int initialBalance;
+  final int isArchived;
+  final int createdAt;
+  final int updatedAt;
+  final int version;
+  final int? deletedAt;
+  const AccountsData({
+    required this.id,
+    required this.ownerId,
+    required this.name,
+    required this.type,
+    required this.currencyCode,
+    required this.initialBalance,
+    required this.isArchived,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.version,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['owner_id'] = Variable<String>(ownerId);
+    map['name'] = Variable<String>(name);
+    map['type'] = Variable<String>(type);
+    map['currency_code'] = Variable<String>(currencyCode);
+    map['initial_balance'] = Variable<int>(initialBalance);
+    map['is_archived'] = Variable<int>(isArchived);
+    map['created_at'] = Variable<int>(createdAt);
+    map['updated_at'] = Variable<int>(updatedAt);
+    map['version'] = Variable<int>(version);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<int>(deletedAt);
+    }
+    return map;
+  }
+
+  AccountsCompanion toCompanion(bool nullToAbsent) {
+    return AccountsCompanion(
+      id: Value(id),
+      ownerId: Value(ownerId),
+      name: Value(name),
+      type: Value(type),
+      currencyCode: Value(currencyCode),
+      initialBalance: Value(initialBalance),
+      isArchived: Value(isArchived),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      version: Value(version),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
+    );
+  }
+
+  factory AccountsData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AccountsData(
+      id: serializer.fromJson<String>(json['id']),
+      ownerId: serializer.fromJson<String>(json['ownerId']),
+      name: serializer.fromJson<String>(json['name']),
+      type: serializer.fromJson<String>(json['type']),
+      currencyCode: serializer.fromJson<String>(json['currencyCode']),
+      initialBalance: serializer.fromJson<int>(json['initialBalance']),
+      isArchived: serializer.fromJson<int>(json['isArchived']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      updatedAt: serializer.fromJson<int>(json['updatedAt']),
+      version: serializer.fromJson<int>(json['version']),
+      deletedAt: serializer.fromJson<int?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'ownerId': serializer.toJson<String>(ownerId),
+      'name': serializer.toJson<String>(name),
+      'type': serializer.toJson<String>(type),
+      'currencyCode': serializer.toJson<String>(currencyCode),
+      'initialBalance': serializer.toJson<int>(initialBalance),
+      'isArchived': serializer.toJson<int>(isArchived),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'updatedAt': serializer.toJson<int>(updatedAt),
+      'version': serializer.toJson<int>(version),
+      'deletedAt': serializer.toJson<int?>(deletedAt),
+    };
+  }
+
+  AccountsData copyWith({
+    String? id,
+    String? ownerId,
+    String? name,
+    String? type,
+    String? currencyCode,
+    int? initialBalance,
+    int? isArchived,
+    int? createdAt,
+    int? updatedAt,
+    int? version,
+    Value<int?> deletedAt = const Value.absent(),
+  }) => AccountsData(
+    id: id ?? this.id,
+    ownerId: ownerId ?? this.ownerId,
+    name: name ?? this.name,
+    type: type ?? this.type,
+    currencyCode: currencyCode ?? this.currencyCode,
+    initialBalance: initialBalance ?? this.initialBalance,
+    isArchived: isArchived ?? this.isArchived,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  AccountsData copyWithCompanion(AccountsCompanion data) {
+    return AccountsData(
+      id: data.id.present ? data.id.value : this.id,
+      ownerId: data.ownerId.present ? data.ownerId.value : this.ownerId,
+      name: data.name.present ? data.name.value : this.name,
+      type: data.type.present ? data.type.value : this.type,
+      currencyCode: data.currencyCode.present
+          ? data.currencyCode.value
+          : this.currencyCode,
+      initialBalance: data.initialBalance.present
+          ? data.initialBalance.value
+          : this.initialBalance,
+      isArchived: data.isArchived.present
+          ? data.isArchived.value
+          : this.isArchived,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      version: data.version.present ? data.version.value : this.version,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountsData(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('initialBalance: $initialBalance, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    ownerId,
+    name,
+    type,
+    currencyCode,
+    initialBalance,
+    isArchived,
+    createdAt,
+    updatedAt,
+    version,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AccountsData &&
+          other.id == this.id &&
+          other.ownerId == this.ownerId &&
+          other.name == this.name &&
+          other.type == this.type &&
+          other.currencyCode == this.currencyCode &&
+          other.initialBalance == this.initialBalance &&
+          other.isArchived == this.isArchived &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.version == this.version &&
+          other.deletedAt == this.deletedAt);
+}
+
+class AccountsCompanion extends UpdateCompanion<AccountsData> {
+  final Value<String> id;
+  final Value<String> ownerId;
+  final Value<String> name;
+  final Value<String> type;
+  final Value<String> currencyCode;
+  final Value<int> initialBalance;
+  final Value<int> isArchived;
+  final Value<int> createdAt;
+  final Value<int> updatedAt;
+  final Value<int> version;
+  final Value<int?> deletedAt;
+  final Value<int> rowid;
+  const AccountsCompanion({
+    this.id = const Value.absent(),
+    this.ownerId = const Value.absent(),
+    this.name = const Value.absent(),
+    this.type = const Value.absent(),
+    this.currencyCode = const Value.absent(),
+    this.initialBalance = const Value.absent(),
+    this.isArchived = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.version = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  AccountsCompanion.insert({
+    required String id,
+    required String ownerId,
+    required String name,
+    required String type,
+    required String currencyCode,
+    required int initialBalance,
+    required int isArchived,
+    required int createdAt,
+    required int updatedAt,
+    required int version,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       ownerId = Value(ownerId),
+       name = Value(name),
+       type = Value(type),
+       currencyCode = Value(currencyCode),
+       initialBalance = Value(initialBalance),
+       isArchived = Value(isArchived),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt),
+       version = Value(version);
+  static Insertable<AccountsData> custom({
+    Expression<String>? id,
+    Expression<String>? ownerId,
+    Expression<String>? name,
+    Expression<String>? type,
+    Expression<String>? currencyCode,
+    Expression<int>? initialBalance,
+    Expression<int>? isArchived,
+    Expression<int>? createdAt,
+    Expression<int>? updatedAt,
+    Expression<int>? version,
+    Expression<int>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ownerId != null) 'owner_id': ownerId,
+      if (name != null) 'name': name,
+      if (type != null) 'type': type,
+      if (currencyCode != null) 'currency_code': currencyCode,
+      if (initialBalance != null) 'initial_balance': initialBalance,
+      if (isArchived != null) 'is_archived': isArchived,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (version != null) 'version': version,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  AccountsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? ownerId,
+    Value<String>? name,
+    Value<String>? type,
+    Value<String>? currencyCode,
+    Value<int>? initialBalance,
+    Value<int>? isArchived,
+    Value<int>? createdAt,
+    Value<int>? updatedAt,
+    Value<int>? version,
+    Value<int?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return AccountsCompanion(
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      currencyCode: currencyCode ?? this.currencyCode,
+      initialBalance: initialBalance ?? this.initialBalance,
+      isArchived: isArchived ?? this.isArchived,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (ownerId.present) {
+      map['owner_id'] = Variable<String>(ownerId.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
+    }
+    if (currencyCode.present) {
+      map['currency_code'] = Variable<String>(currencyCode.value);
+    }
+    if (initialBalance.present) {
+      map['initial_balance'] = Variable<int>(initialBalance.value);
+    }
+    if (isArchived.present) {
+      map['is_archived'] = Variable<int>(isArchived.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<int>(updatedAt.value);
+    }
+    if (version.present) {
+      map['version'] = Variable<int>(version.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AccountsCompanion(')
+          ..write('id: $id, ')
+          ..write('ownerId: $ownerId, ')
+          ..write('name: $name, ')
+          ..write('type: $type, ')
+          ..write('currencyCode: $currencyCode, ')
+          ..write('initialBalance: $initialBalance, ')
+          ..write('isArchived: $isArchived, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('version: $version, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
 }
 
 class DatabaseAtV2 extends GeneratedDatabase {
