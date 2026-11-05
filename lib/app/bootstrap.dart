@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import '../core/database/database.dart';
 import '../core/error/result.dart';
+import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/logging/app_logger.dart';
 import '../core/utils/clock.dart';
@@ -12,6 +14,7 @@ import '../features/settings/presentation/debug/sample_data.dart';
 import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../features/transactions/domain/repositories/transaction_repository.dart';
 import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
+import 'database_error_app.dart';
 import 'di/injector.dart';
 
 /// No `runZonedGuarded` on purpose: `PlatformDispatcher.onError` catches uncaught async errors without forcing every error through one zone.
@@ -35,6 +38,16 @@ Future<void> bootstrap(Widget Function() builder) async {
     // `true` = handled; `false` would re-report it to the platform and duplicate every line once Sentry is wired.
     return true;
   };
+
+  // The first statement runs the migration. A database this build cannot open gets a screen of its own, not a blank launch (ADR-0030); `Object`,
+  // since a missing step throws an `ArgumentError`.
+  try {
+    await getIt.get<GPAppDatabase>().open();
+  } on Object catch (error, stackTrace) {
+    logger.error('database open failed', fields: {'error': error.runtimeType.toString()}, error: error, stackTrace: stackTrace);
+    runApp(GPDatabaseErrorApp(error: error, locale: GPLocale.fromPlatform(PlatformDispatcher.instance.locale)));
+    return;
+  }
 
   // `DateFormat` throws for `vi` until these are loaded.
   await initializeDateFormatting();
