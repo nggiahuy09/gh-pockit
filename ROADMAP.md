@@ -987,7 +987,7 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 ### W9 T6 — hai bản sửa, đo lại (04/11)
 
 - [x] **Covering index số dư (ADR-0027, schema v4 → v5):** nới rộng hai index tài khoản sẵn có thành `(…, occurred_at, id, type, amount_minor,
-  deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ hơn 3 MB, không thêm index phải ghi). Migration drop + tạo lại; bước v4 giờ
+deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ hơn 3 MB, không thêm index phải ghi). Migration drop + tạo lại; bước v4 giờ
       tạo đúng hình dạng v4 và bước v5 chỉ chạy khi `to >= 5`, để migration dừng ở v4 vẫn ra đúng schema v4. Dump `drift_schema_v5.json`; test
       v4 → v5 (giữ dữ liệu, số dư như cũ, ghim plan covering), v3/v2/v1 → v5. Host 50k: **26,8 → 5,0 ms**, p90 35,5 → 5,4; seed 985 → 991 ms.
 - [x] **Thẻ ngày lười (ADR-0028):** `TransactionDayCardWidget` thành sliver — `DecoratedSliver` vẽ thẻ, `SliverList.builder` dựng dòng, key theo id + `findChildIndexCallback`, chỉ dòng đầu/cuối clip góc. Emulator 50k: build trung bình 29,4 → 5,9 ms, p99 599 → 42 ms, tệ nhất 1.921 → 132 ms,
@@ -1012,7 +1012,7 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 | T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR ✅ Done (05/11, làm sớm) — phương án A: từ chối, giữ nguyên file, màn lỗi riêng; ADR-0030; chi tiết ở _W10 T4_ dưới                                                                                 |
 | T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng                                                                                                                                                                                        |
 | T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5 ✅ Done (05/11, làm sớm) — so từng cột ở v5 + app đọc được; chi tiết ở _W10 T6_ dưới                                                                                            |
-| Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag                                                                                                                                                    |
+| Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag — ADR + checklist ✅ Done (05/11, ADR-0031); PR + tag chờ bạn; chi tiết ở _W10 Flex_ dưới                                                          |
 
 **🏁 Milestone P2:** DB đủ chất lượng production. **Tag `v0.2-db`** (và `v0.1-local` còn nợ từ P1 — cả hai cần PR `dev` → `main`).
 
@@ -1100,6 +1100,19 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
       `TransactionDao.watchAccountBalances` khớp tính tay cho bốn tài khoản đang dùng, `PRAGMA foreign_key_check` rỗng, `integrity_check` = `ok`.
 - [x] **Kiểm test có cắn không:** cho bước v5 cộng 1 vào số dư đầu của tài khoản lưu trữ → cả hai test đỏ; hoàn lại.
 - [x] Test: 30 test DB xanh (+2).
+
+### W10 Flex — soft delete có ADR, checklist đổi schema (05/11)
+
+- [x] **ADR-0031 — soft delete cho entity đồng bộ** (golden rule 5; blueprint gọi là "0004", số đó đã thuộc về localization). Ghi lại điều code đã làm từ
+      W2: xoá = `UPDATE` `deleted_at` + `updated_at` (thiếu `updated_at` thì delta pull không thấy), chặn bằng `deleted_at IS NULL`, không bao giờ ghi
+      `version`; tombstone giữ nguyên mọi cột (id của danh mục seed không bị seed lại, list vẫn gọi được tên cha, undo chỉ là xoá `deleted_at`); update
+      bỏ qua tombstone; FK không `ON DELETE` vì không gì đồng bộ bị xoá thật; hard delete chỉ cho thứ không đồng bộ (mutation đã ack, logout).
+- [x] **Mở cho P4:** khi nào được purge tombstone (server đã có + không thiết bị nào còn đẩy sửa đổi lên id đó), và tombstone có nên bỏ ghi chú khi
+      undo không còn với tới — xoá mà nội dung vẫn nằm trên máy là điều người dùng có thể không ngờ.
+- [x] **CLAUDE.md §6:** thêm quy tắc soft delete, và mục _On every schema change — in this order_: version đã phát hành là đóng băng (đổi tiếp là
+      vN+1), dump + commit, sinh lại steps + fixture, bước `fromNToM` chỉ dùng `schema.*`, không câu lệnh ngoài transaction, test từ vN−1 / v1 / chuỗi
+      có dữ liệu, đo 50k nếu dựng lại index, không bao giờ xoá DB.
+- **Còn lại:** PR `task/W10` → `dev`, `dev` → `main`, tag `v0.1-local` + `v0.2-db` — chờ bạn cho phép. `dev` đã có W9 (`5beb680`).
 
 ---
 
