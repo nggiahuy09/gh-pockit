@@ -103,7 +103,7 @@ Positive:
 Negative:
 
 - A step's work is held until it commits. The v5 step rebuilds two indexes over every transaction, and a kill during it throws the rebuild
-  away and pays it again. T5 measures that rebuild at 50k.
+  away and pays it again. W10 T5, moved to W11 Flex, measures that rebuild at 50k.
 - A step cannot use a statement that refuses to run in a transaction. `VACUUM` fails. `PRAGMA foreign_keys` does nothing at all, so a
   future step that rebuilds a table with foreign keys off must turn them off before `_commitAt`, not inside it.
 - A step that fails every time, which is a bug, now leaves the device on the old version and failing on every launch. That is still a

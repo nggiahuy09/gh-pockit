@@ -1005,12 +1005,12 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W10 · 09–15/11 🔴 Migration
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                     |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                    |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR ✅ Done (05/11, làm sớm) — mỗi bước một transaction kèm `user_version`, ADR-0029; chi tiết ở _W10 T2_ dưới                                      |
 | T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô ✅ Done (05/11, làm sớm) — `migrationSteps` sinh từ dump, không dùng `make-migrations`; amendment ADR-0029; chi tiết ở _W10 T3_ dưới |
 | T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR ✅ Done (05/11, làm sớm) — phương án A: từ chối, giữ nguyên file, màn lỗi riêng; ADR-0030; chi tiết ở _W10 T4_ dưới                                                                                 |
-| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng                                                                                                                                                                                        |
+| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng ⏩ Chuyển sang Flex W11 (05/11, theo bạn)                                                                                                                                              |
 | T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5 ✅ Done (05/11, làm sớm) — so từng cột ở v5 + app đọc được; chi tiết ở _W10 T6_ dưới                                                                                            |
 | Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag — ADR + checklist ✅ Done (05/11, ADR-0031); PR + tag chờ bạn; chi tiết ở _W10 Flex_ dưới                                                          |
 
@@ -1030,7 +1030,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - **Vì sao T3:** W9 T6 là lần đầu một entity đã có bị đổi định nghĩa, và lộ ra điểm yếu của `if (from < N)` viết tay: bước cũ dùng định nghĩa hiện tại.
   Bản vá (`_v4AccountIndex`, `to >= 5`) đúng nhưng mỗi lần đổi sau sẽ lặp lại; `stepByStep` sinh schema theo từng version để bước nào dùng đúng của nó.
 - **Vì sao T4:** drift gọi `onUpgrade` cả khi version đi lùi (`from = 5, to = 4`); code hiện không làm gì rồi ghi `user_version = 4` — DB v5 bị gọi là v4.
-- **T5 dùng lại quy trình W9 T4:** sao lưu `Documents/` bằng `devicectl`, cài, chép lại, so; `flutter drive` luôn kèm `--keep-app-running`.
+- **T5 dùng lại quy trình W9 T4** — đã chuyển sang Flex W11 (05/11), cách làm ghi ở _W11_.
 
 ### W10 T2 — migration không để DB nửa vời (05/11, làm sớm, ADR-0029)
 
@@ -1052,7 +1052,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
       ở bước 4 → v3 với đúng bảng + index của v2, v3, rồi lên v5; lần cài đầu hỏng → file rỗng, version 0, lần sau tạo đủ.
 - **Còn lại:** một bước hỏng _mọi lần_ (bug) vẫn làm app không mở được — giờ là crash nhất quán, bản sửa sau thấy DB đúng chỗ nó chờ, nhưng bootstrap
   chưa có màn nào cho lỗi mở DB (câu đọc đầu tiên là `GPLocalization.init`, trước `runApp`). Gần với T4 — chờ bạn chốt. Bước v5 dựng lại index trong
-  một transaction; T5 đo trên 50k.
+  một transaction; Flex W11 (từ T5) đo trên 50k.
 
 ### W10 T3 — mỗi bước dùng schema của chính version đó (05/11, làm sớm, amendment ADR-0029)
 
@@ -1086,7 +1086,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
       thử lại: drift giữ lỗi migration suốt đời kết nối, kết nối dùng chung với isolate nền — mở lại app là cách sạch. 4 chuỗi mới ở cả en và vi.
 - [x] Test (1031 xanh + 1 skip): file v6 bị từ chối hai lần liền với đúng số version, `user_version` vẫn 6, `sqlite_schema` y nguyên, dòng còn; màn lỗi
       hai thông điệp × hai ngôn ngữ, không gì đăng ký trong `getIt`. Helper `_open` của test migration giờ gọi `open()` — đúng đường bootstrap đi.
-- **Còn lại:** 6 dòng glue trong bootstrap (dùng `getIt` toàn cục + `runApp`) không có test — soát tay trên máy ở T5: đặt `user_version = 6` cho DB
+- **Còn lại:** 6 dòng glue trong bootstrap (dùng `getIt` toàn cục + `runApp`) không có test — soát tay trên máy ở Flex W11 (từ T5): đặt `user_version = 6` cho DB
   của app rồi mở. Chưa soát màn lỗi bằng mắt.
 
 ### W10 T6 — một file đi trọn v1 → v5, mỗi version ghi dữ liệu của nó (05/11, làm sớm)
@@ -1120,14 +1120,22 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W11 · 16–22/11 🔴 Supabase schema + RLS
 
-| Ngày | Task                                                                                                                                                    |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) |
-| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                              |
-| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                              |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                          |
-| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                   |
-| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`                                                                           |
+| Ngày | Task                                                                                                                                                                                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9)                                                                                        |
+| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                                                                                                                     |
+| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                     |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                 |
+| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                          |
+| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030) |
+
+> **Từ W10 T5 (chuyển 05/11), Flex tuần này:** v4 → v5 trên iPhone 15, theo quy trình W9 T4.
+>
+> - **DB thật:** máy còn bản release v4 từ W9 T4 — kiểm lại trước. Sao lưu `Documents/` bằng `devicectl`, cài bản mới bằng `devicectl device install app`
+>   (không `flutter install`, lệnh đó gỡ app và xoá dữ liệu), chép ra rồi so: từng dòng, `user_version = 5`, `integrity_check`, hai index đã nới.
+> - **50k:** dựng file 50k ở v4 trên host (seed, đưa hai index về hình v4, `user_version = 4`), chép vào app, mở build profile `DATASET=50k`; log
+>   `elapsed_ms` theo từng bước trong `_commitAt` (chỉ version + ms, golden rule 9). Đo cả trên host làm mốc. `flutter drive` luôn kèm `--keep-app-running`.
+> - **Soát tay ADR-0030:** đặt `user_version = 6` cho DB của app → mở → phải thấy `GPDatabaseErrorApp`, file không đổi; trả về 5 sau đó.
 
 > **Nợ từ W8 (01/11) — làm trước khi vào W11 nếu kịp, không thì tuần đệm W17:** nâng pin lên Flutter ≥ 3.38 (Dart 3.10). Xoá `SceneDelegate` và để
 > `flutter` tự migrate runner sang UIScene, đăng ký plugin qua `FlutterImplicitEngineDelegate` (ADR-0023); nâng go_router, drift + drift_flutter,

@@ -67,7 +67,7 @@ Negative:
   `sqlite_schema.sql` is unchanged, and the row is there. On the code before this ADR, the open succeeded.
 - `database_error_app_test.dart`: both messages in both languages, with nothing registered in `getIt`.
 - Not covered by a test: the six lines of bootstrap glue, which use the global `getIt` and `runApp`. They are checked by hand on a
-  device instead (W10 T5).
+  device instead (W10 T5, moved to W11 Flex).
 
 ## Alternatives rejected
 
