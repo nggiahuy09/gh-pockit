@@ -253,7 +253,110 @@ void main() {
       }
     });
   });
+
+  group('a migration that dies part-way (ADR-0029)', () {
+    // `_fault` takes the name of the last index the v4 step creates, so the step fails after everything before it ran — the state a kill
+    // there leaves. Dropping it afterwards is the next launch, where whatever killed the app is gone.
+
+    test('a failed step leaves the database at the version before it, with nothing of the step behind', () async {
+      final schema = await _verifier.schemaAt(3);
+      schema.rawDatabase
+        ..execute(_fault)
+        ..execute(_v3Account);
+
+      await expectLater(_open(schema.newConnection()), throwsA(_faultHit));
+
+      expect(schema.rawDatabase.userVersion, 3);
+      expect(_objectsOutsideFault(schema.rawDatabase.select(_schemaObjects)), isNot(contains(startsWith('transactions'))));
+      // Raw: opening `GPAppDatabase` again would migrate again.
+      expect(schema.rawDatabase.select('SELECT name FROM accounts').single['name'], 'Ví tiền mặt');
+    });
+
+    test('the next launch runs the failed step again in full', () async {
+      final schema = await _verifier.schemaAt(3);
+      schema.rawDatabase
+        ..execute(_fault)
+        ..execute(_v3Account);
+      await expectLater(_open(schema.newConnection()), throwsA(_faultHit));
+
+      schema.rawDatabase.execute(_faultGone);
+      final db = GPAppDatabase.forTesting(schema.newConnection());
+
+      // Without the rollback this throws "index transactions_owner_id_occurred_at_id already exists" on every launch.
+      await _verifier.migrateAndValidate(db, 5);
+      expect((await db.select(db.accountsTable).getSingle()).initialBalance, 1500000);
+
+      await db.close();
+    });
+
+    test('a device several releases behind keeps the steps that committed before the failure', () async {
+      final schema = await _verifier.schemaAt(1);
+      schema.rawDatabase
+        ..execute(_fault)
+        ..execute("INSERT INTO settings (key, value, updated_at) VALUES ('locale.selected', 'vi', 1757800000000)");
+
+      await expectLater(_open(schema.newConnection()), throwsA(_faultHit));
+
+      // v2 and v3 committed with their own version; drift wrote none, since the open failed.
+      expect(schema.rawDatabase.userVersion, 3);
+      expect(
+        _objectsOutsideFault(schema.rawDatabase.select(_schemaObjects)),
+        unorderedEquals(<String>['settings', 'accounts', 'accounts_owner_id_is_archived', 'categories', 'categories_owner_id_type', 'categories_owner_id_name_key']),
+      );
+
+      schema.rawDatabase.execute(_faultGone);
+      final db = GPAppDatabase.forTesting(schema.newConnection());
+      await _verifier.migrateAndValidate(db, 5);
+      expect((await db.select(db.settingsTable).getSingle()).value, 'vi');
+
+      await db.close();
+    });
+
+    test('a first launch that fails leaves an empty database, and the next one creates it all', () async {
+      final schema = await _verifier.schemaAt(1);
+      // A fresh file: the verifier's v1 minus its one table and its version.
+      schema.rawDatabase
+        ..execute('DROP TABLE settings')
+        ..userVersion = 0
+        ..execute(_fault);
+
+      await expectLater(_open(schema.newConnection()), throwsA(_faultHit));
+
+      expect(schema.rawDatabase.userVersion, 0);
+      expect(_objectsOutsideFault(schema.rawDatabase.select(_schemaObjects)), isEmpty);
+
+      schema.rawDatabase.execute(_faultGone);
+      final db = GPAppDatabase.forTesting(schema.newConnection());
+      await _verifier.migrateAndValidate(db, 5);
+
+      await db.close();
+    });
+  });
 }
+
+const _fault = 'CREATE TABLE fault (x INTEGER); CREATE INDEX transactions_category_id_occurred_at_id ON fault (x)';
+const _faultGone = 'DROP TABLE fault';
+const _schemaObjects = "SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'";
+const _v3Account =
+    'INSERT INTO accounts (id, owner_id, name, type, currency_code, initial_balance, is_archived, created_at, updated_at, version) '
+    "VALUES ('a1', 'local', 'Ví tiền mặt', 'cash', 'VND', 1500000, 0, 1757800000000, 1757800000000, 1)";
+
+final Matcher _faultHit = isA<SqliteException>().having((e) => e.message, 'message', contains('transactions_category_id_occurred_at_id already exists'));
+
+/// The first query opens the database, which is where drift migrates.
+Future<void> _open(QueryExecutor executor) async {
+  final db = GPAppDatabase.forTesting(executor);
+  try {
+    await db.customSelect('SELECT 1').get();
+  } finally {
+    await db.close();
+  }
+}
+
+List<String> _objectsOutsideFault(Iterable<Map<String, Object?>> rows) => [
+  for (final row in rows)
+    if (row['name'] case final String name when name != 'fault' && name != 'transactions_category_id_occurred_at_id') name,
+];
 
 /// Two accounts, an expense, a transfer between them and a tombstone, written as v4 SQL.
 Future<GPAppDatabase> _upgradedFromV4WithTransactions() async {

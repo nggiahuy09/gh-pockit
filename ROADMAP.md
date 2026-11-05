@@ -1005,14 +1005,14 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
 
 ## W10 · 09–15/11 🔴 Migration
 
-| Ngày | Task                                                                                                                                                                                |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR            |
-| T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô |
-| T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR                                                                |
-| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng                                                   |
-| T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5                                            |
-| Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag               |
+| Ngày | Task                                                                                                                                                                                                                                                                               |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR ✅ Done (05/11, làm sớm) — mỗi bước một transaction kèm `user_version`, ADR-0029; chi tiết ở _W10 T2_ dưới |
+| T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô                                                                                                |
+| T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR                                                                                                                                                               |
+| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng                                                                                                                                                  |
+| T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5                                                                                                                                           |
+| Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag                                                                                                              |
 
 **🏁 Milestone P2:** DB đủ chất lượng production. **Tag `v0.2-db`** (và `v0.1-local` còn nợ từ P1 — cả hai cần PR `dev` → `main`).
 
@@ -1031,6 +1031,28 @@ occurred_at<?)` → `SEARCH c USING INDEX sqlite_autoindex_categories_1 (id=?) L
   Bản vá (`_v4AccountIndex`, `to >= 5`) đúng nhưng mỗi lần đổi sau sẽ lặp lại; `stepByStep` sinh schema theo từng version để bước nào dùng đúng của nó.
 - **Vì sao T4:** drift gọi `onUpgrade` cả khi version đi lùi (`from = 5, to = 4`); code hiện không làm gì rồi ghi `user_version = 4` — DB v5 bị gọi là v4.
 - **T5 dùng lại quy trình W9 T4:** sao lưu `Documents/` bằng `devicectl`, cài, chép lại, so; `flutter drive` luôn kèm `--keep-app-running`.
+
+### W10 T2 — migration không để DB nửa vời (05/11, làm sớm, ADR-0029)
+
+> Drift 2.31 không bọc migration trong transaction, và chỉ ghi `user_version` sau khi `onCreate`/`onUpgrade` **và** `beforeOpen` đã xong
+> (`_runMigrations`, `engines.dart`). Hỏng giữa chừng → các bước đã chạy nằm lại trên đĩa, version vẫn cũ → lần mở sau chạy lại → `createIndex` không có
+> `IF NOT EXISTS` → lỗi ở mọi lần mở.
+
+- [x] **Tái hiện trước khi sửa:** 4 test mới chạy trên code cũ đều đỏ. DB v3 hỏng ở bước v4 để lại bảng `transactions` + 3 index; lần mở sau ném
+      `index transactions_owner_id_occurred_at_id already exists`, và lần nào cũng thế. Lần cài đầu cũng vậy: `createAll` cũng không có transaction.
+- [x] **Sửa:** mỗi bước là một transaction, ghi luôn `PRAGMA user_version` của bước đó ở bên trong (`_commitAt`); `onCreate` cũng thế. `if (from < N)`
+      thành vòng lặp theo version + `switch` (`_upgradeTo`); version không có bước → `StateError`, rollback, thay vì ghi version mới lên schema thiếu bước.
+      Guard `to >= 5` biến mất vì vòng lặp dừng ở `to`; `_v4AccountIndex` để T3.
+- [x] **Từng bước, không phải một transaction cho cả chuỗi:** hỏng ở bước 4 của 1 → 5 thì máy dừng ở v3 (v2, v3 đã commit) thay vì v1, lần sau chỉ làm
+      lại từ bước 4. `user_version = 3` sau một lần mở hỏng là bằng chứng version được ghi cùng các bước — drift chưa kịp ghi gì. Khớp `migrationSteps`
+      của `stepByStep` (T3), vốn cũng chia theo version.
+- [x] **Gây lỗi không cần hook trong code app:** test tạo trước bảng `fault` có một index trùng tên với index cuối cùng mà bước v4 tạo → lỗi SQLite thật,
+      sau khi mọi thứ trước nó đã chạy (đúng trạng thái một lần kill để lại). Drop `fault` = lần mở sau, khi thứ làm app chết đã hết.
+- [x] Test (1024 xanh + 1 skip): v3 hỏng ở bước v4 → còn v3, không sót bảng / index nào, dữ liệu v3 nguyên; lần sau chạy lại đủ → khớp dump v5; v1 hỏng
+      ở bước 4 → v3 với đúng bảng + index của v2, v3, rồi lên v5; lần cài đầu hỏng → file rỗng, version 0, lần sau tạo đủ.
+- **Còn lại:** một bước hỏng _mọi lần_ (bug) vẫn làm app không mở được — giờ là crash nhất quán, bản sửa sau thấy DB đúng chỗ nó chờ, nhưng bootstrap
+  chưa có màn nào cho lỗi mở DB (câu đọc đầu tiên là `GPLocalization.init`, trước `runApp`). Gần với T4 — chờ bạn chốt. Bước v5 dựng lại index trong
+  một transaction; T5 đo trên 50k.
 
 ---
 

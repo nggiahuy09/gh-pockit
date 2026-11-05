@@ -17,41 +17,18 @@ final class GPAppDatabase extends _$GPAppDatabase {
 
   GPAppDatabase.forTesting(super.e);
 
-  /// A bump needs an `onUpgrade` step, a migration test and a dump in `drift_schemas/` (§6).
+  /// A bump needs a case in `_upgradeTo`, a migration test and a dump in `drift_schemas/` (§6).
   @override
   int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-    onCreate: (m) => m.createAll(),
+    onCreate: (m) => _commitAt(schemaVersion, m.createAll),
 
-    // `if (from < N)`, not a `switch`: a device that skipped releases must still run every step it missed, in order.
+    // One step per version, in order, so a device that skipped releases runs every step it missed; each commits on its own (ADR-0029).
     onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        // `createTable` skips `@TableIndex` indexes, so each is created here or upgraded devices would lack it.
-        await m.createTable(accountsTable);
-        await m.createIndex(accountsOwnerIdIsArchived);
-      }
-      if (from < 3) {
-        await m.createTable(categoriesTable);
-        await m.createIndex(categoriesOwnerIdType);
-        await m.createIndex(categoriesOwnerIdNameKey);
-      }
-      if (from < 4) {
-        await m.createTable(transactionsTable);
-        await m.createIndex(transactionsOwnerIdOccurredAtId);
-        // As v4 shipped them, not as declared now: a migration that stops at 4 must leave the v4 schema.
-        await m.createIndex(_v4AccountIndex);
-        await m.createIndex(_v4DestinationAccountIndex);
-        await m.createIndex(transactionsCategoryIdOccurredAtId);
-      }
-      // `to` is below 5 only when a migration test stops at an older version.
-      if (from < 5 && to >= 5) {
-        // Same names, wider columns (ADR-0027). SQLite cannot alter an index, so each is dropped and rebuilt from the rows already there.
-        await m.drop(transactionsAccountIdOccurredAtId);
-        await m.drop(transactionsDestinationAccountIdOccurredAtId);
-        await m.createIndex(transactionsAccountIdOccurredAtId);
-        await m.createIndex(transactionsDestinationAccountIdOccurredAtId);
+      for (var version = from + 1; version <= to; version++) {
+        await _commitAt(version, () => _upgradeTo(version, m));
       }
     },
     beforeOpen: (details) async {
@@ -59,6 +36,41 @@ final class GPAppDatabase extends _$GPAppDatabase {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  /// Drift writes `user_version` only after the whole migration returns, outside any transaction: a kill in between re-runs a step that
+  /// already committed, and its `CREATE INDEX` then fails on every launch (ADR-0029).
+  Future<void> _commitAt(int version, Future<void> Function() step) => transaction(() async {
+    await step();
+    await customStatement('PRAGMA user_version = $version');
+  });
+
+  Future<void> _upgradeTo(int version, Migrator m) async {
+    switch (version) {
+      case 2:
+        // `createTable` skips `@TableIndex` indexes, so each is created here or upgraded devices would lack it.
+        await m.createTable(accountsTable);
+        await m.createIndex(accountsOwnerIdIsArchived);
+      case 3:
+        await m.createTable(categoriesTable);
+        await m.createIndex(categoriesOwnerIdType);
+        await m.createIndex(categoriesOwnerIdNameKey);
+      case 4:
+        await m.createTable(transactionsTable);
+        await m.createIndex(transactionsOwnerIdOccurredAtId);
+        // As v4 shipped them, not as declared now: a migration that stops at 4 must leave the v4 schema.
+        await m.createIndex(_v4AccountIndex);
+        await m.createIndex(_v4DestinationAccountIndex);
+        await m.createIndex(transactionsCategoryIdOccurredAtId);
+      case 5:
+        // Same names, wider columns (ADR-0027). SQLite cannot alter an index, so each is dropped and rebuilt from the rows already there.
+        await m.drop(transactionsAccountIdOccurredAtId);
+        await m.drop(transactionsDestinationAccountIdOccurredAtId);
+        await m.createIndex(transactionsAccountIdOccurredAtId);
+        await m.createIndex(transactionsDestinationAccountIdOccurredAtId);
+      default:
+        throw StateError('No migration step to v$version');
+    }
+  }
 }
 
 final _v4AccountIndex = Index(
