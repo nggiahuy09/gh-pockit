@@ -1123,7 +1123,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 | Ngày | Task                                                                                                                                                                                                                                                                                                                                                      |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
-| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                                                                                                                                                                                                                                |
+| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                |
 | T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                                                                                                                                |
 | T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                                                                                                                            |
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                                                                                                                                     |
@@ -1177,6 +1177,47 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - **Còn lại / cho W12:** chặn ghép sai flavor với file env (`--flavor prod` + `env/dev.json`) cần người đọc config — W12 T2, cùng lúc quyết URL
   rỗng nghĩa là gì (nhiều khả năng: chạy local-only). Lần đầu build iOS dev lên máy thật, automatic signing tạo App ID `.dev` + profile. Dữ liệu
   mẫu / DB benchmark cũ trên simulator nằm lại ở app id cũ; build dev bắt đầu với DB rỗng.
+
+### W11 T3 — schema Postgres soi gương bản local, chặt hơn ở chỗ server làm được (08/11, làm sớm, ADR-0033)
+
+> Bạn chọn (08/11): Supabase CLI + Docker (stack local, test pgTAP), timestamp `bigint` epoch ms, có CHECK từ vựng ở server. Máy chưa có
+> Postgres / Docker → đã cài `supabase` 3.0.0 (Homebrew tap) và OrbStack (cask); OrbStack chạy ngay, không cần thao tác.
+
+- [x] **`supabase init`** ở gốc repo: `supabase/config.toml` (Postgres 17; sign-up bật, `enable_confirmations = false` — khớp project dev, không
+      phải sửa), `supabase/.gitignore` (`.temp/`, `.branches/`). Migration đầu: `supabase/migrations/20261108143955_create_synced_tables.sql`.
+- [x] **Ba bảng, cùng tên cột và nullability, bỏ `sync_status`** (trạng thái sync của máy). `TEXT` id → `uuid`; owner → `uuid` tham chiếu
+      `auth.users on delete cascade` (`'local'` không bao giờ qua được: lỗi `22P02`, đúng như `owner_id.dart` mong); mọi `INTEGER` → `bigint`
+      (tiền — ADR-0007, timestamp, `version`); không default, cùng lý do với local.
+- [x] **`bigint` ms, không `timestamptz`:** cursor W15 `(updated_at, id)` so đúng giá trị client lưu; `timestamptz` có micro giây → cursor làm
+      tròn ms sẽ gửi lại dòng cuối trang mãi, trừ khi mọi lần ghi phía server đều cắt. T6 lấy "bây giờ, theo ms" từ một helper.
+- [x] **Chặt hơn local, có chủ đích:** CHECK từ vựng trên ba cột `type` (SQLite phải dựng lại bảng mới đổi được nên local không có — ADR-0009;
+      Postgres một `ALTER`), `currency_code ~ '^[A-Z]{3}$'` (đúng luật của `Money`), ràng buộc cấp bảng có tên
+      (`transactions_destination_iff_transfer`…) để lỗi tự nói luật nào — test khớp theo tên, W14 map lỗi được.
+- [x] **FK theo owner:** con tham chiếu `(id, owner_id)` của cha, cha có `unique (id, owner_id)`. Kiểm FK chạy bằng quyền chủ bảng, bỏ qua RLS
+      → FK thường sẽ nhận giao dịch trỏ vào tài khoản / danh mục của người khác (id danh mục seed còn tính được từ uid — ADR-0002). Đúng với
+      mọi role, kể cả service role mà RLS bỏ qua.
+- [x] **RLS bật ngay trong migration tạo bảng, chưa policy:** Data API mở `public` cho ai có publishable key (vốn công khai) ngay khi bảng
+      tồn tại → từ lúc lên dev tới T4, anon / authenticated không đọc ghi được gì. T4 thêm policy theo owner.
+- [x] **Không index nào ngoài PK và unique:** query đầu tiên của server (delta pull) có index ở T5 — luật ADR-0009 áp cho cả server.
+- [x] **Test** `supabase/tests/database/synced_tables.test.sql`, 35 assertion: hình dạng từng bảng (cột, kiểu, nullability, thứ tự — qua
+      `information_schema`), không default, RLS bật; nhận những gì local nhận (10^15, danh mục đã xoá mềm, hai `name_key` NULL, cùng `name_key`
+      cho owner khác); từ chối owner `'local'` / không phải user, từ vựng, tiền tệ thường / 2 chữ, số tiền 0 / âm, ba luật chuyển khoản, danh mục
+      không tên, seed trùng, 4 kiểu tham chiếu chéo owner; authenticated không thấy cả dòng của mình, không insert được, anon không thấy gì;
+      xoá user kéo theo cả ba bảng của họ, user khác còn nguyên.
+- [x] **Test có cắn:** FK thường trên `account_id` + tắt RLS `accounts` → 5 assertion đỏ đúng chỗ (RLS, 2 tham chiếu chéo, đọc / ghi của
+      authenticated); khôi phục → 35 xanh. Lỗi gặp khi viết: domain của `information_schema` mang collation "C" (Postgres ≥ 12) → `results_eq`
+      không so được với literal; ép `collate "default"`.
+- [x] CLAUDE.md §4 (`supabase/`), §5 (Supabase CLI + pgTAP), §6 (_The server copy_), §9 (lệnh `supabase`), §14; README (_Server schema_).
+- [x] **Đã lên dev (08/11):** bạn `supabase login` + `supabase link`; `supabase db push --remote --dry-run` chỉ có đúng migration này, không
+      seed / role; push xong, `supabase migration list --remote` local = remote. Data API bằng publishable key: `[]` cho cả ba bảng, insert bằng anon
+      → `42501` (RLS) — từ giờ tới T4 không gì lộ ra. CLI 3.x nhắm stack local nếu thiếu `--remote` (đã sửa CLAUDE.md §9, README, ADR-0033).
+- [x] **pgTAP trên dev: 35 xanh (08/11).** Hai lần đầu đỏ ở `plan()`. Đoán đầu (thiếu `extensions` trong `search_path`) không đủ; file chẩn
+      đoán chỉ đọc cho thấy CLI đăng nhập bằng role tạm `cli_login_postgres` — thành viên của `postgres` nhưng không kế thừa quyền, nên không
+      có USAGE trên `extensions`. Test giờ tự `set local role postgres` + `set local search_path = public, extensions`, và quay về `postgres` thay
+      cho `reset role` (vốn trả về role tạm). Sau khi chạy: pgTAP đã gỡ, cả ba bảng 0 dòng, không còn user test.
+- **Còn lại / cho sau:** CI chưa chạy `supabase test db` (cần `supabase/setup-cli` + `supabase db start` trên runner) — hợp nhất ở T4, khi test
+  RLS là thứ đáng chặn PR nhất. Luật "currency của account / type của category không đổi được" (ADR-0010) là trigger → T6. Cho phép xoá
+  `deleted_at` của tombstone (Hoàn tác, ADR-0017) là chuyện policy → T4.
 
 ## W12 · 23–29/11 🔴 Auth client
 

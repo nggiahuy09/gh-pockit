@@ -141,6 +141,7 @@ docs/
 ├── patterns/       # portable notes, not Pockit-specific (keep names generic)
 ├── proposals/      # feature designs not on the roadmap yet; nothing in one is decided until its ADR is written
 └── benchmarks/
+supabase/           # the server: config.toml, migrations/ (schema, ADR-0033), tests/database/ (pgTAP)
 ```
 
 Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbidden**.
@@ -172,6 +173,7 @@ Layer-first layouts (`lib/screens/`, `lib/services/`, `lib/models/`) are **forbi
 | Crash            | `sentry_flutter`                            | 9.29.0                      |
 | Test             | `mocktail` 1.0.5, `bloc_test`, `patrol`     | — / `bloc_test` ⚠️          |
 | Device benchmark | `integration_test` + `flutter_driver` (dev) | SDK (ADR-0026)              |
+| Server schema    | Supabase CLI + pgTAP, Docker via OrbStack   | CLI 3.0.0 (ADR-0033)        |
 
 **Localization note:** do NOT use `gen_l10n`/ARB as blueprint §47 suggests — strings are hand-written in `core/localization/` (ADR-0004). Adding a string means adding a getter to `GPLocaleBase` and implementing it in **both** `GPLocaleEn` and `GPLocaleVi`; missing either one is a compile error, and that is the trade-off being bought. The domain carries no message: a `Failure` carries a type, and presentation maps it to `l10n.error.*`.
 
@@ -220,6 +222,16 @@ already at vN never runs a step it believes it has, so a change slipped into a s
 7. If the step rebuilds an index or rewrites rows over a big table, measure it at 50k (host tier, ADR-0026), and put the first-launch
    cost in the ADR.
 8. Never wipe (golden rule 7). Update the schema row in §14.
+
+### The server copy (ADR-0033)
+
+- Same tables, columns and names as the local ones, minus `sync_status`. A `TEXT` id is a `uuid`, every `INTEGER` a `bigint` (timestamps
+  stay epoch milliseconds), the owner a `uuid` referencing `auth.users` `on delete cascade`. No column defaults.
+- Stricter than local, on purpose: vocabulary CHECKs on `type`, foreign keys scoped to the owner (`(id, owner_id)`), named table-level
+  constraints, and RLS on in the migration that creates the table.
+- One migration per change in `supabase/migrations/` (`supabase migration new`). Once pushed, a migration is frozen, like a shipped vN.
+- From P4 on, a change to a synced local table changes the server in the same PR, and the shape test in
+  `supabase/tests/database/` with it.
 
 ---
 
@@ -287,6 +299,14 @@ flutter test --coverage && genhtml coverage/lcov.info -o coverage/html
 dart run drift_dev schema dump lib/core/database/database.dart drift_schemas/
 dart run drift_dev schema steps drift_schemas/ lib/core/database/database.steps.dart          # one schema per version for the steps (ADR-0029)
 dart run drift_dev schema generate --data-classes --companions drift_schemas/ test/core/database/generated/   # typed fixtures per version
+
+# server schema (ADR-0033) — needs Docker (OrbStack) running; the hosted commands need `supabase login` + `supabase link` once
+supabase db start                    # local Postgres with the auth schema; applies supabase/migrations/
+supabase migration new <name>        # a new file; never edit one that has been pushed
+supabase db reset                    # replay every migration from scratch
+supabase test db                     # pgTAP: supabase/tests/database/
+supabase test db --remote            # the same suite on dev, inside begin … rollback; it leaves nothing behind
+supabase db push --remote            # to the linked dev project; CLI 3.x targets the local stack without --remote
 
 # benchmark (docs/benchmarks/README.md; ADR-0025, ADR-0026) — a DATASET run opens its own DB file, never the real one
 fvm flutter test test/benchmark --dart-define=DATASET=50k  # queries, on the host → build/benchmarks/queries-50k.md
@@ -418,13 +438,13 @@ A feature is Done only when **all** of these hold:
 
 > Update whenever a phase completes. Week-by-week detail lives in `ROADMAP.md`.
 
-| Field                | Value                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase        | **P3 — Backend + Auth** (P2 done in code; `v0.1-local` and `v0.2-db` not tagged yet — both need the `dev` → `main` PR)                                                                                                                                                                                                                                |
-| Week                 | **W11 in progress** (16–22/11, started early 08/11) — T2 dev/prod flavors on Android and iOS, prod keeps the original app id, backend config from a gitignored `env/<flavor>.json`, CI builds the dev flavor (ADR-0032); the dev Supabase project is up (email/password, _Confirm email_ off). W10 left: the PRs and tags; its T5 is this week's Flex |
-| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                          |
-| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                   |
-| Drift schema version | 5 — `settings` + `accounts` + `categories` + `transactions`; v5 widens the two account indexes to cover the balance (ADR-0027); v1–v5 dumped to `drift_schemas/`, every step, v1→v4/v5 and v4→v5 with data tested                                                                                                                                     |
-| Backend              | dev Supabase project (W11 T2): email/password on, sign-up open, _Confirm email_ off; no prod project; `supabase_flutter` not a dependency until W12                                                                                                                                                                                                   |
-| Latest ADR           | 0032 — two flavors, dev and prod, backend config in a gitignored define file (08/11, W11 T2); 0031 — synced entities are soft-deleted, tombstones kept until P4 can purge them (05/11, W10 Flex); 0030 — a database newer than the app is refused, untouched, behind a screen of its own (05/11, W10 T4)                                              |
-| Blocker              | —                                                                                                                                                                                                                                                                                                                                                     |
+| Field                | Value                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase        | **P3 — Backend + Auth** (P2 done in code; `v0.1-local` and `v0.2-db` not tagged yet — both need the `dev` → `main` PR)                                                                                                                                                                                                                                                                                                                         |
+| Week                 | **W11 in progress** (16–22/11, started early 08/11) — T2 dev/prod flavors on Android and iOS, prod keeps the original app id, backend config from a gitignored `env/<flavor>.json`, CI builds the dev flavor, dev Supabase project up (ADR-0032); T3 the server tables mirror local with stricter checks, RLS on with no policy yet, 35 pgTAP assertions on the local stack (ADR-0033). W10 left: the PRs and tags; its T5 is this week's Flex |
+| Lint baseline        | `very_good_analysis` 10.0.0, pinned file version, overrides in `analysis_options.yaml` (four for the coding style, ADR-0020)                                                                                                                                                                                                                                                                                                                   |
+| Line width           | 180 — `formatter.page_width` (CLI) + `dart.lineLength` (editor), the two must match                                                                                                                                                                                                                                                                                                                                                            |
+| Drift schema version | 5 — `settings` + `accounts` + `categories` + `transactions`; v5 widens the two account indexes to cover the balance (ADR-0027); v1–v5 dumped to `drift_schemas/`, every step, v1→v4/v5 and v4→v5 with data tested                                                                                                                                                                                                                              |
+| Backend              | dev Supabase project (W11 T2): email/password on, sign-up open, _Confirm email_ off. Schema pushed (W11 T3): `accounts`, `categories`, `transactions`, RLS on, no policies until T4. No prod project; `supabase_flutter` not a dependency until W12                                                                                                                                                                                            |
+| Latest ADR           | 0033 — the server schema mirrors local, with vocabulary CHECKs, owner-scoped foreign keys and RLS from the first migration (08/11, W11 T3); 0032 — two flavors, dev and prod, backend config in a gitignored define file (08/11, W11 T2); 0031 — synced entities are soft-deleted, tombstones kept until P4 can purge them (05/11, W10 Flex)                                                                                                   |
+| Blocker              | —                                                                                                                                                                                                                                                                                                                                                                                                                                              |

@@ -57,6 +57,35 @@ be `false`, and `mailer_autoconfirm` `true`, which means _Confirm email_ is off)
 curl -s "$(jq -r .SUPABASE_URL env/dev.json)/auth/v1/settings" -H "apikey: $(jq -r .SUPABASE_PUBLISHABLE_KEY env/dev.json)" | jq '{email: .external.email, disable_signup, mailer_autoconfirm}'
 ```
 
+### Server schema
+
+The Postgres schema lives in `supabase/migrations/`, and its pgTAP tests in
+`supabase/tests/database/`
+([ADR-0033](docs/adr/0033-the-server-schema-mirrors-local-with-checks-a-server-can-afford.md)).
+They run against a local stack in Docker. Once per machine:
+
+```bash
+brew install supabase/tap/supabase
+brew install --cask orbstack   # any Docker runtime works; open it once
+```
+
+Once per clone, to reach the dev project (the login opens a browser, and the link
+asks for the database password set when the project was created):
+
+```bash
+supabase login
+supabase link --project-ref "$(jq -r .SUPABASE_URL env/dev.json | sed -E 's#https://([^.]+)\..*#\1#')"
+```
+
+Then:
+
+```bash
+supabase db start   # local Postgres with the auth schema; applies the migrations
+supabase test db    # pgTAP
+supabase db push --remote --dry-run   # what dev does not have yet
+supabase db push --remote             # without --remote, CLI 3.x targets the local stack
+```
+
 ## Quality gate
 
 `.githooks/pre-commit` runs format + analyze before every commit. To run it by hand:
