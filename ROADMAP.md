@@ -1120,14 +1120,14 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W11 · 16–22/11 🔴 Supabase schema + RLS
 
-| Ngày | Task                                                                                                                                                                                                                                           |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9)                                                                                        |
-| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                                                                                                                     |
-| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                     |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                 |
-| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                          |
-| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030) |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                      |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
+| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                                                                                                                                                                                                                                |
+| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                                                                                                                                |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                                                                                                                            |
+| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                                                                                                                                     |
+| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030)                                                                                                            |
 
 > **Từ W10 T5 (chuyển 05/11), Flex tuần này:** v4 → v5 trên iPhone 15, theo quy trình W9 T4.
 >
@@ -1140,6 +1140,43 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 > **Nợ từ W8 (01/11) — làm trước khi vào W11 nếu kịp, không thì tuần đệm W17:** nâng pin lên Flutter ≥ 3.38 (Dart 3.10). Xoá `SceneDelegate` và để
 > `flutter` tự migrate runner sang UIScene, đăng ký plugin qua `FlutterImplicitEngineDelegate` (ADR-0023); nâng go_router, drift + drift_flutter,
 > `very_good_analysis` mà ADR-0003 đang giữ; build simulator lại chạy được (`lipo` của Xcode 27). Đổi pin là một ADR mới; chạy đủ test + build iOS/Android.
+
+### W11 T2 — hai flavor dev / prod, cấu hình backend ngoài git (08/11, làm sớm, ADR-0032)
+
+> Bạn chọn (08/11): flavor cả iOS lẫn Android, `env/*.json` không commit (có `env/example.json`), project dev tắt _Confirm email_. Lý do chính
+> của flavor không phải cái tên: DB local thuộc về một backend, bản dev cài đè lên prod sẽ mở DB của prod, và từ P4 đẩy nó lên dev.
+
+- [x] **prod giữ id cũ** `com.nggiahuy.ghpockit` ("Pockit"): mọi bản đã cài và DB của nó là prod, không gì phải chuyển. Flex tuần này (cài đè
+      v4 → v5 trên iPhone) build `--flavor prod`. **dev** là `com.nggiahuy.ghpockit.dev` ("Pockit Dev"): sandbox + DB riêng, cài song song.
+- [x] **`default-flavor: dev`** trong `pubspec.yaml`: `flutter run` / `build` / `drive` trơn là dev, prod phải gọi tên → benchmark (ADR-0026) chạy
+      trên app dev, không bao giờ gần dữ liệu thật. Chỉ dùng được khi iOS cũng có flavor: flutter tool từ chối `--flavor` khi Xcode project không
+      có scheme riêng (`xcodeproj.dart`) — đây là lý do không làm "Android trước".
+- [x] **Android:** dimension `env`, dev có `applicationIdSuffix = ".dev"`, mỗi flavor một `resValue` `app_name`, manifest đọc `@string/app_name`.
+- [x] **iOS:** 6 configuration `{Debug,Profile,Release}-{dev,prod}` thay 3 cái cũ, scheme `dev` / `prod` thay `Runner` (giống project flavor mẫu
+      của chính Flutter). Mỗi configuration của Runner có `Flutter/<Configuration>.xcconfig` riêng: include file Pods của chính nó +
+      `Generated.xcconfig` + `dev.xcconfig` / `prod.xcconfig` (bundle id + `APP_DISPLAY_NAME`, `Info.plist` đọc). Một file mỗi configuration vì
+      CocoaPods sinh một xcconfig mỗi configuration và chỉ nối configuration nào include nó → `pod install` không cảnh báo, tự nối lại `RunnerTests`
+      đủ 6. pbxproj sửa bằng gem `xcodeproj` (đi kèm CocoaPods), không sửa tay; diff chỉ đụng configuration + file ref, 6 ref
+      `Pods-*.debug/release/profile.xcconfig` mồ côi đã xoá. `pod install` cần `LANG=en_US.UTF-8`, thiếu thì Ruby 3.4 ném
+      `Unicode Normalization not appropriate for ASCII-8BIT`.
+- [x] **Env:** `--dart-define-from-file=env/<flavor>.json`; `.gitignore` chặn `/env/*.json` trừ `env/example.json` (hai key rỗng: `SUPABASE_URL`,
+      `SUPABASE_PUBLISHABLE_KEY`). Publishable key không phải bí mật (nằm trong mọi bản build, RLS mới là chốt — T4), nhưng file này là chỗ một
+      secret thật sẽ lọt vào sau này. Chưa dòng Dart nào đọc hai key: người đọc đầu tiên là W12 T2.
+- [x] **CI:** `flutter build apk --debug --flavor dev --dart-define-from-file=env/example.json` — build cần key tồn tại, không cần giá trị, nên CI
+      không giữ credential nào. Một flavor là đủ: Gradle configure mọi variant ở mỗi lần build, khối `prod` hỏng thì build dev cũng đỏ.
+- [x] **Dart:** đúng một dòng — `app bootstrapped` log thêm `flavor` (`appFlavor`); không log URL hay key.
+- [x] `.vscode/launch.json`: dev, dev + dữ liệu mẫu, prod — đều kèm `--flavor` + file env. CLAUDE.md §9–§10, §14; README (_Flavors and env_, CI).
+- [x] **Kiểm:** APK debug dev / prod / không `--flavor` → `aapt dump badging`: `com.nggiahuy.ghpockit.dev` "Pockit Dev", `com.nggiahuy.ghpockit`
+      "Pockit", không flavor = dev. iOS release `--no-codesign` hai flavor → `Info.plist` đã build: `com.nggiahuy.ghpockit.dev` "Pockit Dev",
+      `com.nggiahuy.ghpockit` "Pockit". Format / analyze sạch; test 1031 xanh + 1 skip, không đổi số — không có hành vi Dart mới để test.
+- [x] **Project Supabase dev đã tạo (08/11)**, `env/dev.json` đã điền. Lần đầu dán nhầm link dashboard (`supabase.com/dashboard/project/<ref>`)
+      vào `SUPABASE_URL` — URL API là `https://<ref>.supabase.co`, đã sửa; README giờ ghi rõ. `GET /auth/v1/settings` → HTTP 200, `email: true`,
+      `disable_signup: false`.
+- [x] **_Confirm email_ đã tắt (08/11):** lần kiểm đầu ra `mailer_autoconfirm: false`, bạn tắt trong dashboard, lệnh kiểm ở README
+      (_Flavors and env_) chạy lại ra `email: true`, `disable_signup: false`, `mailer_autoconfirm: true`.
+- **Còn lại / cho W12:** chặn ghép sai flavor với file env (`--flavor prod` + `env/dev.json`) cần người đọc config — W12 T2, cùng lúc quyết URL
+  rỗng nghĩa là gì (nhiều khả năng: chạy local-only). Lần đầu build iOS dev lên máy thật, automatic signing tạo App ID `.dev` + profile. Dữ liệu
+  mẫu / DB benchmark cũ trên simulator nằm lại ở app id cũ; build dev bắt đầu với DB rỗng.
 
 ## W12 · 23–29/11 🔴 Auth client
 

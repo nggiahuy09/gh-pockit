@@ -30,6 +30,20 @@ android {
         versionName = flutter.versionName
     }
 
+    // prod keeps the original id so installs that predate the flavors (and their data) stay prod; dev sits beside it (ADR-0032).
+    flavorDimensions += "env"
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "Pockit Dev")
+        }
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "Pockit")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

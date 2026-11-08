@@ -62,6 +62,8 @@ fvm flutter drive --profile --keep-app-running --no-dds --driver=test_driver/int
     with the window's size. This shows whether the spikes come from the list's rebuild;
   - `clock_lead_ms`: small and positive when the frame clock and `Timeline.now` agree. The matching above relies on that.
 - The run uses its own database, `pockit_bench_<size>_v<version>`, and never touches the real data.
+- Since ADR-0032 it builds the `dev` flavor (`com.nggiahuy.ghpockit.dev`) unless given `--flavor prod`, so it runs in a different app from
+  the install holding real data. Runs before 2026-11-08 used the prod id; the code under test is the same.
 - The first run of a size seeds that database. Throw that run's numbers away, then take the median of three or more runs.
 
 ## Cold start

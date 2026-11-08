@@ -24,6 +24,39 @@ git config core.hooksPath .githooks   # enable the pre-commit hook (git will not
 Dart extension in VS Code cannot find the SDK and reports
 _"There is no formatter for 'dart' files installed"_.
 
+### Flavors and env
+
+Two flavors ([ADR-0032](docs/adr/0032-dev-and-prod-flavors-with-a-gitignored-env-file.md)):
+
+| Flavor | App id                      | Name       | Backend              |
+| ------ | --------------------------- | ---------- | -------------------- |
+| `dev`  | `com.nggiahuy.ghpockit.dev` | Pockit Dev | dev Supabase project |
+| `prod` | `com.nggiahuy.ghpockit`     | Pockit     | none yet             |
+
+`dev` is the default, so a bare `flutter run` builds it; `prod` keeps the id every
+build had before the flavors, so an existing install and its data stay prod.
+
+The backend URL and key come from `env/<flavor>.json`, which is gitignored. Only
+`env/example.json` (the keys, empty) is committed. Once per clone:
+
+```bash
+cp env/example.json env/dev.json   # then fill in the dev project's values
+cp env/example.json env/prod.json  # stays empty until there is a prod project
+fvm flutter run --flavor dev --dart-define-from-file=env/dev.json
+```
+
+Both values are in the dev project's Supabase dashboard: the project URL and the
+**publishable** key. The URL is the API one, `https://<project-ref>.supabase.co`,
+not the dashboard link `https://supabase.com/dashboard/project/<project-ref>`.
+Never the secret / `service_role` key: the app ships everything in these files.
+
+To check the values and the dev project's auth settings (`disable_signup` should
+be `false`, and `mailer_autoconfirm` `true`, which means _Confirm email_ is off):
+
+```bash
+curl -s "$(jq -r .SUPABASE_URL env/dev.json)/auth/v1/settings" -H "apikey: $(jq -r .SUPABASE_PUBLISHABLE_KEY env/dev.json)" | jq '{email: .external.email, disable_signup, mailer_autoconfirm}'
+```
+
 ## Quality gate
 
 `.githooks/pre-commit` runs format + analyze before every commit. To run it by hand:
@@ -50,12 +83,13 @@ push and pull request against `main` and `dev`, in the same fail-fast order:
 with `jq`, so CI and every machine always use the one pinned SDK — CI never
 hardcodes the version a second time.
 
-`build` is a debug APK with no flavor. It joined the gate before the dev/prod
-flavors did, because the reason for waiting stopped holding at W2: the app now
-bundles a native SQLite, a subset font and icon assets, which are what break on
-a clean machine. The flavors land at W11 with the Supabase env. The job keeps
-the name `format → analyze → test`, since that is the status check the rulesets
-below require.
+`build` is a debug APK of the `dev` flavor, built with the empty
+`env/example.json`: the build needs the keys to exist, not real values, so CI
+holds no credentials. It catches what breaks on a clean machine (the native
+SQLite, the subset font, the icon assets, a flavor block). One flavor is enough,
+since Gradle configures every variant on every build. The job keeps the name
+`format → analyze → test`, since that is the status check the rulesets below
+require.
 
 ### Branch protection for `main` and `dev` (manual, once)
 

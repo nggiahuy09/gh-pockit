@@ -60,6 +60,6 @@ jobs:
       - name: Test
         run: flutter test --reporter expanded
 
-      # No flavor until W11 adds dev/prod; debug needs no signing config.
-      - name: Build (debug APK)
-        run: flutter build apk --debug
+      # The empty example env: the build needs the keys to exist, not real values (ADR-0032). Debug needs no signing config.
+      - name: Build (debug APK, dev flavor)
+        run: flutter build apk --debug --flavor dev --dart-define-from-file=env/example.json
