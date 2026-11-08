@@ -1124,7 +1124,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
 | T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                |
-| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                                                                                                                                |
+| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                           |
 | T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                                                                                                                            |
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                                                                                                                                     |
 | Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030)                                                                                                            |
@@ -1218,6 +1218,39 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - **Còn lại / cho sau:** CI chưa chạy `supabase test db` (cần `supabase/setup-cli` + `supabase db start` trên runner) — hợp nhất ở T4, khi test
   RLS là thứ đáng chặn PR nhất. Luật "currency của account / type của category không đổi được" (ADR-0010) là trigger → T6. Cho phép xoá
   `deleted_at` của tombstone (Hoàn tác, ADR-0017) là chuyện policy → T4.
+
+### W11 T4 — mỗi owner chỉ đọc / ghi dòng của mình (08/11, làm sớm, ADR-0034)
+
+> Bạn chọn (08/11): đổi PK sang `(owner_id, id)` ngay khi bảng trên dev còn rỗng; cho push + chạy test trên dev sau khi local xanh. Tự quyết
+> theo luật sẵn có: client không hard delete (golden rule 5, ADR-0031); CI chạy pgTAP (đã hẹn ở T3).
+
+- [x] **Grant mặc định của Supabase là "tất cả"** cho `anon` và `authenticated` — kể cả `DELETE` và `TRUNCATE`, mà `TRUNCATE` không qua RLS.
+      Migration `20261108150301_owner_access.sql`: `revoke all` khỏi cả hai, rồi chỉ `grant select, insert, update` cho `authenticated`. `anon`
+      không còn gì: chưa đăng nhập thì app đọc DB local, không bao giờ đọc server.
+- [x] **3 policy / bảng, đều `to authenticated`**, trên `owner_id = (select auth.uid())` — subselect để `auth.uid()` chạy một lần mỗi câu lệnh,
+      không phải mỗi dòng. Update có cả `using` lẫn `with check` → không chuyển dòng sang owner khác được. Update không ràng `deleted_at` → Hoàn
+      tác (ADR-0017) chạy được trên server. Không policy / grant delete → xoá báo "permission denied", không lặng lẽ xoá 0 dòng; purge tombstone
+      (P4) là job server dưới service role.
+- [x] **PK `(owner_id, id)`** thay `(id)` và thay luôn `unique (id, owner_id)` của T3 làm đích cho các FK theo owner (giữ nguyên tên). RLS lọc
+      dòng nhưng không lọc tính duy nhất: với PK toàn cục, A chèn trước id của B (id danh mục seed tính được từ uid — ADR-0002) là chặn được lần
+      ghi của B và biết id đó tồn tại qua `23505`. Cột đầu `owner_id` còn phục vụ luôn bộ lọc của policy.
+- [x] **Test** `supabase/tests/database/owner_access.test.sql`, 29 assertion — gồm đúng câu ROADMAP: A hỏi dòng của B theo id (tài khoản, danh
+      mục, giao dịch) → không ra gì. Thêm: grant xét trên **mọi** bảng `public` (bảng sau quên revoke là đỏ), policy, PK; A đọc đủ dòng của mình kể
+      cả tombstone; ghi dưới tên B / sửa dòng B / chuyển dòng cho B / delete / truncate đều bị chặn; dùng id của B → A có dòng riêng, B vẫn ghi
+      được dòng mình; trùng id trong cùng owner vẫn `23505`; token không `sub` không thấy gì; anon bị từ chối hẳn. `synced_tables.test.sql` bỏ 4
+      assertion "chưa ai đọc được cho tới T4" → 31.
+- [x] **Test có cắn:** policy đọc `accounts` thành `using (true)` + bỏ `revoke` + `categories` giữ PK `(id)` → 13 assertion đỏ; trong đó `TRUNCATE`
+      của A xoá sạch bảng thật. Khôi phục → 60 xanh.
+- [x] **CI:** job mới `server schema (pgTAP)` cạnh `quality` — `supabase/setup-cli@v1` (CLI ghim 3.0.0), `supabase db start` (dựng lại mọi
+      migration trên Postgres mới), `supabase test db`. Chưa chạy lần nào: workflow chỉ chạy trên PR vào `dev` / `main`. Thành required check khi
+      bạn thêm nó vào ruleset (README đã ghi).
+- [x] **Lên dev (08/11):** dry-run đúng một migration → push → `migration list --remote` khớp cả hai. Data API bằng publishable key: cả ba bảng →
+      `42501 permission denied` (HTTP 401) thay cho `[]`. `supabase test db --remote`: 60 xanh. Sau đó: 9 policy, 0 dòng, không user test, không
+      pgTAP.
+- [x] CLAUDE.md §6 (_Access_), §14; README (job CI, ruleset).
+- **Còn lại / cho sau:** chạy job CI lần đầu ở PR W11 (CLAUDE.md §10: tuần đụng CI thì nên mở PR draft sớm). Hàm server của W14 / W15 nên là
+  `SECURITY INVOKER` để policy này còn áp dụng — `SECURITY DEFINER` bỏ qua RLS, phải tự kiểm `auth.uid()`; upsert của W14 nhắm
+  `(owner_id, id)` với `owner_id` lấy từ `auth.uid()`, không từ payload.
 
 ## W12 · 23–29/11 🔴 Auth client
 

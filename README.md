@@ -120,6 +120,13 @@ since Gradle configures every variant on every build. The job keeps the name
 `format → analyze → test`, since that is the status check the rulesets below
 require.
 
+A second job, `server schema (pgTAP)`, starts a fresh local Postgres with the
+Supabase CLI, which replays every migration in `supabase/migrations/`, then runs
+the pgTAP suite
+([ADR-0034](docs/adr/0034-each-owner-reads-and-writes-only-their-own-rows.md)).
+It runs beside the first, and blocks a merge only once it is added to the
+rulesets below.
+
 ### Branch protection for `main` and `dev` (manual, once)
 
 GitHub cannot enable this from the repo, so set it by hand in
@@ -127,7 +134,8 @@ GitHub cannot enable this from the repo, so set it by hand in
 **both** `main` and `dev` — the same rules on each:
 
 - [ ] Require a pull request before merging (1 approval; self-approve is fine for a solo repo)
-- [ ] Require status checks to pass → select **`format → analyze → test`**
+- [ ] Require status checks to pass → select **`format → analyze → test`** and, once it
+      has run on a PR, **`server schema (pgTAP)`**
 - [ ] Require branches to be up to date before merging
 - [ ] Leave **Require linear history** OFF — `CLAUDE.md` §10 merges a work branch into `dev`
       with a merge commit (`--no-ff`), and linear history is exactly the rule that forbids one.

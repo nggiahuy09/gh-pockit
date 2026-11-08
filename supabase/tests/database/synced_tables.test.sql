@@ -1,11 +1,11 @@
--- The server copy of the synced tables (W11 T3, ADR-0033): its shape, its constraints, and that RLS denies everyone until T4's policies.
+-- The server copy of the synced tables (W11 T3, ADR-0033): its shape and its constraints. Who may read and write them: owner_access.test.sql.
 begin;
 -- On a hosted project the CLI logs in as a temporary role that inherits nothing from postgres, and SET ROLE loads no role's
 -- search_path: both are set here, and `reset role` would go back to the temporary role.
 set local role postgres;
 set local search_path = public, extensions;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(31);
 
 -- Fixed ids keep a failure readable: a… is user A's, b… user B's.
 insert into auth.users (id, email) values
@@ -179,22 +179,6 @@ select throws_like(
   $$select pg_temp.add_transaction('expense', 'a1000000-0000-4000-8000-000000000001', p_owner_id => 'b0000000-0000-4000-8000-000000000000')$$,
   '%"transactions_account_id_owner_id_fkey"%', 'a row claiming another owner while pointing at the first owner''s account'
 );
-
--- Until T4's policies, the Data API roles read and write nothing.
-
-do $$ begin perform set_config('request.jwt.claims', '{"sub": "a0000000-0000-4000-8000-000000000000", "role": "authenticated"}', true); end $$;
-set local role authenticated;
-select is((select count(*) from public.accounts), 0::bigint, 'a signed-in owner sees none of their own accounts yet');
-select is((select count(*) from public.transactions), 0::bigint, 'nor their transactions');
-select throws_ok(
-  $$insert into public.accounts (id, owner_id, name, type, currency_code, initial_balance, is_archived, created_at, updated_at, version, deleted_at)
-    values (gen_random_uuid(), 'a0000000-0000-4000-8000-000000000000', 'Wallet', 'cash', 'VND', 0, false, 1, 1, 1, null)$$,
-  '42501', null, 'a signed-in owner cannot insert their own account yet'
-);
-set local role postgres;
-set local role anon;
-select is((select count(*) from public.categories), 0::bigint, 'an anonymous caller sees no category');
-set local role postgres;
 
 -- Deleting a user takes their rows along, children and parents in one statement, and nobody else's.
 
