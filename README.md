@@ -123,7 +123,9 @@ require.
 A second job, `server schema (pgTAP)`, starts a fresh local Postgres with the
 Supabase CLI, which replays every migration in `supabase/migrations/`, then runs
 the pgTAP suite
-([ADR-0034](docs/adr/0034-each-owner-reads-and-writes-only-their-own-rows.md)).
+([ADR-0034](docs/adr/0034-each-owner-reads-and-writes-only-their-own-rows.md)),
+then a two-session race between two pushes and a pull, which pgTAP cannot stage
+([ADR-0036](docs/adr/0036-the-server-stamps-writes-in-commit-order.md)).
 It runs beside the first, and blocks a merge only once it is added to the
 rulesets below.
 

@@ -59,6 +59,8 @@ Negative:
 
 ## Open, for T6 and W15
 
+_Settled 2026-11-09 by ADR-0036: a per-owner lock and "newest + 1" stamp `updated_at` in commit order._
+
 A timestamp cursor misses rows that commit out of timestamp order. Two of one owner's devices push at once:
 
 1. Push 1 stamps its row at t=1 and commits late.

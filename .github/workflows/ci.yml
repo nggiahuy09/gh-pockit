@@ -84,3 +84,7 @@ jobs:
 
       - name: Test
         run: supabase test db
+
+      # Two real sessions racing a pull, which pgTAP's one session cannot stage (ADR-0036).
+      - name: Commit order (two sessions)
+        run: bash supabase/tests/concurrency/commit_order.sh

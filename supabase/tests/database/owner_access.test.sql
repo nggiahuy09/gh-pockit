@@ -99,7 +99,7 @@ with updated as (update public.accounts set name = 'Hijacked', updated_at = 2 wh
 select is(count(*), 0::bigint, 'A updating B''s account touches no row') from updated;
 select throws_ok(
   $$update public.accounts set owner_id = 'b0000000-0000-4000-8000-000000000000' where id = 'a1000000-0000-4000-8000-000000000002'$$,
-  '42501', 'new row violates row-level security policy for table "accounts"', 'A cannot hand their account to B'
+  '23514', 'accounts.owner_id never changes after insert', 'A cannot hand their account to B: the fixed-column trigger refuses it before RLS'
 );
 with restored as (update public.transactions set deleted_at = null, updated_at = 3 where id = 'a3000000-0000-4000-8000-000000000002' returning 1)
 select is(count(*), 1::bigint, 'A restores their own tombstone: an undo (ADR-0017)') from restored;

@@ -1125,8 +1125,8 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 | T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
 | T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                |
 | T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                           |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done ở local (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms; ADR-0035; lên dev: chờ bạn; chi tiết ở _W11 T5_ dưới                                                                                           |
-| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                                                                                                                                     |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms, đã lên dev; ADR-0035; chi tiết ở _W11 T5_ dưới                                                                                                         |
+| T6   | Trigger tăng `version` + set `updated_at` phía server ✅ Done (09/11, làm sớm) — khoá theo owner + `greatest(đồng hồ, newest + 1)`: `updated_at` tăng theo thứ tự commit; `version` của server; cột cố định bị từ chối; test race hai phiên trong CI; đã lên dev; ADR-0036; chi tiết ở _W11 T6_ dưới                                                       |
 | Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030)                                                                                                            |
 
 > **Từ W10 T5 (chuyển 05/11), Flex tuần này:** v4 → v5 trên iPhone 15, theo quy trình W9 T4.
@@ -1271,10 +1271,45 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - [x] **Test có cắn:** `transactions` chỉ `(owner_id, updated_at)` + bỏ index `accounts` → 3 đỏ (plan in ra `updated_at >= 0` + `Filter` +
       `Incremental Sort`; `accounts_pkey` + `Sort`). Khôi phục → 64 xanh.
 - [x] CLAUDE.md §6 (_Indexes_), §9 (lệnh benchmark server), §14; `docs/benchmarks/README.md` (_Server_).
-- **Chưa xong — lên dev:** push migration + `supabase test db --remote` — chờ bạn cho phép (lần cho phép trước là cho T4).
-- **Mở cho T6 (quan trọng):** cursor theo timestamp bỏ sót dòng commit lệch thứ tự — hai máy cùng owner push cùng lúc, push 1 đóng dấu t=1 nhưng
+- [x] **Lên dev (09/11, cùng T6):** push, `migration list --remote` khớp, `supabase test db --remote` xanh, có đủ 3 index pull.
+- **Mở cho T6 (quan trọng) — đã giải ở T6, ADR-0036:** cursor theo timestamp bỏ sót dòng commit lệch thứ tự — hai máy cùng owner push cùng lúc, push 1 đóng dấu t=1 nhưng
   commit sau push 2 (t=2), pull ở giữa đã vượt t=2 → dòng của push 1 không bao giờ được pull. Trigger `updated_at` của T6 phải tăng theo thứ tự
   commit cho từng owner (vd. khoá theo owner rồi `greatest(now, mới nhất của owner + 1)` — đúng lookup mà index này phục vụ).
+
+### W11 T6 — server đóng dấu mọi lần ghi, theo thứ tự commit của từng owner (09/11, làm sớm, ADR-0036)
+
+> Bạn chọn (09/11): khoá theo owner + "newest + 1", thay vì bộ đếm `change_seq` hay để W15 tự xử; cho push T5 + T6 lên dev. Giải đúng câu hỏi
+> T5 để mở: cursor theo timestamp bỏ sót dòng commit lệch thứ tự.
+
+- [x] Migration `20261109143253_server_stamps.sql`, hàm ở schema `private` (Data API chỉ mở `public`; `anon` / `authenticated` không có usage):
+  - **Trigger dòng `<bảng>_stamp_write`:** khoá `pg_advisory_xact_lock` theo owner (giữ tới commit), rồi `updated_at = greatest(đồng hồ ms,
+    newest của owner trên cả ba bảng + 1)`; `version` = 1 khi insert, cũ + 1 khi update — bỏ qua giá trị client gửi. `created_at` giữ của
+    client (dòng offline được tạo lúc người dùng tạo). Đọc newest **sau** khi có khoá: READ COMMITTED cho câu lệnh đó snapshot mới, thấy lần
+    ghi trước của owner đã commit. Lookup chỉ đọc index pull của T5.
+  - **Trigger câu lệnh `<bảng>_lock_caller`:** khoá theo `auth.uid()` **trước** khi dòng nào bị khoá — `UPDATE` khoá dòng trước khi trigger dòng
+    chạy, nên chỉ khoá ở trigger dòng thì hai transaction nhiều dòng của cùng owner có thể deadlock. Trigger dòng khoá lại theo `owner_id` (phủ
+    service role; khoá đã giữ thì miễn phí).
+  - **Trigger dòng `<bảng>_fixed_columns`:** đúng những cột mà `toPatch` local bỏ ra — cả ba bảng `id`, `owner_id`, `created_at`; `accounts.
+    currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system` (định danh dòng seed, ADR-0002) → `23514`,
+    `<bảng>_<cột>_fixed`. `IS DISTINCT FROM` nên gửi lại cả dòng với cột cố định không đổi vẫn qua. Chạy trước trigger đóng dấu (cùng thời
+    điểm thì theo tên) → chuyển dòng sang B giờ trả `23514` trước khi RLS kịp trả `42501`; assertion T4 sửa theo.
+- [x] **Test** `supabase/tests/database/server_stamps.test.sql`, 24 assertion: insert → version 1 + đồng hồ server, giữ `created_at`; update →
+      +1 và tiến lên; dấu tăng nghiêm ngặt qua cả ba bảng kể cả trong cùng một ms; cài sẵn một dấu năm 2100 (đồng hồ lùi) → lần ghi sau = cài sẵn
+      + 1; owner khác không bị ảnh hưởng; xoá mềm + hoàn tác là version 3 và được đóng dấu sau dòng mới nhất; 8 cột cố định bị từ chối, cột sửa
+      được vẫn sửa được, gửi lại nguyên dòng vẫn qua; ghi bằng service role giữ khoá của owner; câu lệnh của người đăng nhập dù không khớp dòng
+      nào vẫn giữ khoá của họ; `private` ngoài tầm Data API.
+- [x] **Test race hai phiên thật** `supabase/tests/concurrency/commit_order.sh` (pgTAP một phiên không dựng được): push 1 đóng dấu rồi giữ
+      transaction 5 s, push 2 chạy sau, một lần pull xen giữa → push 2 chờ khoá `Lock:advisory`; pull giữa chừng không thấy dòng nào; pull kế từ
+      cursor đó trả cả hai, push 1 trước; push 2 đóng dấu sau push 1. Ghi thật vào DB local, xoá user (cascade) khi thoát. CI chạy sau pgTAP.
+- [x] **Test có cắn:** bỏ hai lệnh khoá → push 2 không chờ, commit trước; pull giữa chừng thấy 1 dòng (của push 2) và cursor nhảy qua; pull
+      kế không trả gì → **dòng của push 1 mất vĩnh viễn** — đúng lỗi ADR này sinh ra để chặn; thêm 2 assertion khoá pgTAP đỏ. Khôi phục → 88 +
+      4 xanh. Lần đầu script giữ 3 s là không đủ: vòng chờ (~0,2 s mỗi `docker exec`) chạy quá giờ, lần pull rơi sau cả hai commit → giữ 5 s.
+- [x] **Lên dev (09/11):** dry-run đúng T5 + T6 → push → `migration list --remote` khớp cả bốn; `supabase test db --remote` 88 xanh; sau đó: 9
+      trigger, không trigger nào tắt (test có tắt / bật một trigger trong transaction đã rollback), 3 index pull, 0 dòng, không user test, không
+      pgTAP. Script race chỉ chạy local (cần `docker exec`).
+- [x] ADR-0035 ghi đã giải; CLAUDE.md §6 (_Stamps_), §9 (lệnh script race), §14; README (CI).
+- **Cho W14:** lấy `serverVersion` / `serverUpdatedAt` từ phản hồi push (system-design §6.2 đã định); hàm push nên lấy khoá owner ngay đầu lô và là
+  `SECURITY INVOKER`; giữ READ COMMITTED.
 
 ## W12 · 23–29/11 🔴 Auth client
 
