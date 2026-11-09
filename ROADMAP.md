@@ -1125,7 +1125,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 | T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
 | T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                |
 | T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                           |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                                                                                                                            |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done ở local (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms; ADR-0035; lên dev: chờ bạn; chi tiết ở _W11 T5_ dưới                                                                                           |
 | T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                                                                                                                                     |
 | Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030)                                                                                                            |
 
@@ -1251,6 +1251,30 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - **Còn lại / cho sau:** chạy job CI lần đầu ở PR W11 (CLAUDE.md §10: tuần đụng CI thì nên mở PR draft sớm). Hàm server của W14 / W15 nên là
   `SECURITY INVOKER` để policy này còn áp dụng — `SECURITY DEFINER` bỏ qua RLS, phải tự kiểm `auth.uid()`; upsert của W14 nhắm
   `(owner_id, id)` với `owner_id` lấy từ `auth.uid()`, không từ payload.
+
+### W11 T5 — index cho delta pull, kết thúc bằng `id` (09/11, làm sớm, ADR-0035)
+
+> Bảng ghi `(owner_id, updated_at)`. Cursor của pull là cặp `(updated_at, id)` (system-design §6.2) nên index thêm `id` — đúng quy ước index
+> local (ADR-0009) — và có trên cả ba bảng, vì bảng nào cũng được pull theo cursor.
+
+- [x] Migration `20261109140319_delta_pull_indexes.sql`: `<bảng>_owner_id_updated_at_id` trên `transactions`, `accounts`, `categories`. Có `id` thì
+      `ROW(updated_at, id) > ROW(cursor)` là một điều kiện index ngay sau `owner_id`, và index trả dòng đúng thứ tự cursor. Thiếu `id`, index chỉ
+      lo `updated_at >= cursor`: mọi dòng trùng timestamp (danh mục seed, ghi theo lô) bị đọc rồi lọc, cộng `Incremental Sort`. `CREATE INDEX`
+      thường vì bảng rỗng; có dữ liệu rồi thì `CONCURRENTLY`, ngoài transaction của migration.
+- [x] **Câu pull W15 được khoá từ giờ:** test chạy đúng câu đó bằng `authenticated` qua RLS — W15 đổi hình câu query là test đỏ.
+- [x] **Đo ở 50k** (`supabase/benchmarks/delta_pull.sql`, host M1, 10 owner × 50k chung một bảng, chạy rồi rollback; lần thứ ba, cache nóng):
+      trang đầu 200 dòng 0,063 ms / 204 buffer có index, 10,5 ms / 1266 buffer chỉ có PK; tăng dần 10 thay đổi 0,012 ms / 13 buffer so với
+      5,2 ms / 1266 buffer, lọc bỏ 49 990 dòng. Không index thì chi phí theo cả lịch sử của owner; có index thì theo cỡ trang. RLS gộp
+      `owner_id = (InitPlan 1).col1` vào `Index Cond`. Bản hai cột: 0,095–0,103 ms / 0,016 ms — gần như nhau khi timestamp không trùng.
+- [x] **Test** `supabase/tests/database/delta_pull.test.sql`, 4 assertion: định nghĩa ba index; với từng bảng, plan của câu pull (tắt seq scan,
+      bitmap scan, sort) là một index scan trên đúng index đó, owner + row comparison trong `Index Cond`, không sort — đỏ thì in nguyên plan.
+- [x] **Test có cắn:** `transactions` chỉ `(owner_id, updated_at)` + bỏ index `accounts` → 3 đỏ (plan in ra `updated_at >= 0` + `Filter` +
+      `Incremental Sort`; `accounts_pkey` + `Sort`). Khôi phục → 64 xanh.
+- [x] CLAUDE.md §6 (_Indexes_), §9 (lệnh benchmark server), §14; `docs/benchmarks/README.md` (_Server_).
+- **Chưa xong — lên dev:** push migration + `supabase test db --remote` — chờ bạn cho phép (lần cho phép trước là cho T4).
+- **Mở cho T6 (quan trọng):** cursor theo timestamp bỏ sót dòng commit lệch thứ tự — hai máy cùng owner push cùng lúc, push 1 đóng dấu t=1 nhưng
+  commit sau push 2 (t=2), pull ở giữa đã vượt t=2 → dòng của push 1 không bao giờ được pull. Trigger `updated_at` của T6 phải tăng theo thứ tự
+  commit cho từng owner (vd. khoá theo owner rồi `greatest(now, mới nhất của owner + 1)` — đúng lookup mà index này phục vụ).
 
 ## W12 · 23–29/11 🔴 Auth client
 
