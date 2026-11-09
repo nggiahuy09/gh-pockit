@@ -1005,8 +1005,8 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W10 · 09–15/11 🔴 Migration
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                    |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR ✅ Done (05/11, làm sớm) — mỗi bước một transaction kèm `user_version`, ADR-0029; chi tiết ở _W10 T2_ dưới                                      |
 | T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô ✅ Done (05/11, làm sớm) — `migrationSteps` sinh từ dump, không dùng `make-migrations`; amendment ADR-0029; chi tiết ở _W10 T3_ dưới |
 | T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR ✅ Done (05/11, làm sớm) — phương án A: từ chối, giữ nguyên file, màn lỗi riêng; ADR-0030; chi tiết ở _W10 T4_ dưới                                                                                 |
@@ -1120,14 +1120,14 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W11 · 16–22/11 🔴 Supabase schema + RLS
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                                                      |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới |
-| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                |
-| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                           |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms, đã lên dev; ADR-0035; chi tiết ở _W11 T5_ dưới                                                                                                         |
-| T6   | Trigger tăng `version` + set `updated_at` phía server ✅ Done (09/11, làm sớm) — khoá theo owner + `greatest(đồng hồ, newest + 1)`: `updated_at` tăng theo thứ tự commit; `version` của server; cột cố định bị từ chối; test race hai phiên trong CI; đã lên dev; ADR-0036; chi tiết ở _W11 T6_ dưới                                                       |
-| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030)                                                                                                            |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới                                             |
+| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                                                            |
+| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                                                                       |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms, đã lên dev; ADR-0035; chi tiết ở _W11 T5_ dưới                                                                                                                                                     |
+| T6   | Trigger tăng `version` + set `updated_at` phía server ✅ Done (09/11, làm sớm) — khoá theo owner + `greatest(đồng hồ, newest + 1)`: `updated_at` tăng theo thứ tự commit; `version` của server; cột cố định bị từ chối; test race hai phiên trong CI; đã lên dev; ADR-0036; chi tiết ở _W11 T6_ dưới                                                                                                   |
+| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030) ◐ (09/11) — ADR ✅ ADR-0037; SQL trong `supabase/migrations/` ✅ (T3–T6); iPhone v4 → v5 + soát màn lỗi DB: chờ bạn cắm máy; chi tiết ở _W11 Flex_ dưới |
 
 > **Từ W10 T5 (chuyển 05/11), Flex tuần này:** v4 → v5 trên iPhone 15, theo quy trình W9 T4.
 >
@@ -1283,19 +1283,18 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 - [x] Migration `20261109143253_server_stamps.sql`, hàm ở schema `private` (Data API chỉ mở `public`; `anon` / `authenticated` không có usage):
   - **Trigger dòng `<bảng>_stamp_write`:** khoá `pg_advisory_xact_lock` theo owner (giữ tới commit), rồi `updated_at = greatest(đồng hồ ms,
-    newest của owner trên cả ba bảng + 1)`; `version` = 1 khi insert, cũ + 1 khi update — bỏ qua giá trị client gửi. `created_at` giữ của
+newest của owner trên cả ba bảng + 1)`; `version` = 1 khi insert, cũ + 1 khi update — bỏ qua giá trị client gửi. `created_at` giữ của
     client (dòng offline được tạo lúc người dùng tạo). Đọc newest **sau** khi có khoá: READ COMMITTED cho câu lệnh đó snapshot mới, thấy lần
     ghi trước của owner đã commit. Lookup chỉ đọc index pull của T5.
   - **Trigger câu lệnh `<bảng>_lock_caller`:** khoá theo `auth.uid()` **trước** khi dòng nào bị khoá — `UPDATE` khoá dòng trước khi trigger dòng
     chạy, nên chỉ khoá ở trigger dòng thì hai transaction nhiều dòng của cùng owner có thể deadlock. Trigger dòng khoá lại theo `owner_id` (phủ
     service role; khoá đã giữ thì miễn phí).
   - **Trigger dòng `<bảng>_fixed_columns`:** đúng những cột mà `toPatch` local bỏ ra — cả ba bảng `id`, `owner_id`, `created_at`; `accounts.
-    currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system` (định danh dòng seed, ADR-0002) → `23514`,
+currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system` (định danh dòng seed, ADR-0002) → `23514`,
     `<bảng>_<cột>_fixed`. `IS DISTINCT FROM` nên gửi lại cả dòng với cột cố định không đổi vẫn qua. Chạy trước trigger đóng dấu (cùng thời
     điểm thì theo tên) → chuyển dòng sang B giờ trả `23514` trước khi RLS kịp trả `42501`; assertion T4 sửa theo.
 - [x] **Test** `supabase/tests/database/server_stamps.test.sql`, 24 assertion: insert → version 1 + đồng hồ server, giữ `created_at`; update →
-      +1 và tiến lên; dấu tăng nghiêm ngặt qua cả ba bảng kể cả trong cùng một ms; cài sẵn một dấu năm 2100 (đồng hồ lùi) → lần ghi sau = cài sẵn
-      + 1; owner khác không bị ảnh hưởng; xoá mềm + hoàn tác là version 3 và được đóng dấu sau dòng mới nhất; 8 cột cố định bị từ chối, cột sửa
+      +1 và tiến lên; dấu tăng nghiêm ngặt qua cả ba bảng kể cả trong cùng một ms; cài sẵn một dấu năm 2100 (đồng hồ lùi) → lần ghi sau = cài sẵn + 1; owner khác không bị ảnh hưởng; xoá mềm + hoàn tác là version 3 và được đóng dấu sau dòng mới nhất; 8 cột cố định bị từ chối, cột sửa
       được vẫn sửa được, gửi lại nguyên dòng vẫn qua; ghi bằng service role giữ khoá của owner; câu lệnh của người đăng nhập dù không khớp dòng
       nào vẫn giữ khoá của họ; `private` ngoài tầm Data API.
 - [x] **Test race hai phiên thật** `supabase/tests/concurrency/commit_order.sh` (pgTAP một phiên không dựng được): push 1 đóng dấu rồi giữ
@@ -1310,6 +1309,22 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 - [x] ADR-0035 ghi đã giải; CLAUDE.md §6 (_Stamps_), §9 (lệnh script race), §14; README (CI).
 - **Cho W14:** lấy `serverVersion` / `serverUpdatedAt` từ phản hồi push (system-design §6.2 đã định); hàm push nên lấy khoá owner ngay đầu lô và là
   `SECURITY INVOKER`; giữ READ COMMITTED.
+
+### W11 Flex — ADR Supabase (09/11)
+
+- [x] **ADR-0037 — Supabase là backend đầu tiên** (blueprint đặt slot "0005", số đó đã thuộc design tokens). Ghi lại điều T2–T6 đã dựng trên nó:
+      dùng Auth + Postgres + RLS + Data API (RPC), chưa dùng Realtime / Storage / Edge Functions; luật server nằm trong SQL có version và test;
+      sync đi qua hàm Postgres `SECURITY INVOKER` gọi bằng RPC, hợp đồng JSON của system-design §6.2 giữ trung lập; Supabase dừng ở tầng data
+      (`AuthRepository`, `SyncRemoteDataSource`, không kiểu Supabase nào vào domain) → đường sang NestJS của blueprint §31 vẫn mở.
+- [x] **Cái giá ghi rõ:** luật ở hai ngôn ngữ (Dart + SQL) phải đổi cùng PR; dính `auth.users` / `auth.uid()` / quy ước PostgREST — rời Supabase
+      là chuyển user giữ id + viết lại policy; migration lên dev bằng tay nên có thể lệch repo (đã lệch 09/11: T6 lên dev trước khi commit) → trước
+      PR chạy `supabase migration list --remote`; gói free tạm dừng project im lặng khoảng một tuần; region cố định khi tạo — dev ở **Seoul**
+      (`ap-northeast-2`, không phải Singapore như gợi ý lúc T2), region của prod phải chọn có chủ đích.
+- [x] **SQL trong `supabase/migrations/`:** xong từ T3–T6 (bốn migration).
+- [x] CLAUDE.md §14.
+- **Còn lại — cần bạn cắm iPhone 15 (từ W10 T5):** v4 → v5 trên DB thật (build `--flavor prod`: app id cũ; cần `env/prod.json` — chép từ
+  `env/example.json`; cài bằng `devicectl device install app`, không `flutter install`), DB benchmark 50k ở v4 (đo dựng lại index), soát tay
+  màn lỗi DB (ADR-0030: `user_version = 6` → `GPDatabaseErrorApp`, file không đổi).
 
 ## W12 · 23–29/11 🔴 Auth client
 
