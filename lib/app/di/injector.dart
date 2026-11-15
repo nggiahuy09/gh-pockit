@@ -39,8 +39,8 @@ void configureCoreDependencies([GetIt? container]) {
     // `dispose` is for tests: resetting the locator without closing leaks the sqlite connection, and with `shareAcrossIsolates` its isolate too.
     ..registerLazySingleton<GPAppDatabase>(
       () => switch (benchmarkDatasetSize) {
-        final size? => GPAppDatabase(name: 'pockit_bench_${size.key}_v${BenchmarkDatasetGenerator.version}'),
-        null => GPAppDatabase(),
+        final size? => GPAppDatabase(name: 'pockit_bench_${size.key}_v${BenchmarkDatasetGenerator.version}', logger: c.get<GPAppLogger>()),
+        null => GPAppDatabase(logger: c.get<GPAppLogger>()),
       },
       dispose: (db) => db.close(),
     )

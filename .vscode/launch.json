@@ -2,15 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Pockit",
-      "request": "launch",
-      "type": "dart"
-    },
-    {
-      "name": "Pockit (sample data)",
+      "name": "Pockit (dev)",
       "request": "launch",
       "type": "dart",
-      "args": ["--dart-define=SAMPLE_DATA=true"]
+      "args": ["--flavor", "dev", "--dart-define-from-file=env/dev.json"]
+    },
+    {
+      "name": "Pockit (dev, sample data)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--flavor", "dev", "--dart-define-from-file=env/dev.json", "--dart-define=SAMPLE_DATA=true"]
+    },
+    {
+      "name": "Pockit (prod)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--flavor", "prod", "--dart-define-from-file=env/prod.json"]
     }
   ]
 }

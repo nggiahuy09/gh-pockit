@@ -46,3 +46,7 @@ app.*.map.json
 
 # FVM
 .fvm/
+
+# Backend config per flavor (ADR-0032). Only the example, which lists the keys with empty values, is committed.
+/env/*.json
+!/env/example.json

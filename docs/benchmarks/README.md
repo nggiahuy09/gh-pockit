@@ -62,7 +62,21 @@ fvm flutter drive --profile --keep-app-running --no-dds --driver=test_driver/int
     with the window's size. This shows whether the spikes come from the list's rebuild;
   - `clock_lead_ms`: small and positive when the frame clock and `Timeline.now` agree. The matching above relies on that.
 - The run uses its own database, `pockit_bench_<size>_v<version>`, and never touches the real data.
+- Since ADR-0032 it builds the `dev` flavor (`com.nggiahuy.ghpockit.dev`) unless given `--flavor prod`, so it runs in a different app from
+  the install holding real data. Runs before 2026-11-08 used the prod id; the code under test is the same.
 - The first run of a size seeds that database. Throw that run's numbers away, then take the median of three or more runs.
+
+## Server — queries on the local Postgres
+
+The pull's queries, measured on the Supabase stack in Docker (ADR-0035). One script per query; each seeds its data and rolls it back.
+
+```bash
+docker exec -i supabase_db_gh-pockit psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - < supabase/benchmarks/delta_pull.sql
+```
+
+- `delta_pull.sql` seeds ten owners with 50k transactions each in one table, then explains the pull query as `authenticated`, through
+  RLS. It runs a first page and an incremental pull, each with and without the index.
+- Read the third run of each query. These are host numbers, comparable only with other host runs.
 
 ## Cold start
 

@@ -60,6 +60,31 @@ jobs:
       - name: Test
         run: flutter test --reporter expanded
 
-      # No flavor until W11 adds dev/prod; debug needs no signing config.
-      - name: Build (debug APK)
-        run: flutter build apk --debug
+      # The empty example env: the build needs the keys to exist, not real values (ADR-0032). Debug needs no signing config.
+      - name: Build (debug APK, dev flavor)
+        run: flutter build apk --debug --flavor dev --dart-define-from-file=env/example.json
+
+  # The server schema: every migration replayed on a fresh local Postgres, then the pgTAP suite (ADR-0033, ADR-0034). Runs beside
+  # `quality`; it is not a required check until it is added to the rulesets (README).
+  server:
+    name: server schema (pgTAP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The CLI version is pinned like every other tool: a new major has changed defaults before (`db push` without `--remote`).
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.0.0
+
+      - name: Start local Postgres and apply the migrations
+        run: supabase db start
+
+      - name: Test
+        run: supabase test db
+
+      # Two real sessions racing a pull, which pgTAP's one session cannot stage (ADR-0036).
+      - name: Commit order (two sessions)
+        run: bash supabase/tests/concurrency/commit_order.sh

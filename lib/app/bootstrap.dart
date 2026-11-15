@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../core/database/database.dart';
@@ -83,6 +84,6 @@ Future<void> bootstrap(Widget Function() builder) async {
     }
   }
 
-  logger.info('app bootstrapped');
+  logger.info('app bootstrapped', fields: {'flavor': appFlavor});
   runApp(builder.call());
 }

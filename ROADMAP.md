@@ -1010,7 +1010,7 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 | T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR ✅ Done (05/11, làm sớm) — mỗi bước một transaction kèm `user_version`, ADR-0029; chi tiết ở _W10 T2_ dưới                                      |
 | T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô ✅ Done (05/11, làm sớm) — `migrationSteps` sinh từ dump, không dùng `make-migrations`; amendment ADR-0029; chi tiết ở _W10 T3_ dưới |
 | T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR ✅ Done (05/11, làm sớm) — phương án A: từ chối, giữ nguyên file, màn lỗi riêng; ADR-0030; chi tiết ở _W10 T4_ dưới                                                                                 |
-| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng ⏩ Chuyển sang Flex W11 (05/11, theo bạn)                                                                                                                                              |
+| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng ⏩ Chuyển sang Flex W11 (05/11, theo bạn) ✅ Done (12/11, ở Flex W11) — DB thật đã ở v5 sẵn; dựng lại v4 từ bản sao, cài đè: giữ đủ mọi dòng; 50k: 145 ms; chi tiết ở _W11 Flex_        |
 | T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5 ✅ Done (05/11, làm sớm) — so từng cột ở v5 + app đọc được; chi tiết ở _W10 T6_ dưới                                                                                            |
 | Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag — ADR + checklist ✅ Done (05/11, ADR-0031); PR + tag chờ bạn; chi tiết ở _W10 Flex_ dưới                                                          |
 
@@ -1120,14 +1120,14 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W11 · 16–22/11 🔴 Supabase schema + RLS
 
-| Ngày | Task                                                                                                                                                                                                                                           |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9)                                                                                        |
-| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`)                                                                                                                                     |
-| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail**                                                                                                                     |
-| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull                                                                                                                                                                                 |
-| T6   | Trigger tăng `version` + set `updated_at` phía server                                                                                                                                                                                          |
-| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030) |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới                                                                                                   |
+| T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                                                                                                                  |
+| T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                                                                                                                             |
+| T5   | Index phía server: `(owner_id, updated_at)` phục vụ delta pull ✅ Done (09/11, làm sớm) — `(owner_id, updated_at, id)` trên cả ba bảng, câu pull W15 được khoá bằng test plan, 50k: 10,5 → 0,06 ms, đã lên dev; ADR-0035; chi tiết ở _W11 T5_ dưới                                                                                                                                                                                                           |
+| T6   | Trigger tăng `version` + set `updated_at` phía server ✅ Done (09/11, làm sớm) — khoá theo owner + `greatest(đồng hồ, newest + 1)`: `updated_at` tăng theo thứ tự commit; `version` của server; cột cố định bị từ chối; test race hai phiên trong CI; đã lên dev; ADR-0036; chi tiết ở _W11 T6_ dưới                                                                                                                                                         |
+| Flex | ADR _Use Supabase as initial backend_. Ghi lại SQL vào `supabase/migrations/`. **Từ W10 T5:** v4 → v5 trên iPhone 15 — cài đè lên DB thật (sao lưu, so) và DB benchmark 50k ở v4 (đo thời gian dựng lại index); soát tay màn lỗi DB (ADR-0030) ✅ Done (12/11) — ADR-0037; SQL trong `supabase/migrations/` (T3–T6); iPhone 15: v4 → v5 trên bản sao dữ liệu thật giữ đủ mọi dòng, bước v5 ở 50k 145 ms, màn lỗi DB soát tay đạt; chi tiết ở _W11 Flex_ dưới |
 
 > **Từ W10 T5 (chuyển 05/11), Flex tuần này:** v4 → v5 trên iPhone 15, theo quy trình W9 T4.
 >
@@ -1140,6 +1140,209 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 > **Nợ từ W8 (01/11) — làm trước khi vào W11 nếu kịp, không thì tuần đệm W17:** nâng pin lên Flutter ≥ 3.38 (Dart 3.10). Xoá `SceneDelegate` và để
 > `flutter` tự migrate runner sang UIScene, đăng ký plugin qua `FlutterImplicitEngineDelegate` (ADR-0023); nâng go_router, drift + drift_flutter,
 > `very_good_analysis` mà ADR-0003 đang giữ; build simulator lại chạy được (`lipo` của Xcode 27). Đổi pin là một ADR mới; chạy đủ test + build iOS/Android.
+
+### W11 T2 — hai flavor dev / prod, cấu hình backend ngoài git (08/11, làm sớm, ADR-0032)
+
+> Bạn chọn (08/11): flavor cả iOS lẫn Android, `env/*.json` không commit (có `env/example.json`), project dev tắt _Confirm email_. Lý do chính
+> của flavor không phải cái tên: DB local thuộc về một backend, bản dev cài đè lên prod sẽ mở DB của prod, và từ P4 đẩy nó lên dev.
+
+- [x] **prod giữ id cũ** `com.nggiahuy.ghpockit` ("Pockit"): mọi bản đã cài và DB của nó là prod, không gì phải chuyển. Flex tuần này (cài đè
+      v4 → v5 trên iPhone) build `--flavor prod`. **dev** là `com.nggiahuy.ghpockit.dev` ("Pockit Dev"): sandbox + DB riêng, cài song song.
+- [x] **`default-flavor: dev`** trong `pubspec.yaml`: `flutter run` / `build` / `drive` trơn là dev, prod phải gọi tên → benchmark (ADR-0026) chạy
+      trên app dev, không bao giờ gần dữ liệu thật. Chỉ dùng được khi iOS cũng có flavor: flutter tool từ chối `--flavor` khi Xcode project không
+      có scheme riêng (`xcodeproj.dart`) — đây là lý do không làm "Android trước".
+- [x] **Android:** dimension `env`, dev có `applicationIdSuffix = ".dev"`, mỗi flavor một `resValue` `app_name`, manifest đọc `@string/app_name`.
+- [x] **iOS:** 6 configuration `{Debug,Profile,Release}-{dev,prod}` thay 3 cái cũ, scheme `dev` / `prod` thay `Runner` (giống project flavor mẫu
+      của chính Flutter). Mỗi configuration của Runner có `Flutter/<Configuration>.xcconfig` riêng: include file Pods của chính nó +
+      `Generated.xcconfig` + `dev.xcconfig` / `prod.xcconfig` (bundle id + `APP_DISPLAY_NAME`, `Info.plist` đọc). Một file mỗi configuration vì
+      CocoaPods sinh một xcconfig mỗi configuration và chỉ nối configuration nào include nó → `pod install` không cảnh báo, tự nối lại `RunnerTests`
+      đủ 6. pbxproj sửa bằng gem `xcodeproj` (đi kèm CocoaPods), không sửa tay; diff chỉ đụng configuration + file ref, 6 ref
+      `Pods-*.debug/release/profile.xcconfig` mồ côi đã xoá. `pod install` cần `LANG=en_US.UTF-8`, thiếu thì Ruby 3.4 ném
+      `Unicode Normalization not appropriate for ASCII-8BIT`.
+- [x] **Env:** `--dart-define-from-file=env/<flavor>.json`; `.gitignore` chặn `/env/*.json` trừ `env/example.json` (hai key rỗng: `SUPABASE_URL`,
+      `SUPABASE_PUBLISHABLE_KEY`). Publishable key không phải bí mật (nằm trong mọi bản build, RLS mới là chốt — T4), nhưng file này là chỗ một
+      secret thật sẽ lọt vào sau này. Chưa dòng Dart nào đọc hai key: người đọc đầu tiên là W12 T2.
+- [x] **CI:** `flutter build apk --debug --flavor dev --dart-define-from-file=env/example.json` — build cần key tồn tại, không cần giá trị, nên CI
+      không giữ credential nào. Một flavor là đủ: Gradle configure mọi variant ở mỗi lần build, khối `prod` hỏng thì build dev cũng đỏ.
+- [x] **Dart:** đúng một dòng — `app bootstrapped` log thêm `flavor` (`appFlavor`); không log URL hay key.
+- [x] `.vscode/launch.json`: dev, dev + dữ liệu mẫu, prod — đều kèm `--flavor` + file env. CLAUDE.md §9–§10, §14; README (_Flavors and env_, CI).
+- [x] **Kiểm:** APK debug dev / prod / không `--flavor` → `aapt dump badging`: `com.nggiahuy.ghpockit.dev` "Pockit Dev", `com.nggiahuy.ghpockit`
+      "Pockit", không flavor = dev. iOS release `--no-codesign` hai flavor → `Info.plist` đã build: `com.nggiahuy.ghpockit.dev` "Pockit Dev",
+      `com.nggiahuy.ghpockit` "Pockit". Format / analyze sạch; test 1031 xanh + 1 skip, không đổi số — không có hành vi Dart mới để test.
+- [x] **Project Supabase dev đã tạo (08/11)**, `env/dev.json` đã điền. Lần đầu dán nhầm link dashboard (`supabase.com/dashboard/project/<ref>`)
+      vào `SUPABASE_URL` — URL API là `https://<ref>.supabase.co`, đã sửa; README giờ ghi rõ. `GET /auth/v1/settings` → HTTP 200, `email: true`,
+      `disable_signup: false`.
+- [x] **_Confirm email_ đã tắt (08/11):** lần kiểm đầu ra `mailer_autoconfirm: false`, bạn tắt trong dashboard, lệnh kiểm ở README
+      (_Flavors and env_) chạy lại ra `email: true`, `disable_signup: false`, `mailer_autoconfirm: true`.
+- **Còn lại / cho W12:** chặn ghép sai flavor với file env (`--flavor prod` + `env/dev.json`) cần người đọc config — W12 T2, cùng lúc quyết URL
+  rỗng nghĩa là gì (nhiều khả năng: chạy local-only). Lần đầu build iOS dev lên máy thật, automatic signing tạo App ID `.dev` + profile. Dữ liệu
+  mẫu / DB benchmark cũ trên simulator nằm lại ở app id cũ; build dev bắt đầu với DB rỗng.
+
+### W11 T3 — schema Postgres soi gương bản local, chặt hơn ở chỗ server làm được (08/11, làm sớm, ADR-0033)
+
+> Bạn chọn (08/11): Supabase CLI + Docker (stack local, test pgTAP), timestamp `bigint` epoch ms, có CHECK từ vựng ở server. Máy chưa có
+> Postgres / Docker → đã cài `supabase` 3.0.0 (Homebrew tap) và OrbStack (cask); OrbStack chạy ngay, không cần thao tác.
+
+- [x] **`supabase init`** ở gốc repo: `supabase/config.toml` (Postgres 17; sign-up bật, `enable_confirmations = false` — khớp project dev, không
+      phải sửa), `supabase/.gitignore` (`.temp/`, `.branches/`). Migration đầu: `supabase/migrations/20261108143955_create_synced_tables.sql`.
+- [x] **Ba bảng, cùng tên cột và nullability, bỏ `sync_status`** (trạng thái sync của máy). `TEXT` id → `uuid`; owner → `uuid` tham chiếu
+      `auth.users on delete cascade` (`'local'` không bao giờ qua được: lỗi `22P02`, đúng như `owner_id.dart` mong); mọi `INTEGER` → `bigint`
+      (tiền — ADR-0007, timestamp, `version`); không default, cùng lý do với local.
+- [x] **`bigint` ms, không `timestamptz`:** cursor W15 `(updated_at, id)` so đúng giá trị client lưu; `timestamptz` có micro giây → cursor làm
+      tròn ms sẽ gửi lại dòng cuối trang mãi, trừ khi mọi lần ghi phía server đều cắt. T6 lấy "bây giờ, theo ms" từ một helper.
+- [x] **Chặt hơn local, có chủ đích:** CHECK từ vựng trên ba cột `type` (SQLite phải dựng lại bảng mới đổi được nên local không có — ADR-0009;
+      Postgres một `ALTER`), `currency_code ~ '^[A-Z]{3}$'` (đúng luật của `Money`), ràng buộc cấp bảng có tên
+      (`transactions_destination_iff_transfer`…) để lỗi tự nói luật nào — test khớp theo tên, W14 map lỗi được.
+- [x] **FK theo owner:** con tham chiếu `(id, owner_id)` của cha, cha có `unique (id, owner_id)`. Kiểm FK chạy bằng quyền chủ bảng, bỏ qua RLS
+      → FK thường sẽ nhận giao dịch trỏ vào tài khoản / danh mục của người khác (id danh mục seed còn tính được từ uid — ADR-0002). Đúng với
+      mọi role, kể cả service role mà RLS bỏ qua.
+- [x] **RLS bật ngay trong migration tạo bảng, chưa policy:** Data API mở `public` cho ai có publishable key (vốn công khai) ngay khi bảng
+      tồn tại → từ lúc lên dev tới T4, anon / authenticated không đọc ghi được gì. T4 thêm policy theo owner.
+- [x] **Không index nào ngoài PK và unique:** query đầu tiên của server (delta pull) có index ở T5 — luật ADR-0009 áp cho cả server.
+- [x] **Test** `supabase/tests/database/synced_tables.test.sql`, 35 assertion: hình dạng từng bảng (cột, kiểu, nullability, thứ tự — qua
+      `information_schema`), không default, RLS bật; nhận những gì local nhận (10^15, danh mục đã xoá mềm, hai `name_key` NULL, cùng `name_key`
+      cho owner khác); từ chối owner `'local'` / không phải user, từ vựng, tiền tệ thường / 2 chữ, số tiền 0 / âm, ba luật chuyển khoản, danh mục
+      không tên, seed trùng, 4 kiểu tham chiếu chéo owner; authenticated không thấy cả dòng của mình, không insert được, anon không thấy gì;
+      xoá user kéo theo cả ba bảng của họ, user khác còn nguyên.
+- [x] **Test có cắn:** FK thường trên `account_id` + tắt RLS `accounts` → 5 assertion đỏ đúng chỗ (RLS, 2 tham chiếu chéo, đọc / ghi của
+      authenticated); khôi phục → 35 xanh. Lỗi gặp khi viết: domain của `information_schema` mang collation "C" (Postgres ≥ 12) → `results_eq`
+      không so được với literal; ép `collate "default"`.
+- [x] CLAUDE.md §4 (`supabase/`), §5 (Supabase CLI + pgTAP), §6 (_The server copy_), §9 (lệnh `supabase`), §14; README (_Server schema_).
+- [x] **Đã lên dev (08/11):** bạn `supabase login` + `supabase link`; `supabase db push --remote --dry-run` chỉ có đúng migration này, không
+      seed / role; push xong, `supabase migration list --remote` local = remote. Data API bằng publishable key: `[]` cho cả ba bảng, insert bằng anon
+      → `42501` (RLS) — từ giờ tới T4 không gì lộ ra. CLI 3.x nhắm stack local nếu thiếu `--remote` (đã sửa CLAUDE.md §9, README, ADR-0033).
+- [x] **pgTAP trên dev: 35 xanh (08/11).** Hai lần đầu đỏ ở `plan()`. Đoán đầu (thiếu `extensions` trong `search_path`) không đủ; file chẩn
+      đoán chỉ đọc cho thấy CLI đăng nhập bằng role tạm `cli_login_postgres` — thành viên của `postgres` nhưng không kế thừa quyền, nên không
+      có USAGE trên `extensions`. Test giờ tự `set local role postgres` + `set local search_path = public, extensions`, và quay về `postgres` thay
+      cho `reset role` (vốn trả về role tạm). Sau khi chạy: pgTAP đã gỡ, cả ba bảng 0 dòng, không còn user test.
+- **Còn lại / cho sau:** CI chưa chạy `supabase test db` (cần `supabase/setup-cli` + `supabase db start` trên runner) — hợp nhất ở T4, khi test
+  RLS là thứ đáng chặn PR nhất. Luật "currency của account / type của category không đổi được" (ADR-0010) là trigger → T6. Cho phép xoá
+  `deleted_at` của tombstone (Hoàn tác, ADR-0017) là chuyện policy → T4.
+
+### W11 T4 — mỗi owner chỉ đọc / ghi dòng của mình (08/11, làm sớm, ADR-0034)
+
+> Bạn chọn (08/11): đổi PK sang `(owner_id, id)` ngay khi bảng trên dev còn rỗng; cho push + chạy test trên dev sau khi local xanh. Tự quyết
+> theo luật sẵn có: client không hard delete (golden rule 5, ADR-0031); CI chạy pgTAP (đã hẹn ở T3).
+
+- [x] **Grant mặc định của Supabase là "tất cả"** cho `anon` và `authenticated` — kể cả `DELETE` và `TRUNCATE`, mà `TRUNCATE` không qua RLS.
+      Migration `20261108150301_owner_access.sql`: `revoke all` khỏi cả hai, rồi chỉ `grant select, insert, update` cho `authenticated`. `anon`
+      không còn gì: chưa đăng nhập thì app đọc DB local, không bao giờ đọc server.
+- [x] **3 policy / bảng, đều `to authenticated`**, trên `owner_id = (select auth.uid())` — subselect để `auth.uid()` chạy một lần mỗi câu lệnh,
+      không phải mỗi dòng. Update có cả `using` lẫn `with check` → không chuyển dòng sang owner khác được. Update không ràng `deleted_at` → Hoàn
+      tác (ADR-0017) chạy được trên server. Không policy / grant delete → xoá báo "permission denied", không lặng lẽ xoá 0 dòng; purge tombstone
+      (P4) là job server dưới service role.
+- [x] **PK `(owner_id, id)`** thay `(id)` và thay luôn `unique (id, owner_id)` của T3 làm đích cho các FK theo owner (giữ nguyên tên). RLS lọc
+      dòng nhưng không lọc tính duy nhất: với PK toàn cục, A chèn trước id của B (id danh mục seed tính được từ uid — ADR-0002) là chặn được lần
+      ghi của B và biết id đó tồn tại qua `23505`. Cột đầu `owner_id` còn phục vụ luôn bộ lọc của policy.
+- [x] **Test** `supabase/tests/database/owner_access.test.sql`, 29 assertion — gồm đúng câu ROADMAP: A hỏi dòng của B theo id (tài khoản, danh
+      mục, giao dịch) → không ra gì. Thêm: grant xét trên **mọi** bảng `public` (bảng sau quên revoke là đỏ), policy, PK; A đọc đủ dòng của mình kể
+      cả tombstone; ghi dưới tên B / sửa dòng B / chuyển dòng cho B / delete / truncate đều bị chặn; dùng id của B → A có dòng riêng, B vẫn ghi
+      được dòng mình; trùng id trong cùng owner vẫn `23505`; token không `sub` không thấy gì; anon bị từ chối hẳn. `synced_tables.test.sql` bỏ 4
+      assertion "chưa ai đọc được cho tới T4" → 31.
+- [x] **Test có cắn:** policy đọc `accounts` thành `using (true)` + bỏ `revoke` + `categories` giữ PK `(id)` → 13 assertion đỏ; trong đó `TRUNCATE`
+      của A xoá sạch bảng thật. Khôi phục → 60 xanh.
+- [x] **CI:** job mới `server schema (pgTAP)` cạnh `quality` — `supabase/setup-cli@v1` (CLI ghim 3.0.0), `supabase db start` (dựng lại mọi
+      migration trên Postgres mới), `supabase test db`. Chưa chạy lần nào: workflow chỉ chạy trên PR vào `dev` / `main`. Thành required check khi
+      bạn thêm nó vào ruleset (README đã ghi).
+- [x] **Lên dev (08/11):** dry-run đúng một migration → push → `migration list --remote` khớp cả hai. Data API bằng publishable key: cả ba bảng →
+      `42501 permission denied` (HTTP 401) thay cho `[]`. `supabase test db --remote`: 60 xanh. Sau đó: 9 policy, 0 dòng, không user test, không
+      pgTAP.
+- [x] CLAUDE.md §6 (_Access_), §14; README (job CI, ruleset).
+- **Còn lại / cho sau:** chạy job CI lần đầu ở PR W11 (CLAUDE.md §10: tuần đụng CI thì nên mở PR draft sớm). Hàm server của W14 / W15 nên là
+  `SECURITY INVOKER` để policy này còn áp dụng — `SECURITY DEFINER` bỏ qua RLS, phải tự kiểm `auth.uid()`; upsert của W14 nhắm
+  `(owner_id, id)` với `owner_id` lấy từ `auth.uid()`, không từ payload.
+
+### W11 T5 — index cho delta pull, kết thúc bằng `id` (09/11, làm sớm, ADR-0035)
+
+> Bảng ghi `(owner_id, updated_at)`. Cursor của pull là cặp `(updated_at, id)` (system-design §6.2) nên index thêm `id` — đúng quy ước index
+> local (ADR-0009) — và có trên cả ba bảng, vì bảng nào cũng được pull theo cursor.
+
+- [x] Migration `20261109140319_delta_pull_indexes.sql`: `<bảng>_owner_id_updated_at_id` trên `transactions`, `accounts`, `categories`. Có `id` thì
+      `ROW(updated_at, id) > ROW(cursor)` là một điều kiện index ngay sau `owner_id`, và index trả dòng đúng thứ tự cursor. Thiếu `id`, index chỉ
+      lo `updated_at >= cursor`: mọi dòng trùng timestamp (danh mục seed, ghi theo lô) bị đọc rồi lọc, cộng `Incremental Sort`. `CREATE INDEX`
+      thường vì bảng rỗng; có dữ liệu rồi thì `CONCURRENTLY`, ngoài transaction của migration.
+- [x] **Câu pull W15 được khoá từ giờ:** test chạy đúng câu đó bằng `authenticated` qua RLS — W15 đổi hình câu query là test đỏ.
+- [x] **Đo ở 50k** (`supabase/benchmarks/delta_pull.sql`, host M1, 10 owner × 50k chung một bảng, chạy rồi rollback; lần thứ ba, cache nóng):
+      trang đầu 200 dòng 0,063 ms / 204 buffer có index, 10,5 ms / 1266 buffer chỉ có PK; tăng dần 10 thay đổi 0,012 ms / 13 buffer so với
+      5,2 ms / 1266 buffer, lọc bỏ 49 990 dòng. Không index thì chi phí theo cả lịch sử của owner; có index thì theo cỡ trang. RLS gộp
+      `owner_id = (InitPlan 1).col1` vào `Index Cond`. Bản hai cột: 0,095–0,103 ms / 0,016 ms — gần như nhau khi timestamp không trùng.
+- [x] **Test** `supabase/tests/database/delta_pull.test.sql`, 4 assertion: định nghĩa ba index; với từng bảng, plan của câu pull (tắt seq scan,
+      bitmap scan, sort) là một index scan trên đúng index đó, owner + row comparison trong `Index Cond`, không sort — đỏ thì in nguyên plan.
+- [x] **Test có cắn:** `transactions` chỉ `(owner_id, updated_at)` + bỏ index `accounts` → 3 đỏ (plan in ra `updated_at >= 0` + `Filter` +
+      `Incremental Sort`; `accounts_pkey` + `Sort`). Khôi phục → 64 xanh.
+- [x] CLAUDE.md §6 (_Indexes_), §9 (lệnh benchmark server), §14; `docs/benchmarks/README.md` (_Server_).
+- [x] **Lên dev (09/11, cùng T6):** push, `migration list --remote` khớp, `supabase test db --remote` xanh, có đủ 3 index pull.
+- **Mở cho T6 (quan trọng) — đã giải ở T6, ADR-0036:** cursor theo timestamp bỏ sót dòng commit lệch thứ tự — hai máy cùng owner push cùng lúc, push 1 đóng dấu t=1 nhưng
+  commit sau push 2 (t=2), pull ở giữa đã vượt t=2 → dòng của push 1 không bao giờ được pull. Trigger `updated_at` của T6 phải tăng theo thứ tự
+  commit cho từng owner (vd. khoá theo owner rồi `greatest(now, mới nhất của owner + 1)` — đúng lookup mà index này phục vụ).
+
+### W11 T6 — server đóng dấu mọi lần ghi, theo thứ tự commit của từng owner (09/11, làm sớm, ADR-0036)
+
+> Bạn chọn (09/11): khoá theo owner + "newest + 1", thay vì bộ đếm `change_seq` hay để W15 tự xử; cho push T5 + T6 lên dev. Giải đúng câu hỏi
+> T5 để mở: cursor theo timestamp bỏ sót dòng commit lệch thứ tự.
+
+- [x] Migration `20261109143253_server_stamps.sql`, hàm ở schema `private` (Data API chỉ mở `public`; `anon` / `authenticated` không có usage):
+  - **Trigger dòng `<bảng>_stamp_write`:** khoá `pg_advisory_xact_lock` theo owner (giữ tới commit), rồi `updated_at = greatest(đồng hồ ms,
+newest của owner trên cả ba bảng + 1)`; `version` = 1 khi insert, cũ + 1 khi update — bỏ qua giá trị client gửi. `created_at` giữ của
+    client (dòng offline được tạo lúc người dùng tạo). Đọc newest **sau** khi có khoá: READ COMMITTED cho câu lệnh đó snapshot mới, thấy lần
+    ghi trước của owner đã commit. Lookup chỉ đọc index pull của T5.
+  - **Trigger câu lệnh `<bảng>_lock_caller`:** khoá theo `auth.uid()` **trước** khi dòng nào bị khoá — `UPDATE` khoá dòng trước khi trigger dòng
+    chạy, nên chỉ khoá ở trigger dòng thì hai transaction nhiều dòng của cùng owner có thể deadlock. Trigger dòng khoá lại theo `owner_id` (phủ
+    service role; khoá đã giữ thì miễn phí).
+  - **Trigger dòng `<bảng>_fixed_columns`:** đúng những cột mà `toPatch` local bỏ ra — cả ba bảng `id`, `owner_id`, `created_at`; `accounts.
+currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system` (định danh dòng seed, ADR-0002) → `23514`,
+    `<bảng>_<cột>_fixed`. `IS DISTINCT FROM` nên gửi lại cả dòng với cột cố định không đổi vẫn qua. Chạy trước trigger đóng dấu (cùng thời
+    điểm thì theo tên) → chuyển dòng sang B giờ trả `23514` trước khi RLS kịp trả `42501`; assertion T4 sửa theo.
+- [x] **Test** `supabase/tests/database/server_stamps.test.sql`, 24 assertion: insert → version 1 + đồng hồ server, giữ `created_at`; update →
+      +1 và tiến lên; dấu tăng nghiêm ngặt qua cả ba bảng kể cả trong cùng một ms; cài sẵn một dấu năm 2100 (đồng hồ lùi) → lần ghi sau = cài sẵn + 1; owner khác không bị ảnh hưởng; xoá mềm + hoàn tác là version 3 và được đóng dấu sau dòng mới nhất; 8 cột cố định bị từ chối, cột sửa
+      được vẫn sửa được, gửi lại nguyên dòng vẫn qua; ghi bằng service role giữ khoá của owner; câu lệnh của người đăng nhập dù không khớp dòng
+      nào vẫn giữ khoá của họ; `private` ngoài tầm Data API.
+- [x] **Test race hai phiên thật** `supabase/tests/concurrency/commit_order.sh` (pgTAP một phiên không dựng được): push 1 đóng dấu rồi giữ
+      transaction 5 s, push 2 chạy sau, một lần pull xen giữa → push 2 chờ khoá `Lock:advisory`; pull giữa chừng không thấy dòng nào; pull kế từ
+      cursor đó trả cả hai, push 1 trước; push 2 đóng dấu sau push 1. Ghi thật vào DB local, xoá user (cascade) khi thoát. CI chạy sau pgTAP.
+- [x] **Test có cắn:** bỏ hai lệnh khoá → push 2 không chờ, commit trước; pull giữa chừng thấy 1 dòng (của push 2) và cursor nhảy qua; pull
+      kế không trả gì → **dòng của push 1 mất vĩnh viễn** — đúng lỗi ADR này sinh ra để chặn; thêm 2 assertion khoá pgTAP đỏ. Khôi phục → 88 +
+      4 xanh. Lần đầu script giữ 3 s là không đủ: vòng chờ (~0,2 s mỗi `docker exec`) chạy quá giờ, lần pull rơi sau cả hai commit → giữ 5 s.
+- [x] **Lên dev (09/11):** dry-run đúng T5 + T6 → push → `migration list --remote` khớp cả bốn; `supabase test db --remote` 88 xanh; sau đó: 9
+      trigger, không trigger nào tắt (test có tắt / bật một trigger trong transaction đã rollback), 3 index pull, 0 dòng, không user test, không
+      pgTAP. Script race chỉ chạy local (cần `docker exec`).
+- [x] ADR-0035 ghi đã giải; CLAUDE.md §6 (_Stamps_), §9 (lệnh script race), §14; README (CI).
+- **Cho W14:** lấy `serverVersion` / `serverUpdatedAt` từ phản hồi push (system-design §6.2 đã định); hàm push nên lấy khoá owner ngay đầu lô và là
+  `SECURITY INVOKER`; giữ READ COMMITTED.
+
+### W11 Flex — ADR Supabase (09/11), iPhone 15 (12/11)
+
+- [x] **ADR-0037 — Supabase là backend đầu tiên** (blueprint đặt slot "0005", số đó đã thuộc design tokens). Ghi lại điều T2–T6 đã dựng trên nó:
+      dùng Auth + Postgres + RLS + Data API (RPC), chưa dùng Realtime / Storage / Edge Functions; luật server nằm trong SQL có version và test;
+      sync đi qua hàm Postgres `SECURITY INVOKER` gọi bằng RPC, hợp đồng JSON của system-design §6.2 giữ trung lập; Supabase dừng ở tầng data
+      (`AuthRepository`, `SyncRemoteDataSource`, không kiểu Supabase nào vào domain) → đường sang NestJS của blueprint §31 vẫn mở.
+- [x] **Cái giá ghi rõ:** luật ở hai ngôn ngữ (Dart + SQL) phải đổi cùng PR; dính `auth.users` / `auth.uid()` / quy ước PostgREST — rời Supabase
+      là chuyển user giữ id + viết lại policy; migration lên dev bằng tay nên có thể lệch repo (đã lệch 09/11: T6 lên dev trước khi commit) → trước
+      PR chạy `supabase migration list --remote`; gói free tạm dừng project im lặng khoảng một tuần; region cố định khi tạo — dev ở **Seoul**
+      (`ap-northeast-2`, không phải Singapore như gợi ý lúc T2), region của prod phải chọn có chủ đích.
+- [x] **SQL trong `supabase/migrations/`:** xong từ T3–T6 (bốn migration).
+- [x] CLAUDE.md §14.
+- [x] **iPhone 15 (12/11, từ W10 T5).** Trước khi đụng vào gì: tắt app, sao lưu `Documents/` bằng `devicectl device copy from` (SHA-256
+      `ef6cbcfa…`, giữ ở scratchpad của phiên). **DB thật đã ở v5 sẵn**, không còn là v4 như W10 T5 giả định: `user_version` 5, hai index đã nới,
+      `integrity_check` ok, 4 tài khoản / 11 danh mục / 49 giao dịch — một lần cài nào đó giữa 03/11 và 11/11 đã nâng nó.
+- [x] **v4 → v5 trên dữ liệu thật (bạn chọn: dựng lại v4 từ bản sao).** Bản sao: hai index về đúng SQL v4 của `drift_schema_v4.json`,
+      `user_version = 4`, dữ liệu giữ nguyên (mã băm từng bảng khớp). Ghi vào app prod, đọc ngược lại để chắc, cài đè bản `--flavor prod` của
+      branch bằng `devicectl device install app` (3 s), mở app. Kết quả: `user_version` 5, `integrity_check` ok, không vi phạm FK, **mã băm cả 4
+      bảng khớp bản sao lưu**, schema giống hệt file v5 gốc (15 mục). Cài đè bằng flavor prod giữ nguyên container — điều ADR-0032 hứa, giờ đã
+      thấy trên máy thật. So sánh chỉ in số đếm và mã băm, không in dòng nào.
+- [x] **50k (ADR-0027):** app dev tự seed file 50k trên máy (27,7 MB, 50.000 giao dịch, 5 tài khoản) ở v5; trên host đưa hai index về v4 +
+      `user_version = 4`; mỗi lần đo chép file v4 vào app dev rồi mở. Bước v4 → v5: **291 / 145 / 122 ms, trung vị 145 ms** (lần đầu sau khi
+      khởi động lại máy, cache lạnh); sau mỗi lần: v5, toàn vẹn, đủ 50.000 dòng, đúng schema v5. Host (cùng câu lệnh, SQLite hệ thống của macOS
+      qua Python, M1): 224 / 193 / 195 ms — khác bản SQLite app đóng gói, chỉ so cỡ. Ghi vào ADR-0027, ADR-0029, `docs/benchmarks/50k.md`.
+- [x] **Code:** `_commitAt` log `migration step committed` với `version` + `elapsed_ms` của từng bước, không gì từ dòng (golden rule 9);
+      `GPAppDatabase` nhận `GPAppLogger?`, DI truyền vào. Test mới: v3 → v5 log đúng hai bước 4 và 5, mỗi bước đúng hai trường. 1032 xanh + 1 skip.
+- [x] **Soát tay ADR-0030:** file 50k của app dev ở `user_version = 6` → app mở ra màn lỗi với thông điệp cập nhật (bạn xác nhận trên máy), app
+      không crash, file chép ra **giống từng byte**, vẫn 6; trả về 5 → app mở bình thường, file v5 toàn vẹn.
+- [x] **Cách đo, rút ra:** `flutter run` trên iOS chỉ đọc stdout/stderr từ VM service, **không** đọc luồng Logging — log `developer.log` của app
+      không bao giờ hiện ở đó; `--start-paused` + tự nghe VM service thì kẹt vì `flutter run` dò VM service hơn 200 s và để lại một lệnh
+      `devicectl install` mồ côi làm treo mọi lần cài sau; app dev dừng sẵn không tắt được kể cả SIGKILL → phải khởi động lại máy. Cách chạy
+      được: một bản build tạm in thêm ra stdout (`dart:io`), đọc qua `devicectl device process launch --console`, ~10 s mỗi lần đo; mã nguồn khôi
+      phục ngay sau khi build, bản dev sạch cài lại sau đó. App prod không bị tắt hay ghi trong lúc đo.
 
 ## W12 · 23–29/11 🔴 Auth client
 

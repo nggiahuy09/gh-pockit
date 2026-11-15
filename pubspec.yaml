@@ -56,6 +56,9 @@ dev_dependencies:
   very_good_analysis: ^10.0.0
 
 flutter:
+  # A plain `flutter run` / `build` / `drive` is dev; prod is only ever built by name (ADR-0032).
+  default-flavor: dev
+
   uses-material-design: true
 
   # Bundled, not fetched at runtime: a cold start must not depend on connectivity. Latin + Vietnamese subset (ADR-0008), SIL OFL 1.1.

@@ -6,6 +6,8 @@ import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/database/database_too_new_exception.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 
+import '../../helpers/fake_clock.dart';
+import '../../helpers/recording_logger.dart';
 import 'generated/schema.dart';
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
@@ -236,6 +238,20 @@ void main() {
           'SEARCH t USING COVERING INDEX transactions_destination_account_id_occurred_at_id (destination_account_id=?)',
         ]),
       );
+
+      await db.close();
+    });
+
+    test('logs each step it commits with its version and time, and nothing from a row', () async {
+      final logger = RecordingLogger(FakeClock());
+      final db = GPAppDatabase.forTesting(await _verifier.startAt(3), logger: logger);
+
+      await _verifier.migrateAndValidate(db, 5);
+
+      expect(logger.records.map((record) => record.message), everyElement('migration step committed'));
+      expect(logger.records.map((record) => record.fields['version']), [4, 5]);
+      expect(logger.records.map((record) => record.fields.keys), everyElement(unorderedEquals(['version', 'elapsed_ms'])));
+      expect(logger.records.map((record) => record.fields['elapsed_ms']), everyElement(isA<int>()));
 
       await db.close();
     });
