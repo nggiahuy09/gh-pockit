@@ -3,7 +3,8 @@
 ## Status
 
 Accepted — 2026-11-08 (W11 T2, started early). You chose: flavors on iOS as well as Android, `env/*.json` kept out of git with a committed
-example, and email confirmation off on the dev project. No schema change.
+example, and email confirmation off on the dev project. No schema change. Amended 2026-11-15 (W12 T2): the env file names its flavor, and
+the bootstrap checks it (ADR-0038).
 
 ## Context
 
@@ -95,3 +96,16 @@ anyone with the repo call sign-up on dev, and the file is where a real secret wo
 
 **A `staging` flavor** (blueprint §46 lists dev, staging, prod). There is no staging backend: a build cut from `dev` uses the dev project.
 Add a third flavor when there is a third project.
+
+## Amended 2026-11-15 (W12 T2) — the env file names its flavor
+
+Decision 4 left `--flavor prod --dart-define-from-file=env/dev.json` unguarded until something read the file. W12 T2 is that reader (ADR-0038):
+
+- every `env/<flavor>.json` gains `ENV_FLAVOR` (`"dev"` or `"prod"`), and `env/example.json` says `"dev"`. A `cp` to `env/prod.json` is
+  edited to `"prod"`;
+- the bootstrap compares it with `appFlavor` before the database opens. A mismatch, or a file without the key, runs a startup error screen
+  instead of the app;
+- both keys empty means local-only, on either flavor while there is no prod project. One key without the other, or a URL that is not a bare
+  origin, is refused. `http://` passes on dev only.
+
+CI is unaffected: it builds with `env/example.json`, which matches the dev flavor it builds.
