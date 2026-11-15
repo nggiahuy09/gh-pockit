@@ -18,12 +18,18 @@ enum AccountFormField {
       GPValidationCode.transactionCurrencyMismatch ||
       GPValidationCode.transactionTransferCurrenciesDiffer ||
       GPValidationCode.transactionCategoryTypeMismatch ||
-      GPValidationCode.transactionDateInFuture => null,
+      GPValidationCode.transactionDateInFuture ||
+      GPValidationCode.authInvalidCredentials ||
+      GPValidationCode.authEmailTaken ||
+      GPValidationCode.authEmailInvalid ||
+      GPValidationCode.authPasswordWeak => null,
     },
     GPNetworkFailure() ||
     GPTimeoutFailure() ||
     GPAuthenticationFailure() ||
     GPAuthorizationFailure() ||
+    GPRateLimitedFailure() ||
+    GPBackendUnavailableFailure() ||
     GPConflictFailure() ||
     GPNotFoundFailure() ||
     GPDatabaseFailure() ||

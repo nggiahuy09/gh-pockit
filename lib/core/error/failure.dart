@@ -29,6 +29,16 @@ final class GPAuthorizationFailure extends GPFailure {
   const GPAuthorizationFailure();
 }
 
+/// HTTP 429. Retryable, after a wait.
+final class GPRateLimitedFailure extends GPFailure {
+  const GPRateLimitedFailure();
+}
+
+/// This build has no backend: an env file with both keys empty runs local-only (ADR-0038).
+final class GPBackendUnavailableFailure extends GPFailure {
+  const GPBackendUnavailableFailure();
+}
+
 final class GPValidationFailure extends GPFailure {
   const GPValidationFailure(this.code);
 
@@ -85,4 +95,13 @@ enum GPValidationCode {
 
   /// Checked by the use cases: it needs today's date (ADR-0022).
   transactionDateInFuture,
+
+  /// The server's answer for a wrong password and for an unknown email alike, so the copy must not say which.
+  authInvalidCredentials,
+
+  authEmailTaken,
+  authEmailInvalid,
+
+  /// The server's password policy, which can be stricter than the client's check.
+  authPasswordWeak,
 }

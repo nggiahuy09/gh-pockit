@@ -15,6 +15,8 @@ import '../features/settings/presentation/debug/sample_data.dart';
 import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../features/transactions/domain/repositories/transaction_repository.dart';
 import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
+import 'backend_config_error_app.dart';
+import 'config/backend_config.dart';
 import 'database_error_app.dart';
 import 'di/injector.dart';
 
@@ -27,6 +29,15 @@ Future<void> bootstrap(Widget Function() builder) async {
   configureCategoriesDependencies();
   configureTransactionsDependencies();
   final logger = getIt.get<GPAppLogger>();
+
+  // Before the database: a build holding the wrong env file must not open, or later sync, the data of the flavor it claims to be (ADR-0038).
+  final backendConfig = GPBackendConfig.fromEnvironment(appFlavor);
+  if (backendConfig case GPInvalidBackendConfig(:final problem)) {
+    logger.error('backend config invalid', fields: {'flavor': appFlavor, 'problem': problem.name});
+    runApp(GPBackendConfigErrorApp(locale: GPLocale.fromPlatform(PlatformDispatcher.instance.locale), problem: problem));
+    return;
+  }
+  configureAuthDependencies(backendConfig);
 
   final previousOnError = FlutterError.onError;
   FlutterError.onError = (details) {
@@ -84,6 +95,6 @@ Future<void> bootstrap(Widget Function() builder) async {
     }
   }
 
-  logger.info('app bootstrapped', fields: {'flavor': appFlavor});
+  logger.info('app bootstrapped', fields: {'flavor': appFlavor, 'backend': backendConfig is GPRemoteBackendConfig ? 'remote' : 'local_only'});
   runApp(builder.call());
 }

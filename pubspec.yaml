@@ -33,6 +33,9 @@ dependencies:
 
   meta: 1.16.0
 
+  # Pure Dart, not `supabase_flutter`: no native plugins, no global singleton, and no session in SharedPreferences (ADR-0038). Only `data/` imports it.
+  supabase: 2.16.1
+
   uuid: 4.6.0
 
 dev_dependencies:
@@ -48,6 +51,9 @@ dev_dependencies:
 
   flutter_test:
     sdk: flutter
+
+  # `MockClient`: the auth repository tests run the real GoTrue client against canned responses. Already resolved through `supabase`.
+  http: 1.6.0
 
   integration_test:
     sdk: flutter

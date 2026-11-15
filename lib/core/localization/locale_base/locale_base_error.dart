@@ -7,6 +7,8 @@ abstract class GPLocaleBaseError {
   String get timeout;
   String get authentication;
   String get authorization;
+  String get rateLimited;
+  String get backendUnavailable;
 
   /// No limits in the copy ("max 100 characters"): they live in the entities, and the form shows them with a live counter.
   String get validationAccountNameEmpty;
@@ -22,6 +24,10 @@ abstract class GPLocaleBaseError {
   String get validationTransactionTransferCurrenciesDiffer;
   String get validationTransactionCategoryTypeMismatch;
   String get validationTransactionDateInFuture;
+  String get validationAuthInvalidCredentials;
+  String get validationAuthEmailTaken;
+  String get validationAuthEmailInvalid;
+  String get validationAuthPasswordWeak;
   String get conflict;
   String get notFound;
   String get database;
@@ -34,4 +40,9 @@ abstract class GPLocaleBaseError {
   String get databaseTooNewBody;
   String get databaseOpenFailedTitle;
   String get databaseOpenFailedBody;
+
+  /// Shown before the app itself, when the env file does not fit the build (ADR-0038). Only a developer sees it; the body is followed by the
+  /// problem's code.
+  String get backendConfigInvalidTitle;
+  String get backendConfigInvalidBody;
 }

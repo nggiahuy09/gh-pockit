@@ -16,6 +16,12 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get authorization => 'Bạn không có quyền thực hiện thao tác này.';
 
   @override
+  String get rateLimited => 'Bạn đã thử quá nhiều lần. Hãy đợi vài phút rồi thử lại.';
+
+  @override
+  String get backendUnavailable => 'Phiên bản Pockit này chỉ chạy ngoại tuyến nên không có tài khoản để đăng nhập.';
+
+  @override
   String get validationAccountNameEmpty => 'Tên tài khoản không được để trống.';
 
   @override
@@ -55,6 +61,18 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationTransactionDateInFuture => 'Chọn hôm nay hoặc một ngày trước đó.';
 
   @override
+  String get validationAuthInvalidCredentials => 'Email hoặc mật khẩu không đúng.';
+
+  @override
+  String get validationAuthEmailTaken => 'Email này đã có tài khoản. Hãy đăng nhập.';
+
+  @override
+  String get validationAuthEmailInvalid => 'Hãy nhập một địa chỉ email hợp lệ.';
+
+  @override
+  String get validationAuthPasswordWeak => 'Hãy chọn mật khẩu mạnh hơn.';
+
+  @override
   String get conflict => 'Mục này đã được thay đổi trên một thiết bị khác.';
 
   @override
@@ -83,4 +101,10 @@ final class GPLocaleViError implements GPLocaleBaseError {
 
   @override
   String get databaseOpenFailedBody => 'Dữ liệu vẫn còn trên máy và không có gì bị xóa. Hãy đóng hẳn ứng dụng rồi mở lại. Nếu vẫn gặp lỗi này, hãy cập nhật Pockit.';
+
+  @override
+  String get backendConfigInvalidTitle => 'Bản build này cấu hình sai';
+
+  @override
+  String get backendConfigInvalidBody => 'File env không khớp với flavor, hoặc còn thiếu. Hãy build lại với đúng --dart-define-from-file.';
 }

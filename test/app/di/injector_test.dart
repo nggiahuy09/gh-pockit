@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:ghpockit/app/config/backend_config.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/localization/drift_locale_store.dart';
@@ -12,6 +13,9 @@ import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/supabase_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -20,6 +24,7 @@ import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   group('configureCoreDependencies', () {
@@ -160,6 +165,36 @@ void main() {
       configureCategoriesDependencies(container);
 
       expect(container.get<BenchmarkDatasetSeeder>(), isA<BenchmarkDatasetSeeder>());
+    });
+  });
+
+  group('configureAuthDependencies', () {
+    late GetIt container;
+
+    setUp(() {
+      container = GetIt.asNewInstance();
+      configureCoreDependencies(container);
+    });
+
+    tearDown(() => container.reset());
+
+    test('a remote config binds the Supabase repository, built on one shared client', () {
+      configureAuthDependencies(const GPRemoteBackendConfig(url: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_test'), container);
+
+      expect(container.get<AuthRepository>(), isA<SupabaseAuthRepository>());
+      expect(container.get<SupabaseClient>(), same(container.get<SupabaseClient>()));
+      expect(container.isRegistered<SupabaseAuthRepository>(), isFalse);
+    });
+
+    test('a local-only config binds the local-only repository and builds no client', () {
+      configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
+
+      expect(container.get<AuthRepository>(), isA<LocalOnlyAuthRepository>());
+      expect(container.isRegistered<SupabaseClient>(), isFalse);
+    });
+
+    test('an invalid config never reaches DI', () {
+      expect(() => configureAuthDependencies(const GPInvalidBackendConfig(GPBackendConfigProblem.flavorMismatch), container), throwsArgumentError);
     });
   });
 }

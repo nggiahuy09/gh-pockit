@@ -16,6 +16,12 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get authorization => 'You do not have permission to do that.';
 
   @override
+  String get rateLimited => 'Too many attempts. Wait a few minutes and try again.';
+
+  @override
+  String get backendUnavailable => 'This version of Pockit works offline only, so there is no account to sign in to.';
+
+  @override
   String get validationAccountNameEmpty => "Account name can't be empty.";
 
   @override
@@ -55,6 +61,18 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationTransactionDateInFuture => 'Pick today or an earlier day.';
 
   @override
+  String get validationAuthInvalidCredentials => 'The email or password is incorrect.';
+
+  @override
+  String get validationAuthEmailTaken => 'An account with this email already exists. Sign in instead.';
+
+  @override
+  String get validationAuthEmailInvalid => 'Enter a valid email address.';
+
+  @override
+  String get validationAuthPasswordWeak => 'Choose a stronger password.';
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override
@@ -83,4 +101,10 @@ final class GPLocaleEnError implements GPLocaleBaseError {
 
   @override
   String get databaseOpenFailedBody => 'Your data is still on this device, and nothing was deleted. Close the app fully and open it again. If this keeps happening, update Pockit.';
+
+  @override
+  String get backendConfigInvalidTitle => 'This build is misconfigured';
+
+  @override
+  String get backendConfigInvalidBody => 'Its env file does not match its flavor, or is incomplete. Rebuild with the right --dart-define-from-file.';
 }

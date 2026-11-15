@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
+import 'package:supabase/supabase.dart';
+
 import '../../core/database/database.dart';
 import '../../core/database/owner_id.dart';
 import '../../core/localization/drift_locale_store.dart';
@@ -14,6 +16,9 @@ import '../../core/utils/uuid_generator.dart';
 import '../../features/accounts/data/daos/account_dao.dart';
 import '../../features/accounts/data/repositories/account_repository_impl.dart';
 import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/auth/data/repositories/local_only_auth_repository.dart';
+import '../../features/auth/data/repositories/supabase_auth_repository.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/categories/data/daos/category_dao.dart';
 import '../../features/categories/data/repositories/category_repository_impl.dart';
 import '../../features/categories/data/seed/category_seeder.dart';
@@ -24,6 +29,7 @@ import '../../features/transactions/data/seed/benchmark_dataset_generator.dart';
 import '../../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../../features/transactions/data/seed/benchmark_dataset_size_enum.dart';
 import '../../features/transactions/domain/repositories/transaction_repository.dart';
+import '../config/backend_config.dart';
 
 /// Use cases are never registered here: blocs build them from repositories resolved through this (ADR-0013).
 final GetIt getIt = GetIt.instance;
@@ -53,6 +59,26 @@ void configureCoreDependencies([GetIt? container]) {
     ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()))
     // Must stay a singleton: it holds the active language, and a second instance would leave part of the tree in the old one.
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()));
+}
+
+/// The one place outside `data/` that names Supabase: the client is built here and handed to the repositories (ADR-0038).
+void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
+  final c = container ?? getIt;
+
+  switch (config) {
+    case GPRemoteBackendConfig(:final url, :final publishableKey):
+      c
+        ..registerLazySingleton<SupabaseClient>(
+          // Implicit flow: PKCE needs a store for its verifier and only serves redirect sign-ins, which email/password never makes.
+          () => SupabaseClient(url, publishableKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)),
+          dispose: (client) => client.dispose(),
+        )
+        ..registerLazySingleton<AuthRepository>(() => SupabaseAuthRepository(auth: c.get<SupabaseClient>().auth, logger: c.get<GPAppLogger>()));
+    case GPLocalOnlyBackendConfig():
+      c.registerLazySingleton<AuthRepository>(LocalOnlyAuthRepository.new);
+    case GPInvalidBackendConfig(:final problem):
+      throw ArgumentError.value(problem, 'config', 'the bootstrap stops on an invalid config before DI');
+  }
 }
 
 void configureAccountsDependencies([GetIt? container]) {

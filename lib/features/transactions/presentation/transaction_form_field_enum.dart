@@ -16,7 +16,11 @@ enum TransactionFormField {
       GPValidationCode.accountNameTooLong ||
       GPValidationCode.accountHasTransactions ||
       GPValidationCode.categoryNameEmpty ||
-      GPValidationCode.categoryNameTooLong => null,
+      GPValidationCode.categoryNameTooLong ||
+      GPValidationCode.authInvalidCredentials ||
+      GPValidationCode.authEmailTaken ||
+      GPValidationCode.authEmailInvalid ||
+      GPValidationCode.authPasswordWeak => null,
       GPValidationCode.transactionAmountNotPositive => TransactionFormField.amount,
       // The source was picked first, and the picker offers only destinations it can pair with: the destination is what fixes these.
       GPValidationCode.transactionDestinationMissing || GPValidationCode.transactionDestinationSameAsSource => TransactionFormField.destination,
@@ -31,6 +35,8 @@ enum TransactionFormField {
     GPTimeoutFailure() ||
     GPAuthenticationFailure() ||
     GPAuthorizationFailure() ||
+    GPRateLimitedFailure() ||
+    GPBackendUnavailableFailure() ||
     GPConflictFailure() ||
     GPNotFoundFailure() ||
     GPDatabaseFailure() ||
