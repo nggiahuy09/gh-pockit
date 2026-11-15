@@ -71,7 +71,8 @@ Negative:
 
 - Each account index entry is wider, by a short text, an integer and a null. The file grows by about 1.2 MB at 50k.
 - On a device that already holds data, the first launch after the upgrade rebuilds two indexes over every transaction. That is a one-off
-  cost, paid once.
+  cost, paid once. Measured at 50k on an iPhone 15 (W11 Flex, 2026-11-12): 145 ms, the median of 291, 145 and 122 ms. The 291 ms was
+  the first run after a reboot, with a cold cache. The same SQL took about 195 ms on the host (`docs/benchmarks/50k.md`).
 - The index names list their key columns only. The carried columns are in `transactions_table.dart` and in this ADR.
 
 ## Alternatives rejected

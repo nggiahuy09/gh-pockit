@@ -67,7 +67,10 @@ Negative:
   `sqlite_schema.sql` is unchanged, and the row is there. On the code before this ADR, the open succeeded.
 - `database_error_app_test.dart`: both messages in both languages, with nothing registered in `getIt`.
 - Not covered by a test: the six lines of bootstrap glue, which use the global `getIt` and `runApp`. They are checked by hand on a
-  device instead (W10 T5, moved to W11 Flex).
+  device instead. Done on 2026-11-12 on an iPhone 15 (W11 Flex), with the dev app's 50k file at `user_version = 6`:
+  - the app opened on the error screen, with the update message;
+  - the file came back byte-identical, still at 6;
+  - set back to 5, the app opened normally.
 
 ## Alternatives rejected
 

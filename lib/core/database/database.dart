@@ -5,6 +5,7 @@ import 'package:meta/meta.dart';
 import '../../features/accounts/data/tables/accounts_table.dart';
 import '../../features/categories/data/tables/categories_table.dart';
 import '../../features/transactions/data/tables/transactions_table.dart';
+import '../logging/app_logger.dart';
 import 'database.steps.dart';
 import 'database_too_new_exception.dart';
 import 'tables/settings_table.dart';
@@ -15,9 +16,11 @@ part 'database.g.dart';
 @DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable])
 final class GPAppDatabase extends _$GPAppDatabase {
   /// [name] is the file's: a benchmark run opens its own, so it never touches the real data (ADR-0026).
-  GPAppDatabase({String name = 'pockit'}) : super(openAppConnection(name: name));
+  GPAppDatabase({String name = 'pockit', GPAppLogger? logger}) : _logger = logger, super(openAppConnection(name: name));
 
-  GPAppDatabase.forTesting(super.e);
+  GPAppDatabase.forTesting(super.e, {GPAppLogger? logger}) : _logger = logger;
+
+  final GPAppLogger? _logger;
 
   /// A bump needs a dump in `drift_schemas/`, a regenerated `database.steps.dart`, a `fromNToM` step and a migration test (§6, §9).
   @override
@@ -48,10 +51,15 @@ final class GPAppDatabase extends _$GPAppDatabase {
 
   /// Drift writes `user_version` only after the whole migration returns, outside any transaction: a kill in between re-runs a step that
   /// already committed, and its `CREATE INDEX` then fails on every launch (ADR-0029).
-  Future<void> _commitAt(int version, Future<void> Function() step) => transaction(() async {
-    await step();
-    await customStatement('PRAGMA user_version = $version');
-  });
+  Future<void> _commitAt(int version, Future<void> Function() step) async {
+    final stopwatch = Stopwatch()..start();
+    await transaction(() async {
+      await step();
+      await customStatement('PRAGMA user_version = $version');
+    });
+    // The first-launch cost of a step, measured at 50k on a device (ADR-0029); the version and the time, nothing from a row (golden rule 9).
+    _logger?.info('migration step committed', fields: {'version': version, 'elapsed_ms': stopwatch.elapsedMilliseconds});
+  }
 }
 
 /// Not drift's `stepByStep`, which runs the whole chain outside any transaction. Each step sees the schema of the version it reaches, never
