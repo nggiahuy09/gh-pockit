@@ -23,12 +23,16 @@ void main() {
       expect(_resolve(envFlavor: 'prod'), _invalid(GPBackendConfigProblem.flavorMismatch));
     });
 
-    test('a file from before ENV_FLAVOR existed is refused', () {
+    test('a filled file from before ENV_FLAVOR existed is refused', () {
       expect(_resolve(envFlavor: ''), _invalid(GPBackendConfigProblem.flavorMismatch));
     });
 
-    test('no flavor at all is refused, even with an empty file', () {
-      expect(_resolve(appFlavor: null, envFlavor: '', url: '', publishableKey: ''), _invalid(GPBackendConfigProblem.flavorMismatch));
+    test('a backend with no app flavor is refused', () {
+      expect(_resolve(appFlavor: null), _invalid(GPBackendConfigProblem.flavorMismatch));
+    });
+
+    test('a half-filled file for the other flavor is a mismatch first', () {
+      expect(_resolve(envFlavor: 'prod', publishableKey: ''), _invalid(GPBackendConfigProblem.flavorMismatch));
     });
   });
 
@@ -39,6 +43,15 @@ void main() {
 
     test('both empty runs local-only on prod too, while there is no prod project', () {
       expect(_resolve(appFlavor: 'prod', envFlavor: 'prod', url: '', publishableKey: ''), isA<GPLocalOnlyBackendConfig>());
+    });
+
+    test('a bare flutter run, with no env file at all, runs local-only', () {
+      expect(_resolve(envFlavor: '', url: '', publishableKey: ''), isA<GPLocalOnlyBackendConfig>());
+      expect(_resolve(appFlavor: null, envFlavor: '', url: '', publishableKey: ''), isA<GPLocalOnlyBackendConfig>());
+    });
+
+    test('an empty file for the other flavor runs local-only: there is no backend to mix up', () {
+      expect(_resolve(appFlavor: 'prod', url: '', publishableKey: ''), isA<GPLocalOnlyBackendConfig>());
     });
 
     test('a URL without a key is refused', () {

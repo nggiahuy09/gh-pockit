@@ -73,19 +73,18 @@ and closes the guard ADR-0032 decision 4 left open. No schema change.
    - Until then no token is ever written anywhere.
 6. **`env/<flavor>.json` gains `ENV_FLAVOR`**, and `GPBackendConfig.resolve` checks the file before anything else runs:
 
-   | The file                                            | Result                                                                |
-   | --------------------------------------------------- | --------------------------------------------------------------------- |
-   | `ENV_FLAVOR` missing, or not the flavor being built | refused: `flavorMismatch`                                             |
-   | both keys empty                                     | local-only: `LocalOnlyAuthRepository`, every row owned by `'local'`   |
-   | one key set, the other empty                        | refused: `backendIncomplete`                                          |
-   | URL not a bare origin (path, query, fragment)       | refused: `urlMalformed`. This catches the dashboard link              |
-   | URL `http://`                                       | allowed on dev, for the local stack; refused on prod (`urlMalformed`) |
-   | otherwise                                           | `GPRemoteBackendConfig(url, publishableKey)`                          |
-   - **A refused file stops the bootstrap before the database opens.** `GPBackendConfigErrorApp` names the problem on screen, because iOS
-     shows no app log (`flutter run` reads stdout, not `developer.log`). It shares its shell with the database error screen
-     (`GPStartupErrorApp`).
-   - **Local-only means:** sign-up and sign-in answer `GPBackendUnavailableFailure` (new), and sign-out succeeds. T4/T5 read local-only to
-     skip the login screen altogether.
+   | The file                                                  | Result                                                                |
+   | --------------------------------------------------------- | --------------------------------------------------------------------- |
+   | both keys empty, whatever `ENV_FLAVOR` says (or no file)  | local-only: `LocalOnlyAuthRepository`, every row owned by `'local'`   |
+   | a backend set, `ENV_FLAVOR` missing or not the flavor     | refused: `flavorMismatch`                                             |
+   | one key set, the other empty                              | refused: `backendIncomplete`                                          |
+   | URL not a bare origin (path, query, fragment)             | refused: `urlMalformed`. This catches the dashboard link              |
+   | URL `http://`                                             | allowed on dev, for the local stack; refused on prod (`urlMalformed`) |
+   | otherwise                                                 | `GPRemoteBackendConfig(url, publishableKey)`                          |
+
+   - **The flavor is checked only when a backend is set.** It guards one thing: a build talking to the other flavor's backend. With both
+     keys empty there is none, and the sandbox and the database follow the flavor anyway (ADR-0032). So a bare `flutter run`, with no
+     `--dart-define-from-file`, starts local-only instead of stopping, as it did before this ADR.
 
 7. **Prod runs local-only on an empty file for now.** There is no prod project, and `env/prod.json` is empty. A strict rule would block the
    next prod build, which is the install holding real data. **The change that creates the prod project makes an empty prod file a
@@ -104,9 +103,10 @@ Positive:
 
 Negative:
 
-- **Every env file needs the new key.** A file without it is refused (`flavorMismatch`). `env/example.json` says `dev`, so a
-  `cp env/example.json env/prod.json` has to be edited to `prod`. Each clone's existing `env/dev.json` and `env/prod.json` need the line
-  added once.
+- **Every filled env file needs the new key.** A file with a backend and without the key is refused (`flavorMismatch`); an empty one runs
+  local-only either way. `env/example.json` says `dev`, so a `cp env/example.json env/prod.json` is edited to `prod` before it is filled.
+- **A run without the env file is silently local-only.** Sign-in then answers that this build has no backend. Deliberate: refusing it
+  made a bare `fvm flutter run` open on the error screen, for no risk.
 - **Token refresh on resume is ours to write (T4).** Without it, a session older than an hour fails its first call after a long background,
   and recovers on the next refresh tick.
 - **No deep links.** Password reset by email, magic links and OAuth would need `app_links` (or `supabase_flutter`) back, and PKCE with a

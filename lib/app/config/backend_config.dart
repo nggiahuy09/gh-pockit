@@ -14,10 +14,10 @@ sealed class GPBackendConfig {
   );
 
   factory GPBackendConfig.resolve({required String? appFlavor, required String envFlavor, required String url, required String publishableKey}) {
-    if (appFlavor == null || envFlavor != appFlavor) return const GPInvalidBackendConfig(GPBackendConfigProblem.flavorMismatch);
-
-    // Prod too, while there is no prod project; the change that creates one makes an empty prod file a refusal (ADR-0038).
+    // First, and whatever `ENV_FLAVOR` says: with no backend there is nothing to mix up, so a bare `flutter run` starts. Prod too, while there is no
+    // prod project; the change that creates one makes an empty prod file a refusal (ADR-0038).
     if (url.isEmpty && publishableKey.isEmpty) return const GPLocalOnlyBackendConfig();
+    if (appFlavor == null || envFlavor != appFlavor) return const GPInvalidBackendConfig(GPBackendConfigProblem.flavorMismatch);
     if (url.isEmpty || publishableKey.isEmpty) return const GPInvalidBackendConfig(GPBackendConfigProblem.backendIncomplete);
 
     final isProd = appFlavor == _prodFlavor;
@@ -34,7 +34,7 @@ sealed class GPBackendConfig {
   static bool _isOrigin(Uri uri) => uri.host.isNotEmpty && (uri.path.isEmpty || uri.path == '/') && !uri.hasQuery && !uri.hasFragment;
 }
 
-/// Both keys empty: the app runs as before auth, every row owned by `'local'`.
+/// Both keys empty, with or without `ENV_FLAVOR`: the app runs as before auth, every row owned by `'local'`.
 final class GPLocalOnlyBackendConfig extends GPBackendConfig {
   const GPLocalOnlyBackendConfig();
 }
@@ -62,7 +62,7 @@ final class GPInvalidBackendConfig extends GPBackendConfig {
 }
 
 enum GPBackendConfigProblem {
-  /// `ENV_FLAVOR` is not the flavor being built: `--flavor prod` with `env/dev.json`, or a file from before the key existed.
+  /// A backend is set but `ENV_FLAVOR` is not the flavor being built: `--flavor prod` with `env/dev.json`, or a filled file from before the key existed.
   flavorMismatch,
 
   /// One of the two keys is set and the other is empty.

@@ -103,9 +103,10 @@ Decision 4 left `--flavor prod --dart-define-from-file=env/dev.json` unguarded u
 
 - every `env/<flavor>.json` gains `ENV_FLAVOR` (`"dev"` or `"prod"`), and `env/example.json` says `"dev"`. A `cp` to `env/prod.json` is
   edited to `"prod"`;
-- the bootstrap compares it with `appFlavor` before the database opens. A mismatch, or a file without the key, runs a startup error screen
-  instead of the app;
-- both keys empty means local-only, on either flavor while there is no prod project. One key without the other, or a URL that is not a bare
+- when a backend is set, the bootstrap compares it with `appFlavor` before the database opens. A mismatch, or a filled file without the key,
+  runs a startup error screen instead of the app;
+- both keys empty means local-only whatever the key says, on either flavor while there is no prod project. A bare `flutter run` with no
+  env file is that case. One key without the other, or a URL that is not a bare
   origin, is refused. `http://` passes on dev only.
 
 CI is unaffected: it builds with `env/example.json`, which matches the dev flavor it builds.

@@ -45,12 +45,13 @@ cp env/example.json env/prod.json  # set ENV_FLAVOR to "prod"; the keys stay emp
 fvm flutter run --flavor dev --dart-define-from-file=env/dev.json
 ```
 
-Each file names the flavor it is for in `ENV_FLAVOR`, and the app checks it before
-it opens the database (ADR-0038). A build whose file does not match, a file from
-before the key existed, a URL without its key (or the reverse), or a URL that is
-not a bare origin opens on a "misconfigured build" screen naming the problem.
-Both keys empty means **local-only**: no backend, no sign-in, every row stays on
-the device. That is what CI and a fresh clone run.
+Each file names the flavor it is for in `ENV_FLAVOR`. When the file sets a backend,
+the app checks it against the flavor before it opens the database (ADR-0038): a
+build whose file does not match, a filled file from before the key existed, a URL
+without its key (or the reverse), or a URL that is not a bare origin opens on a
+"misconfigured build" screen naming the problem. Both keys empty, or no env file
+at all (a bare `flutter run`), means **local-only**: no backend, no sign-in, every
+row stays on the device. That is what CI and a fresh clone run.
 
 Both values are in the dev project's Supabase dashboard: the project URL and the
 **publishable** key. The URL is the API one, `https://<project-ref>.supabase.co`,
