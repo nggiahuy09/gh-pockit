@@ -99,8 +99,13 @@ enum GPValidationCode {
   /// The server's answer for a wrong password and for an unknown email alike, so the copy must not say which.
   authInvalidCredentials,
 
-  authEmailTaken,
+  authEmailEmpty,
   authEmailInvalid,
+  authEmailTaken,
+  authPasswordEmpty,
+
+  /// Sign-up only, under `AuthCredentials.passwordMinLength`: sign-in leaves an old, shorter password to the server.
+  authPasswordTooShort,
 
   /// The server's password policy, which can be stricter than the client's check.
   authPasswordWeak,

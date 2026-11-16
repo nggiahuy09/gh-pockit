@@ -20,8 +20,11 @@ enum AccountFormField {
       GPValidationCode.transactionCategoryTypeMismatch ||
       GPValidationCode.transactionDateInFuture ||
       GPValidationCode.authInvalidCredentials ||
-      GPValidationCode.authEmailTaken ||
+      GPValidationCode.authEmailEmpty ||
       GPValidationCode.authEmailInvalid ||
+      GPValidationCode.authEmailTaken ||
+      GPValidationCode.authPasswordEmpty ||
+      GPValidationCode.authPasswordTooShort ||
       GPValidationCode.authPasswordWeak => null,
     },
     GPNetworkFailure() ||

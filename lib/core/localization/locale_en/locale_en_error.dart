@@ -64,10 +64,19 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationAuthInvalidCredentials => 'The email or password is incorrect.';
 
   @override
-  String get validationAuthEmailTaken => 'An account with this email already exists. Sign in instead.';
+  String get validationAuthEmailEmpty => 'Enter your email.';
 
   @override
   String get validationAuthEmailInvalid => 'Enter a valid email address.';
+
+  @override
+  String get validationAuthEmailTaken => 'An account with this email already exists.';
+
+  @override
+  String get validationAuthPasswordEmpty => 'Enter your password.';
+
+  @override
+  String get validationAuthPasswordTooShort => 'Password is too short.';
 
   @override
   String get validationAuthPasswordWeak => 'Choose a stronger password.';

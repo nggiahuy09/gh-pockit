@@ -64,10 +64,19 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationAuthInvalidCredentials => 'Email hoặc mật khẩu không đúng.';
 
   @override
-  String get validationAuthEmailTaken => 'Email này đã có tài khoản. Hãy đăng nhập.';
+  String get validationAuthEmailEmpty => 'Hãy nhập email.';
 
   @override
   String get validationAuthEmailInvalid => 'Hãy nhập một địa chỉ email hợp lệ.';
+
+  @override
+  String get validationAuthEmailTaken => 'Email này đã có tài khoản.';
+
+  @override
+  String get validationAuthPasswordEmpty => 'Hãy nhập mật khẩu.';
+
+  @override
+  String get validationAuthPasswordTooShort => 'Mật khẩu quá ngắn.';
 
   @override
   String get validationAuthPasswordWeak => 'Hãy chọn mật khẩu mạnh hơn.';

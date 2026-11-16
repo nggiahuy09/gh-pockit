@@ -25,8 +25,11 @@ abstract class GPLocaleBaseError {
   String get validationTransactionCategoryTypeMismatch;
   String get validationTransactionDateInFuture;
   String get validationAuthInvalidCredentials;
-  String get validationAuthEmailTaken;
+  String get validationAuthEmailEmpty;
   String get validationAuthEmailInvalid;
+  String get validationAuthEmailTaken;
+  String get validationAuthPasswordEmpty;
+  String get validationAuthPasswordTooShort;
   String get validationAuthPasswordWeak;
   String get conflict;
   String get notFound;

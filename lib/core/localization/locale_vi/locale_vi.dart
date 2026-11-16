@@ -7,6 +7,8 @@ part 'locale_vi_home.dart';
 
 part 'locale_vi_accounts.dart';
 
+part 'locale_vi_auth.dart';
+
 part 'locale_vi_transactions.dart';
 
 part 'locale_vi_budgets.dart';
@@ -33,6 +35,9 @@ final class GPLocaleVi implements GPLocaleBase {
 
   @override
   GPLocaleBaseAccounts get accounts => const GPLocaleViAccounts();
+
+  @override
+  GPLocaleBaseAuth get auth => const GPLocaleViAuth();
 
   @override
   GPLocaleBaseTransactions get transactions => const GPLocaleViTransactions();

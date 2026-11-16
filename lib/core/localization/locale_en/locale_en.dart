@@ -7,6 +7,8 @@ part 'locale_en_home.dart';
 
 part 'locale_en_accounts.dart';
 
+part 'locale_en_auth.dart';
+
 part 'locale_en_transactions.dart';
 
 part 'locale_en_budgets.dart';
@@ -33,6 +35,9 @@ final class GPLocaleEn implements GPLocaleBase {
 
   @override
   GPLocaleBaseAccounts get accounts => const GPLocaleEnAccounts();
+
+  @override
+  GPLocaleBaseAuth get auth => const GPLocaleEnAuth();
 
   @override
   GPLocaleBaseTransactions get transactions => const GPLocaleEnTransactions();
