@@ -2,10 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/domain/use_case.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
+import 'package:ghpockit/features/auth/domain/entities/auth_status.dart';
 import 'package:ghpockit/features/auth/domain/entities/user_entity.dart';
+import 'package:ghpockit/features/auth/domain/usecases/restore_session_use_case.dart';
 import 'package:ghpockit/features/auth/domain/usecases/sign_in_use_case.dart';
 import 'package:ghpockit/features/auth/domain/usecases/sign_out_use_case.dart';
 import 'package:ghpockit/features/auth/domain/usecases/sign_up_use_case.dart';
+import 'package:ghpockit/features/auth/domain/usecases/watch_auth_status_use_case.dart';
 
 import '../../../../helpers/fake_auth_repository.dart';
 
@@ -65,5 +68,17 @@ void main() {
   test('SignOutUseCase signs out', () async {
     expect(await SignOutUseCase(repository).execute(const GPNoInput()), const GPOk<void>(null));
     expect(repository.signOutCalls, 1);
+  });
+
+  test('RestoreSessionUseCase restores', () async {
+    expect(await RestoreSessionUseCase(repository).execute(const GPNoInput()), const GPOk<void>(null));
+    expect(repository.restoreCalls, 1);
+  });
+
+  test('WatchAuthStatusUseCase passes the statuses through', () async {
+    final first = WatchAuthStatusUseCase(repository).execute(const GPNoInput()).first;
+    repository.statuses.add(const AuthSignedOut());
+
+    expect(await first, const AuthSignedOut());
   });
 }

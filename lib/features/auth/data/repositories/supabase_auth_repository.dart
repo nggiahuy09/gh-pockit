@@ -1,18 +1,59 @@
+import 'dart:async';
+
 import 'package:supabase/supabase.dart';
 
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/logging/app_logger.dart';
+import '../../domain/entities/auth_status.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../datasources/supabase_session_keeper.dart';
 import '../mapper/user_mapper.dart';
 
 /// Logs a failure's GoTrue code and HTTP status only: never the email, the password, a token or the server's message (golden rule 9).
 final class SupabaseAuthRepository implements AuthRepository {
-  const SupabaseAuthRepository({required GoTrueClient auth, required GPAppLogger logger}) : _auth = auth, _logger = logger;
+  const SupabaseAuthRepository({required GoTrueClient auth, required SupabaseSessionKeeper keeper, required GPAppLogger logger}) : _auth = auth, _keeper = keeper, _logger = logger;
 
   final GoTrueClient _auth;
+  final SupabaseSessionKeeper _keeper;
   final GPAppLogger _logger;
+
+  /// Reads the client's session on each event instead of the event's own: the stream replays its whole history to a new listener. A
+  /// controller, not `async*`: cancelling an `async*` paused in `await for` waits for an auth event that may never come.
+  @override
+  Stream<AuthStatus> watchAuthStatus() {
+    StreamSubscription<AuthState>? subscription;
+    AuthStatus? last;
+    late final StreamController<AuthStatus> controller;
+
+    void emitCurrent() {
+      final status = _currentStatus();
+      if (status == last) return;
+
+      last = status;
+      controller.add(status);
+    }
+
+    controller = StreamController<AuthStatus>(
+      onListen: () {
+        emitCurrent();
+        // Its errors are failed refreshes, which keep the session; the keeper logs them.
+        subscription = _auth.onAuthStateChange.listen((_) => emitCurrent(), onError: (Object _) {});
+      },
+      onPause: () => subscription?.pause(),
+      onResume: () => subscription?.resume(),
+      onCancel: () => subscription?.cancel(),
+    );
+    return controller.stream;
+  }
+
+  @override
+  Future<GPResult<void>> restoreSession() async {
+    _keeper.start();
+    await _keeper.restore();
+    return const GPOk(null);
+  }
 
   @override
   Future<GPResult<UserEntity>> signUp({required String email, required String password}) => _authenticate(
@@ -39,6 +80,11 @@ final class SupabaseAuthRepository implements AuthRepository {
 
     return const GPOk(null);
   }
+
+  AuthStatus _currentStatus() => switch (_auth.currentSession?.user.toDomain()) {
+    final user? => AuthSignedIn(user),
+    null => const AuthSignedOut(),
+  };
 
   Future<GPResult<UserEntity>> _authenticate(Future<AuthResponse> Function() request, {required String failedMessage, required String noSessionMessage}) async {
     final AuthResponse response;

@@ -8,11 +8,14 @@ import 'package:ghpockit/core/localization/drift_locale_store.dart';
 import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
+import 'package:ghpockit/core/security/flutter_secure_store.dart';
+import 'package:ghpockit/core/security/secure_store.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/datasources/supabase_session_keeper.dart';
 import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
 import 'package:ghpockit/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
@@ -37,7 +40,8 @@ void main() {
 
     tearDown(() => container.reset());
 
-    test('registers the three core abstractions', () {
+    test('registers the core abstractions', () {
+      expect(container.get<GPSecureStore>(), isA<GPFlutterSecureStore>());
       expect(container.get<GPClock>(), isA<GPSystemClock>());
       expect(container.get<GPUuidGenerator>(), isA<GPUuidGeneratorImpl>());
       expect(container.get<GPAppLogger>(), isA<GPDeveloperLogger>());
@@ -171,26 +175,29 @@ void main() {
   group('configureAuthDependencies', () {
     late GetIt container;
 
-    setUp(() {
+    setUp(() async {
       container = GetIt.asNewInstance();
       configureCoreDependencies(container);
+      await _useMemoryDatabase(container);
     });
 
     tearDown(() => container.reset());
 
-    test('a remote config binds the Supabase repository, built on one shared client', () {
+    test('a remote config binds the Supabase repository, built on one shared client and one keeper', () {
       configureAuthDependencies(const GPRemoteBackendConfig(url: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_test'), container);
 
       expect(container.get<AuthRepository>(), isA<SupabaseAuthRepository>());
       expect(container.get<SupabaseClient>(), same(container.get<SupabaseClient>()));
+      expect(container.get<SupabaseSessionKeeper>(), same(container.get<SupabaseSessionKeeper>()));
       expect(container.isRegistered<SupabaseAuthRepository>(), isFalse);
     });
 
-    test('a local-only config binds the local-only repository and builds no client', () {
+    test('a local-only config binds the local-only repository and builds no client or keeper', () {
       configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
 
       expect(container.get<AuthRepository>(), isA<LocalOnlyAuthRepository>());
       expect(container.isRegistered<SupabaseClient>(), isFalse);
+      expect(container.isRegistered<SupabaseSessionKeeper>(), isFalse);
     });
 
     test('an invalid config never reaches DI', () {

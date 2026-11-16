@@ -11,11 +11,14 @@ import '../../core/localization/locale_store.dart';
 import '../../core/localization/localization.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/developer_logger.dart';
+import '../../core/security/flutter_secure_store.dart';
+import '../../core/security/secure_store.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/uuid_generator.dart';
 import '../../features/accounts/data/daos/account_dao.dart';
 import '../../features/accounts/data/repositories/account_repository_impl.dart';
 import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/auth/data/datasources/supabase_session_keeper.dart';
 import '../../features/auth/data/repositories/local_only_auth_repository.dart';
 import '../../features/auth/data/repositories/supabase_auth_repository.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -51,6 +54,7 @@ void configureCoreDependencies([GetIt? container]) {
       dispose: (db) => db.close(),
     )
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
+    ..registerLazySingleton<GPSecureStore>(GPFlutterSecureStore.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
     ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c.get<GPClock>()))
     ..registerLazySingleton<GPAppLogger>(
@@ -73,7 +77,19 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
           () => SupabaseClient(url, publishableKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)),
           dispose: (client) => client.dispose(),
         )
-        ..registerLazySingleton<AuthRepository>(() => SupabaseAuthRepository(auth: c.get<SupabaseClient>().auth, logger: c.get<GPAppLogger>()));
+        ..registerLazySingleton<SupabaseSessionKeeper>(
+          () => SupabaseSessionKeeper(
+            auth: c.get<SupabaseClient>().auth,
+            clock: c.get<GPClock>(),
+            database: c.get<GPAppDatabase>(),
+            logger: c.get<GPAppLogger>(),
+            store: c.get<GPSecureStore>(),
+          ),
+          dispose: (keeper) => keeper.dispose(),
+        )
+        ..registerLazySingleton<AuthRepository>(
+          () => SupabaseAuthRepository(auth: c.get<SupabaseClient>().auth, keeper: c.get<SupabaseSessionKeeper>(), logger: c.get<GPAppLogger>()),
+        );
     case GPLocalOnlyBackendConfig():
       c.registerLazySingleton<AuthRepository>(LocalOnlyAuthRepository.new);
     case GPInvalidBackendConfig(:final problem):

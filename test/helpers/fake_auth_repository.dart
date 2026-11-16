@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:ghpockit/core/error/result.dart';
+import 'package:ghpockit/features/auth/domain/entities/auth_status.dart';
 import 'package:ghpockit/features/auth/domain/entities/user_entity.dart';
 import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 
@@ -13,6 +14,19 @@ final class FakeAuthRepository extends AuthRepository {
 
   final List<({String method, String email, String password})> calls = [];
   int signOutCalls = 0;
+  int restoreCalls = 0;
+
+  /// What `watchAuthStatus` emits; a test adds to it.
+  final StreamController<AuthStatus> statuses = StreamController<AuthStatus>.broadcast();
+
+  @override
+  Stream<AuthStatus> watchAuthStatus() => statuses.stream;
+
+  @override
+  Future<GPResult<void>> restoreSession() async {
+    restoreCalls++;
+    return const GPOk(null);
+  }
 
   @override
   Future<GPResult<UserEntity>> signUp({required String email, required String password}) => _answer('signUp', email, password);

@@ -4,12 +4,15 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../core/database/database.dart';
+import '../core/domain/use_case.dart';
 import '../core/error/result.dart';
 import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/logging/app_logger.dart';
 import '../core/utils/clock.dart';
 import '../features/accounts/domain/repositories/account_repository.dart';
+import '../features/auth/domain/repositories/auth_repository.dart';
+import '../features/auth/domain/usecases/restore_session_use_case.dart';
 import '../features/categories/data/seed/category_seeder.dart';
 import '../features/settings/presentation/debug/sample_data.dart';
 import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
@@ -60,6 +63,10 @@ Future<void> bootstrap(Widget Function() builder) async {
     runApp(GPDatabaseErrorApp(error: error, locale: GPLocale.fromPlatform(PlatformDispatcher.instance.locale)));
     return;
   }
+
+  // After the database: the keeper reads its marker there (ADR-0039). No network call, so it costs one Keychain / Keystore read, and nothing
+  // on a local-only build.
+  await RestoreSessionUseCase(getIt.get<AuthRepository>()).execute(const GPNoInput());
 
   // `DateFormat` throws for `vi` until these are loaded.
   await initializeDateFormatting();

@@ -1,47 +1,55 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghpockit/core/database/database.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
+import 'package:ghpockit/features/auth/data/datasources/supabase_session_keeper.dart';
 import 'package:ghpockit/features/auth/data/repositories/supabase_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/entities/auth_status.dart';
 import 'package:ghpockit/features/auth/domain/entities/user_entity.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:supabase/supabase.dart';
 
 import '../../../../helpers/fake_clock.dart';
+import '../../../../helpers/gotrue_fixtures.dart';
+import '../../../../helpers/in_memory_secure_store.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
-// The response bodies and codes were read from a local GoTrue (`supabase start`, CLI 3.0.0) on 15/11/2026; the rate-limit code is GoTrue's
-// own `ErrorCode.overRequestRateLimit`.
-const _baseUrl = 'http://gotrue.test/auth/v1';
-const _email = 'huy@example.com';
+// The rate-limit code is GoTrue's own `ErrorCode.overRequestRateLimit`; every other body comes from a local GoTrue (gotrue_fixtures.dart).
+const String _email = gotrueTestEmail;
 const _password = 'correct-horse-9';
-const _userId = '0b6f1c2e-6a1d-4c58-9d6e-2f3a4b5c6d7e';
+const String _userId = gotrueTestUserId;
 
 void main() {
+  // The keeper listens to the app lifecycle.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late List<http.Request> requests;
   late RecordingLogger logger;
+  late GPAppDatabase database;
+  late InMemorySecureStore store;
 
   setUp(() {
     requests = [];
     logger = RecordingLogger(FakeClock());
+    database = GPAppDatabase.forTesting(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
+    store = InMemorySecureStore();
   });
 
-  /// The real client, so the tests pin GoTrue's parsing as well as the mapping on top of it.
-  GoTrueClient client(Future<http.Response> Function(http.Request request) handler) => GoTrueClient(
-    url: _baseUrl,
-    autoRefreshToken: false,
-    flowType: AuthFlowType.implicit,
-    httpClient: MockClient((request) {
-      requests.add(request);
-      return handler(request);
-    }),
-  );
+  tearDown(() => database.close());
 
-  SupabaseAuthRepository repository(GoTrueClient auth) => SupabaseAuthRepository(auth: auth, logger: logger);
+  GoTrueClient client(Future<http.Response> Function(http.Request request) handler) => gotrueClient(requests, handler);
+
+  SupabaseAuthRepository repository(GoTrueClient auth) => SupabaseAuthRepository(
+    auth: auth,
+    keeper: SupabaseSessionKeeper(auth: auth, clock: FakeClock(), database: database, logger: logger, store: store),
+    logger: logger,
+  );
 
   void expectNoSecretsLogged() {
     final logged = logger.records.map((record) => '${record.message} ${record.fields} ${record.error}').join('\n');
@@ -53,7 +61,7 @@ void main() {
 
   group('signUp', () {
     test('returns the new user, signed in', () async {
-      final auth = client((_) async => _json(200, _sessionBody()));
+      final auth = client((_) async => gotrueJson(200, gotrueSession()));
 
       final user = okValue(await repository(auth).signUp(email: _email, password: _password));
 
@@ -65,7 +73,7 @@ void main() {
     });
 
     test('sends no PKCE challenge: the implicit flow needs no verifier store', () async {
-      final auth = client((_) async => _json(200, _sessionBody()));
+      final auth = client((_) async => gotrueJson(200, gotrueSession()));
 
       await repository(auth).signUp(email: _email, password: _password);
 
@@ -73,7 +81,7 @@ void main() {
     });
 
     test('a taken email is a validation failure', () async {
-      final auth = client((_) async => _error(422, 'user_already_exists', 'User already registered'));
+      final auth = client((_) async => gotrueError(422, 'user_already_exists', 'User already registered'));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -82,7 +90,7 @@ void main() {
     });
 
     test('email_exists means the same thing', () async {
-      final auth = client((_) async => _error(422, 'email_exists', 'Email address already exists'));
+      final auth = client((_) async => gotrueError(422, 'email_exists', 'Email address already exists'));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -91,7 +99,7 @@ void main() {
 
     test("a password the server's policy refuses is weak", () async {
       final auth = client(
-        (_) async => _json(422, {
+        (_) async => gotrueJson(422, {
           'code': 'weak_password',
           'message': 'Password should be at least 6 characters.',
           'weak_password': {
@@ -106,7 +114,7 @@ void main() {
     });
 
     test('an email the server refuses is invalid', () async {
-      final auth = client((_) async => _error(400, 'email_address_invalid', 'Email address is invalid'));
+      final auth = client((_) async => gotrueError(400, 'email_address_invalid', 'Email address is invalid'));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -115,7 +123,7 @@ void main() {
 
     test('validation_failed names no field, so it stays unknown', () async {
       // GoTrue's body for a malformed email; an empty password gets the same code.
-      final auth = client((_) async => _error(400, 'validation_failed', 'Unable to validate email address: invalid format'));
+      final auth = client((_) async => gotrueError(400, 'validation_failed', 'Unable to validate email address: invalid format'));
 
       final result = await repository(auth).signUp(email: 'not-an-email', password: _password);
 
@@ -124,7 +132,7 @@ void main() {
     });
 
     test('no session in the answer, as with email confirmation on, is unknown', () async {
-      final auth = client((_) async => _json(200, _userBody()));
+      final auth = client((_) async => gotrueJson(200, gotrueUser()));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -134,7 +142,7 @@ void main() {
     });
 
     test('a user without an email is unknown', () async {
-      final auth = client((_) async => _json(200, _sessionBody(user: _userBody(email: null))));
+      final auth = client((_) async => gotrueJson(200, gotrueSession(user: gotrueUser(email: null))));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -143,7 +151,7 @@ void main() {
     });
 
     test('a 200 whose body GoTrue cannot parse is unknown, not a crash', () async {
-      final auth = client((_) async => _json(200, {..._sessionBody(), 'user': 'not-an-object'}));
+      final auth = client((_) async => gotrueJson(200, {...gotrueSession(), 'user': 'not-an-object'}));
 
       final result = await repository(auth).signUp(email: _email, password: _password);
 
@@ -154,7 +162,7 @@ void main() {
 
   group('signIn', () {
     test('returns the user and holds the session', () async {
-      final auth = client((_) async => _json(200, _sessionBody()));
+      final auth = client((_) async => gotrueJson(200, gotrueSession()));
 
       final user = okValue(await repository(auth).signIn(email: _email, password: _password));
 
@@ -165,7 +173,7 @@ void main() {
     });
 
     test('a wrong password and an unknown email are one failure', () async {
-      final auth = client((_) async => _error(400, 'invalid_credentials', 'Invalid login credentials'));
+      final auth = client((_) async => gotrueError(400, 'invalid_credentials', 'Invalid login credentials'));
 
       final result = await repository(auth).signIn(email: _email, password: 'wrong-pass-1');
 
@@ -175,7 +183,7 @@ void main() {
     });
 
     test('a rate limit is its own failure', () async {
-      final auth = client((_) async => _error(429, 'over_request_rate_limit', 'Request rate limit reached'));
+      final auth = client((_) async => gotrueError(429, 'over_request_rate_limit', 'Request rate limit reached'));
 
       final result = await repository(auth).signIn(email: _email, password: _password);
 
@@ -183,7 +191,7 @@ void main() {
     });
 
     test('a 429 with no code is still a rate limit', () async {
-      final auth = client((_) async => _json(429, {'message': 'Too Many Requests'}));
+      final auth = client((_) async => gotrueJson(429, {'message': 'Too Many Requests'}));
 
       final result = await repository(auth).signIn(email: _email, password: _password);
 
@@ -210,9 +218,9 @@ void main() {
 
     test('logs no email, password or token on any path', () async {
       final answers = [
-        _json(200, _sessionBody()),
-        _error(400, 'invalid_credentials', 'Invalid login credentials'),
-        _json(200, {..._sessionBody(), 'user': 'not-an-object'}),
+        gotrueJson(200, gotrueSession()),
+        gotrueError(400, 'invalid_credentials', 'Invalid login credentials'),
+        gotrueJson(200, {...gotrueSession(), 'user': 'not-an-object'}),
         http.Response('upstream down', 502),
       ];
       var call = 0;
@@ -229,7 +237,7 @@ void main() {
 
   group('signOut', () {
     test('revokes the session on the server and drops it here', () async {
-      final auth = client((request) async => request.url.path.endsWith('/logout') ? http.Response('', 204) : _json(200, _sessionBody()));
+      final auth = client((request) async => request.url.path.endsWith('/logout') ? http.Response('', 204) : gotrueJson(200, gotrueSession()));
       await repository(auth).signIn(email: _email, password: _password);
 
       final result = await repository(auth).signOut();
@@ -244,7 +252,7 @@ void main() {
       var online = true;
       final auth = client((request) async {
         if (!online) throw http.ClientException('Network is unreachable', request.url);
-        return _json(200, _sessionBody());
+        return gotrueJson(200, gotrueSession());
       });
       await repository(auth).signIn(email: _email, password: _password);
       online = false;
@@ -261,7 +269,7 @@ void main() {
     test('a session the server already ended is not an error', () async {
       final auth = client(
         (request) async =>
-            request.url.path.endsWith('/logout') ? _error(403, 'session_not_found', 'Session from session_id claim in JWT does not exist') : _json(200, _sessionBody()),
+            request.url.path.endsWith('/logout') ? gotrueError(403, 'session_not_found', 'Session from session_id claim in JWT does not exist') : gotrueJson(200, gotrueSession()),
       );
       await repository(auth).signIn(email: _email, password: _password);
 
@@ -280,36 +288,52 @@ void main() {
       expect(requests, isEmpty);
     });
   });
+
+  group('watchAuthStatus', () {
+    test('starts with the status as it is, then follows sign-in and sign-out', () async {
+      final auth = client((request) async => request.url.path.endsWith('/logout') ? http.Response('', 204) : gotrueJson(200, gotrueSession()));
+      final statuses = <AuthStatus>[];
+      final subscription = repository(auth).watchAuthStatus().listen(statuses.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      await repository(auth).signIn(email: _email, password: _password);
+      await pumpEventQueue();
+      await repository(auth).signOut();
+      await pumpEventQueue();
+
+      expect(statuses, [const AuthSignedOut(), const AuthSignedIn(UserEntity(id: _userId, email: _email)), const AuthSignedOut()]);
+    });
+
+    test('a late listener gets the current status once, not the replayed history', () async {
+      final auth = client((request) async => request.url.path.endsWith('/logout') ? http.Response('', 204) : gotrueJson(200, gotrueSession()));
+      await repository(auth).signIn(email: _email, password: _password);
+      await repository(auth).signOut();
+      await repository(auth).signIn(email: _email, password: _password);
+
+      final statuses = <AuthStatus>[];
+      final subscription = repository(auth).watchAuthStatus().listen(statuses.add);
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      expect(statuses, [const AuthSignedIn(UserEntity(id: _userId, email: _email))]);
+    });
+  });
+
+  test('restoreSession puts back the kept session, with no request, and keeps the next one', () async {
+    store.values[SupabaseSessionKeeper.sessionKey] = jsonEncode(gotrueSession());
+    await database.into(database.settingsTable).insert(SettingsTableCompanion.insert(key: SupabaseSessionKeeper.keptMarkerKey, value: '1', updatedAt: 0));
+    final auth = client((_) async => gotrueJson(200, gotrueSession(refreshToken: 'refresh-token-2')));
+    final keeper = SupabaseSessionKeeper(auth: auth, clock: FakeClock(), database: database, logger: logger, store: store);
+    addTearDown(keeper.dispose);
+    final repo = SupabaseAuthRepository(auth: auth, keeper: keeper, logger: logger);
+
+    expect(await repo.restoreSession(), const GPOk<void>(null));
+    expect(await repo.watchAuthStatus().first, const AuthSignedIn(UserEntity(id: _userId, email: _email)));
+    expect(requests, isEmpty);
+
+    await repo.signIn(email: _email, password: _password);
+    await pumpEventQueue();
+    expect(store.values[SupabaseSessionKeeper.sessionKey], contains('refresh-token-2'));
+  });
 }
-
-http.Response _json(int status, Map<String, Object?> body) =>
-    http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json', 'x-supabase-api-version': '2024-01-01'});
-
-http.Response _error(int status, String code, String message) => _json(status, {'code': code, 'message': message});
-
-Map<String, Object?> _userBody({String? email = _email}) => {
-  'id': _userId,
-  'aud': 'authenticated',
-  'role': 'authenticated',
-  'email': email,
-  'app_metadata': {
-    'provider': 'email',
-    'providers': ['email'],
-  },
-  'user_metadata': {'email_verified': true},
-  'created_at': '2026-11-15T09:00:00Z',
-  'updated_at': '2026-11-15T09:00:00Z',
-  'is_anonymous': false,
-};
-
-Map<String, Object?> _sessionBody({Map<String, Object?>? user}) => {
-  'access_token': _fakeJwt(),
-  'token_type': 'bearer',
-  'expires_in': 3600,
-  'expires_at': 1794733200,
-  'refresh_token': 'refresh-token-1',
-  'user': user ?? _userBody(),
-};
-
-/// GoTrue decodes the payload for `exp`; the signature is never checked client-side. Starts with `header.` so a leak is easy to search for.
-String _fakeJwt() => 'header.${base64Url.encode(utf8.encode(jsonEncode({'sub': _userId, 'exp': 1794733200}))).replaceAll('=', '')}.signature';
