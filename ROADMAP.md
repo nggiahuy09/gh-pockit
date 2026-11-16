@@ -1346,15 +1346,15 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 ## W12 · 23–29/11 🔴 Auth client
 
-| Ngày | Task                                                                                                                                                                                                                                    |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out) ✅ Done (15/11, làm sớm) — gói Dart thuần `supabase`, session trong bộ nhớ tới T4, file env có `ENV_FLAVOR`, file rỗng = local-only; ADR-0038; chi tiết ở _W12 T2_ dưới |
-| T3   | Login + Register UI + validation                                                                                                                                                                                                        |
-| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated)                                                                                                                                        |
-| T5   | `go_router` redirect guard theo auth state                                                                                                                                                                                              |
-| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009)                                                                                   |
-| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                        |
-| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                  |
+| Ngày | Task                                                                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out) ✅ Done (15/11, làm sớm) — gói Dart thuần `supabase`, session trong bộ nhớ tới T4, file env có `ENV_FLAVOR`, file rỗng = local-only; ADR-0038; chi tiết ở _W12 T2_ dưới                                  |
+| T3   | Login + Register UI + validation ✅ Done (15/11, làm sớm) — `AuthCredentials` + 3 use case, `AuthFormBloc` một form cho cả đăng nhập / đăng ký, lỗi theo trường từng cái một (ADR-0016), `GPTextField` có mật khẩu; chưa nối router (T5); chi tiết ở _Kế hoạch W12_ dưới |
+| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated)                                                                                                                                                                         |
+| T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn — `/login`, `/register` mở từ Hồ sơ, guard chỉ đẩy người đã đăng nhập ra khỏi hai route đó; chi tiết ở _Kế hoạch W12_ dưới                                                 |
+| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009)                                                                                                                    |
+| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                         |
+| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                                                   |
 
 > **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
 > `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
@@ -1363,13 +1363,13 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 ### Kế hoạch W12 (chốt 15/11)
 
-> Bạn chốt (15/11) bốn quyết định dưới đây, mỗi cái thành một ADR **cùng PR với code của nó** (golden rule 10). Thứ tự làm khác bảng: claim
+> Bạn chốt (15/11) năm quyết định dưới đây, mỗi cái thành một ADR **cùng PR với code của nó** (golden rule 10). Thứ tự làm khác bảng: claim
 > dữ liệu `'local'` đi trước T5 / T6, vì logout xoá DB mà chạy trước claim là xoá luôn dữ liệu đang ghi trên máy.
 >
 > **Thứ tự:** T2 ✅ → T3 → T4 (gồm secure storage của Flex) → Claim → T5 → T6 → chế độ giao diện → Flex. UI của login / đăng ký / chế độ
 > giao diện vẽ trước trên canvas _Pockit Design_.
 
-**Bốn quyết định đã chốt**
+**Năm quyết định đã chốt**
 
 - **A — repository biết owner qua `GPOwnerContext`** (core), đọc ở mỗi lần gọi; thay hằng `localOwnerId` đang tiêm lúc DI. Không đăng ký lại
   repository khi auth đổi: một singleton đổi giá trị dễ test hơn một scope get_it, và không bloc nào giữ repository cũ.
@@ -1378,15 +1378,31 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - **C — chặn logout khi còn dòng chưa sync** (`sync_status = 'pending'`), tới khi push chạy được (W14). Trước đó mọi dòng đều pending, nên
   logout ở W12–W13 bị chặn và màn hình nói vì sao; nới ra thành hộp xác nhận kèm số dòng khi P4 có push.
 - **D — logout giữ bảng `settings`** (ngôn ngữ, chế độ giao diện): cài đặt của máy, không phải dữ liệu của người dùng, và không sync.
+- **E — đăng nhập là tùy chọn, chỉ để sao lưu và đồng bộ** (offline-first). App dùng đầy đủ khi chưa đăng nhập, dữ liệu thuộc `'local'`;
+  màn đăng nhập mở từ thẻ "Đồng bộ nhiều thiết bị" trong Hồ sơ, có nút đóng. Không redirect người chưa đăng nhập về `/login`, không splash
+  chờ auth: UI đọc DB local, trạng thái auth chỉ đổi thẻ Đồng bộ. Thay cho "chặn theo auth state" ở dòng T5 của bảng.
 
-**T3 — Login + Register UI + validation**
+**T3 — Login + Register UI + validation** ✅ (15/11)
 
-- [ ] Validation phía client: email đúng dạng, mật khẩu ≥ 6 ký tự (khớp server). Bắt buộc, vì `validation_failed` của server không chỉ trường.
-- [ ] `SignUpUseCase`, `SignInUseCase`, `SignOutUseCase` (`GPUseCase`; input log không có email).
-- [ ] `SignInBloc` / `SignUpBloc` dạng form (một state, `status`, `_copyWith` — ADR-0020). Lỗi theo trường (ADR-0016): email sai dạng, email
-      đã có tài khoản, mật khẩu yếu; còn lại lên banner: sai thông tin, rate limit, mạng, unknown, không có backend.
-- [ ] Page + View theo canvas; chuỗi ở cả en / vi. Chưa nối router (T5).
-- [ ] Test: validation, bloc qua `bloc.stream`, widget loading / lỗi / submit.
+- [x] **`AuthCredentials`** (value object trong `domain/entities/`): email trim, rỗng → `authEmailEmpty`, sai dạng (`a@b.c`, không khoảng
+      trắng — server quyết phần còn lại) → `authEmailInvalid`; mật khẩu không trim, rỗng → `authPasswordEmpty`; sign-up < 6 →
+      `authPasswordTooShort` (khớp `minimum_password_length` trong `supabase/config.toml`). Sign-in không kiểm độ dài: tài khoản cũ có thể có
+      mật khẩu ngắn hơn luật mới, để server quyết. Kiểm email trước mật khẩu → lỗi đầu tiên là trường trên cùng (ADR-0016).
+- [x] Ba mã mới (`authEmailEmpty`, `authPasswordEmpty`, `authPasswordTooShort`), copy en / vi không ghi con số (quy ước: giới hạn nằm ở
+      domain, hiện cạnh trường — helper "Ít nhất 6 ký tự." dưới ô mật khẩu lúc đăng ký).
+- [x] `SignInUseCase`, `SignUpUseCase` (kiểm `AuthCredentials` rồi mới gọi repository), `SignOutUseCase` (chỉ kết thúc session; xoá dữ liệu là
+      T6). Input `toLog()` rỗng: cả hai trường là thông tin đăng nhập.
+- [x] **Một `AuthFormBloc` thay vì hai bloc**, `AuthFormMode { signIn, signUp }` đổi tại chỗ và giữ cả email lẫn mật khẩu — "Email này đã có
+      tài khoản" có nút "Đăng nhập với email này". Form một state (`status`, `_copyWith`), sửa trường nào xoá lỗi của trường đó hoặc lỗi không
+      thuộc trường nào (ADR-0016); gửi thêm lần nữa hay đổi mode lúc đang gửi đều bị bỏ qua. `toString` không in email / mật khẩu.
+- [x] `AuthFormField.fromFailure` không wildcard: email / mật khẩu lên trường; sai thông tin, rate limit, mạng, không có backend lên banner.
+- [x] **`GPTextField`** thêm `obscureText` (luôn tắt autocorrect + gợi ý), `autocorrect`, `autofillHints`, `trailing` (nút hiện / ẩn mật khẩu).
+- [x] `AuthPage` / `AuthView`: nút đóng (`popOrGoNamed` về Home), `AutofillGroup` + `finishAutofillContext` lúc thành công để trình quản lý
+      mật khẩu lưu; thành công → đóng + snackbar "Đã đăng nhập." / "Đã tạo tài khoản." (canvas vẽ một màn xác nhận có câu claim — để tới khi
+      có Claim). Chuỗi mới ở `GPLocaleBaseAuth`, cả en / vi. Chưa nối router (T5).
+- [x] Test: `AuthCredentials` (11), ba use case (8), field enum (3), bloc (13), trang qua `GoRouter` thật (11, có tiếng Việt), `GPTextField`
+      (+2). Format / analyze sạch; test 1081 → 1129 xanh + 1 skip.
+- [x] Canvas `W12Auth`: lỗi theo trường từng cái một (trước vẽ cả hai cùng lúc), copy "Mật khẩu quá ngắn." khớp code.
 
 **T4 — session restore + `AuthBloc`** (secure storage của Flex dời vào đây, ADR-0038)
 
@@ -1394,25 +1410,30 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [ ] `startAutoRefresh` / `stopAutoRefresh` theo lifecycle.
 - [ ] `AuthRepository.watchAuthStatus()`; `AuthBloc`: `unknown → authenticated(user) | unauthenticated | localOnly`.
 - [ ] Offline-first: mở app không mạng với token hết hạn vẫn là `authenticated` — refresh hỏng vì mạng không phải đăng xuất.
+- [ ] `unknown` không chặn gì (E): shell hiện ngay từ DB local, chỉ thẻ Đồng bộ trong Hồ sơ chờ trạng thái.
 - [ ] Test: restore có / không / hỏng session, offline lúc khởi động, chuyển trạng thái.
 
 **Claim dữ liệu `'local'`** (nợ W8; quyết định A + B)
 
 - [ ] `GPOwnerContext` thay `localOwnerId` ở mọi repository, seeder và DAO đọc owner.
-- [ ] Lần đăng nhập đầu: một transaction, cha trước con — đổi id danh mục seed (B), `UPDATE … SET owner_id = :uid, updated_at = :now,
-    version = version + 1 WHERE owner_id = 'local'` trên ba bảng. Chưa có outbox: giữ `sync_status = 'pending'`, W13 T5 backfill mutation.
+- [ ] Lần đăng nhập đầu: một transaction, cha trước con — đổi id danh mục seed (B), rồi trên ba bảng:
+      `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'`.
+      Chưa có outbox: giữ `sync_status = 'pending'`, W13 T5 backfill mutation.
 - [ ] Test: ghi offline vài ngày rồi đăng ký → còn nguyên, thuộc uid, không danh mục trùng; chạy claim lần hai không đổi gì.
 
-**T5 — `go_router` redirect guard**
+**T5 — route đăng nhập + guard** (quyết định E: đăng nhập tùy chọn)
 
-- [ ] `refreshListenable` từ stream `AuthBloc`: `unknown` → splash, `unauthenticated` → `/login` (`/login`, `/register` ngoài shell),
-      `authenticated` / `localOnly` → shell. Giữ nhánh của `StatefulShellRoute` (ADR-0003); deep link cần đăng nhập thì quay lại sau login.
-- [ ] Test: bảng redirect trạng thái × route.
+- [ ] `/login`, `/register` ngoài shell, mở từ thẻ Đồng bộ trong Hồ sơ; nút đóng quay về chỗ cũ (`popOrGo`).
+- [ ] Guard ngược: `refreshListenable` từ stream `AuthBloc`; đã đăng nhập mà vào `/login` / `/register` → về Hồ sơ; `localOnly` → hai route
+      này không tồn tại (về Hồ sơ), thẻ Đồng bộ ẩn. Không route nào trong shell cần đăng nhập. Giữ nhánh `StatefulShellRoute` (ADR-0003).
+- [ ] Thẻ Đồng bộ trong Hồ sơ theo trạng thái: chưa đăng nhập (nút Đăng nhập), đã đăng nhập (email + số thay đổi chưa sao lưu), local-only (ẩn).
+- [ ] Test: bảng guard trạng thái × route; Hồ sơ ba trạng thái thẻ.
 
 **T6 — logout** (quyết định C + D)
 
 - [ ] Chặn khi còn dòng pending (C). Không chặn: cancel sync (chỗ để sẵn) → xoá con trước cha (transactions → categories → accounts) trong
       một transaction → xoá session trong secure storage → `signOut`. Giữ `settings` (D); không xoá file DB.
+- [ ] Sau logout app về trạng thái chưa đăng nhập và vẫn dùng được (E): owner về `'local'`, `CategorySeeder` seed lại danh mục mặc định.
 - [ ] Test: bị chặn khi còn pending; sau logout không còn dòng tài chính nào, FK không lỗi, user sau không thấy dữ liệu user trước.
 
 **Thêm — chế độ giao diện: sáng / tối / theo hệ thống** (thêm 15/11)
@@ -1456,8 +1477,9 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [x] **Không dùng bản cũ:** sign-up qua `supabase_flutter` mặc định ghi refresh token vào SharedPreferences — đúng thứ blueprint §34 cấm.
       Bỏ nó thì T4 tự viết phần dừng / chạy lại auto refresh theo lifecycle (~15 dòng), và chưa có deep link (reset mật khẩu qua email cần
       `app_links` + PKCE sau này).
-- [x] **`ENV_FLAVOR` trong `env/<flavor>.json`, kiểm trước khi mở DB** (`GPBackendConfig.resolve`): lệch flavor hoặc thiếu key →
-      `flavorMismatch`; hai key rỗng → local-only (`LocalOnlyAuthRepository`: sign up / in trả `GPBackendUnavailableFailure` mới, sign out
+- [x] **`ENV_FLAVOR` trong `env/<flavor>.json`, kiểm trước khi mở DB** (`GPBackendConfig.resolve`): hai key rỗng → local-only, bất kể
+      `ENV_FLAVOR` (nới 15/11: `fvm flutter run` trơn không có file env từng ra màn `flavorMismatch` — không có backend thì không có gì để
+      nhầm); có backend mà lệch flavor hoặc thiếu key → `flavorMismatch`; local-only (`LocalOnlyAuthRepository`: sign up / in trả `GPBackendUnavailableFailure` mới, sign out
       `GPOk`); một rỗng một có → `backendIncomplete`; URL không phải origin trần (path / query / fragment — bắt được link dashboard dán nhầm
       hồi W11) → `urlMalformed`; `http://` chỉ được ở dev (stack local), prod thì `urlMalformed`. Bị từ chối → `GPBackendConfigErrorApp`
       ghi tên lỗi lên màn hình (iOS không hiện log của app), dùng chung khung `GPStartupErrorApp` với màn lỗi DB.
@@ -1471,7 +1493,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [x] `env/example.json`, `env/dev.json`, `env/prod.json` đã thêm `ENV_FLAVOR` (hai file sau gitignored, chỉ thêm key, giữ nguyên giá trị).
       ADR-0038; ADR-0037 và ADR-0032 có mục _Amended_; CLAUDE.md §2 / §5 / §14; README (_Flavors and env_).
 - **Còn lại:** chưa soát trên máy thật. Khi tạo project prod: file prod rỗng
-  phải thành bị từ chối, cùng PR. Mỗi clone cũ phải thêm `ENV_FLAVOR` vào file env của mình, không thì app không mở.
+  phải thành bị từ chối, cùng PR. Mỗi clone cũ có file env đã điền backend phải thêm `ENV_FLAVOR`, không thì app không mở.
 
 **🏁 Milestone P3:** **Tag `v0.3-auth`.**
 
