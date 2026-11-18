@@ -21,6 +21,7 @@ import 'package:ghpockit/features/transactions/presentation/bloc/transaction_lis
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
@@ -369,7 +370,7 @@ void main() {
         dao: TransactionDao(db),
         logger: RecordingLogger(clock),
         uuidGenerator: FakeUuidGenerator(),
-        ownerId: localOwnerId,
+        ownerContext: FixedOwnerContext(),
       );
       await db
           .into(db.accountsTable)

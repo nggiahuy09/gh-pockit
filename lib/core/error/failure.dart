@@ -109,4 +109,7 @@ enum GPValidationCode {
 
   /// The server's password policy, which can be stricter than the client's check.
   authPasswordWeak,
+
+  /// This device still holds another account's data, whose session ended without a sign-out (ADR-0040).
+  authDeviceOwnedByAnotherAccount,
 }

@@ -17,6 +17,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
@@ -252,7 +253,7 @@ void main() {
 
     test('reports not found for a live transaction, an unknown id, and one of another owner', () async {
       final created = okValue(await _create(repository));
-      final theirs = TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator('theirs'), ownerId: _otherOwner);
+      final theirs = TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator('theirs'), ownerContext: FixedOwnerContext(_otherOwner));
       final their = okValue(await theirs.createTransaction(amount: Money(1000, 'VND'), type: TransactionType.expense, occurredAt: _occurredAt, accountId: 'acc-theirs'));
       await theirs.deleteTransaction(their.id);
 
@@ -661,7 +662,7 @@ Future<void> _insertAccount(GPAppDatabase db, String id, {String currencyCode = 
     );
 
 TransactionRepositoryImpl _repositoryOver(TransactionDao dao, {required FakeClock clock, required RecordingLogger logger, required FakeUuidGenerator uuid}) =>
-    TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+    TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
 
 Future<GPResult<TransactionEntity>> _create(
   TransactionRepositoryImpl repository, {

@@ -5,7 +5,8 @@ import 'package:get_it/get_it.dart';
 import 'package:supabase/supabase.dart';
 
 import '../../core/database/database.dart';
-import '../../core/database/owner_id.dart';
+import '../../core/database/owner_context.dart';
+import '../../core/database/settings_owner_context.dart';
 import '../../core/localization/drift_locale_store.dart';
 import '../../core/localization/locale_store.dart';
 import '../../core/localization/localization.dart';
@@ -18,10 +19,13 @@ import '../../core/utils/uuid_generator.dart';
 import '../../features/accounts/data/daos/account_dao.dart';
 import '../../features/accounts/data/repositories/account_repository_impl.dart';
 import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/auth/data/daos/device_owner_dao.dart';
 import '../../features/auth/data/datasources/supabase_session_keeper.dart';
+import '../../features/auth/data/repositories/device_owner_repository_impl.dart';
 import '../../features/auth/data/repositories/local_only_auth_repository.dart';
 import '../../features/auth/data/repositories/supabase_auth_repository.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/domain/repositories/device_owner_repository.dart';
 import '../../features/categories/data/daos/category_dao.dart';
 import '../../features/categories/data/repositories/category_repository_impl.dart';
 import '../../features/categories/data/seed/category_seeder.dart';
@@ -54,6 +58,13 @@ void configureCoreDependencies([GetIt? container]) {
       dispose: (db) => db.close(),
     )
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
+    // Must stay a singleton: it caches the owner every repository reads, and the claim reloads it (ADR-0040).
+    ..registerLazySingleton<GPSettingsOwnerContext>(
+      () => GPSettingsOwnerContext(database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
+      dispose: (context) => context.dispose(),
+    )
+    // The same instance: repositories read it, the bootstrap and the claim reload it.
+    ..registerLazySingleton<GPOwnerContext>(() => c.get<GPSettingsOwnerContext>())
     ..registerLazySingleton<GPSecureStore>(GPFlutterSecureStore.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
     ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c.get<GPClock>()))
@@ -68,6 +79,19 @@ void configureCoreDependencies([GetIt? container]) {
 /// The one place outside `data/` that names Supabase: the client is built here and handed to the repositories (ADR-0038).
 void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
   final c = container ?? getIt;
+
+  // Both builds: a local-only one never claims, but sign-in's use cases are built the same way.
+  c
+    ..registerLazySingleton<DeviceOwnerDao>(() => DeviceOwnerDao(c.get<GPAppDatabase>()))
+    ..registerLazySingleton<DeviceOwnerRepository>(
+      () => DeviceOwnerRepositoryImpl(
+        clock: c.get<GPClock>(),
+        dao: c.get<DeviceOwnerDao>(),
+        logger: c.get<GPAppLogger>(),
+        ownerContext: c.get<GPSettingsOwnerContext>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+      ),
+    );
 
   switch (config) {
     case GPRemoteBackendConfig(:final url, :final publishableKey):
@@ -108,8 +132,7 @@ void configureAccountsDependencies([GetIt? container]) {
         dao: c.get<AccountDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        // The sentinel owner until auth. Passed, never defaulted, so every site is greppable.
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }
@@ -120,7 +143,7 @@ void configureCategoriesDependencies([GetIt? container]) {
   c
     ..registerLazySingleton<CategoryDao>(() => CategoryDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<CategorySeeder>(
-      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), uuidGenerator: c.get<GPUuidGenerator>(), ownerId: localOwnerId),
+      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), ownerContext: c.get<GPOwnerContext>(), uuidGenerator: c.get<GPUuidGenerator>()),
     )
     ..registerLazySingleton<CategoryRepository>(
       () => CategoryRepositoryImpl(
@@ -128,7 +151,7 @@ void configureCategoriesDependencies([GetIt? container]) {
         dao: c.get<CategoryDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }
@@ -144,7 +167,7 @@ void configureTransactionsDependencies([GetIt? container]) {
         dao: c.get<TransactionDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     )
     // Built only when a non-release run passes `--dart-define=DATASET`.
@@ -158,7 +181,7 @@ void configureTransactionsDependencies([GetIt? container]) {
           uuidGenerator: GPUuidGeneratorImpl(clock: c.get<GPClock>(), random: Random(BenchmarkDatasetGenerator.defaultSeed)),
         ),
         transactionDao: c.get<TransactionDao>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }

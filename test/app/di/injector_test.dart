@@ -4,6 +4,8 @@ import 'package:get_it/get_it.dart';
 import 'package:ghpockit/app/config/backend_config.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/database/database.dart';
+import 'package:ghpockit/core/database/owner_context.dart';
+import 'package:ghpockit/core/database/settings_owner_context.dart';
 import 'package:ghpockit/core/localization/drift_locale_store.dart';
 import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
@@ -16,9 +18,11 @@ import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/auth/data/datasources/supabase_session_keeper.dart';
+import 'package:ghpockit/features/auth/data/repositories/device_owner_repository_impl.dart';
 import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
 import 'package:ghpockit/features/auth/data/repositories/supabase_auth_repository.dart';
 import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/device_owner_repository.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -190,6 +194,13 @@ void main() {
       expect(container.get<SupabaseClient>(), same(container.get<SupabaseClient>()));
       expect(container.get<SupabaseSessionKeeper>(), same(container.get<SupabaseSessionKeeper>()));
       expect(container.isRegistered<SupabaseAuthRepository>(), isFalse);
+    });
+
+    test('both configs bind the device owner repository, on the one owner context the repositories read', () {
+      configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
+
+      expect(container.get<DeviceOwnerRepository>(), isA<DeviceOwnerRepositoryImpl>());
+      expect(container.get<GPOwnerContext>(), same(container.get<GPSettingsOwnerContext>()));
     });
 
     test('a local-only config binds the local-only repository and builds no client or keeper', () {

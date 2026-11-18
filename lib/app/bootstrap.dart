@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../core/database/database.dart';
+import '../core/database/settings_owner_context.dart';
 import '../core/domain/use_case.dart';
 import '../core/error/result.dart';
 import '../core/localization/locale.dart';
@@ -12,6 +13,7 @@ import '../core/logging/app_logger.dart';
 import '../core/utils/clock.dart';
 import '../features/accounts/domain/repositories/account_repository.dart';
 import '../features/auth/domain/repositories/auth_repository.dart';
+import '../features/auth/domain/repositories/device_owner_repository.dart';
 import '../features/auth/domain/usecases/restore_session_use_case.dart';
 import '../features/categories/data/seed/category_seeder.dart';
 import '../features/settings/presentation/debug/sample_data.dart';
@@ -64,9 +66,12 @@ Future<void> bootstrap(Widget Function() builder) async {
     return;
   }
 
+  // Before anything reads or seeds a row: every query filters on it (ADR-0040).
+  await getIt.get<GPSettingsOwnerContext>().load();
+
   // After the database: the keeper reads its marker there (ADR-0039). No network call, so it costs one Keychain / Keystore read, and nothing
-  // on a local-only build.
-  await RestoreSessionUseCase(getIt.get<AuthRepository>()).execute(const GPNoInput());
+  // on a local-only build. Then claims for a restored user whose last claim did not land (ADR-0040).
+  await RestoreSessionUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>()).execute(const GPNoInput());
 
   // `DateFormat` throws for `vi` until these are loaded.
   await initializeDateFormatting();

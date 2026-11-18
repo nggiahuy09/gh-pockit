@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
 import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
@@ -11,6 +10,7 @@ import 'package:ghpockit/features/transactions/data/repositories/transaction_rep
 
 import 'fake_clock.dart';
 import 'fake_uuid_generator.dart';
+import 'fixed_owner_context.dart';
 import 'recording_logger.dart';
 
 /// The real account, category and transaction repositories over one in-memory database. No categories are seeded.
@@ -19,9 +19,27 @@ final class InMemoryRepositories {
     // Otherwise drift keeps a cancelled stream cached behind `Timer.run`, and a widget test fails on a timer still pending at teardown.
     db = GPAppDatabase.forTesting(DatabaseConnection(NativeDatabase.memory(), closeStreamsSynchronously: true));
     final logger = RecordingLogger(this.clock);
-    accounts = AccountRepositoryImpl(clock: this.clock, dao: AccountDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('acc'), ownerId: localOwnerId);
-    categories = CategoryRepositoryImpl(clock: this.clock, dao: CategoryDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('cat'), ownerId: localOwnerId);
-    transactions = TransactionRepositoryImpl(clock: this.clock, dao: TransactionDao(db), logger: logger, uuidGenerator: FakeUuidGenerator('tx'), ownerId: localOwnerId);
+    accounts = AccountRepositoryImpl(
+      clock: this.clock,
+      dao: AccountDao(db),
+      logger: logger,
+      uuidGenerator: FakeUuidGenerator('acc'),
+      ownerContext: FixedOwnerContext(),
+    );
+    categories = CategoryRepositoryImpl(
+      clock: this.clock,
+      dao: CategoryDao(db),
+      logger: logger,
+      uuidGenerator: FakeUuidGenerator('cat'),
+      ownerContext: FixedOwnerContext(),
+    );
+    transactions = TransactionRepositoryImpl(
+      clock: this.clock,
+      dao: TransactionDao(db),
+      logger: logger,
+      uuidGenerator: FakeUuidGenerator('tx'),
+      ownerContext: FixedOwnerContext(),
+    );
   }
 
   late final AccountRepositoryImpl accounts;

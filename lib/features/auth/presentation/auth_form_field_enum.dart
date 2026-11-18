@@ -24,7 +24,8 @@ enum AuthFormField {
       GPValidationCode.transactionTransferCurrenciesDiffer ||
       GPValidationCode.transactionCategoryTypeMismatch ||
       GPValidationCode.transactionDateInFuture ||
-      GPValidationCode.authInvalidCredentials => null,
+      GPValidationCode.authInvalidCredentials ||
+      GPValidationCode.authDeviceOwnedByAnotherAccount => null,
     },
     GPNetworkFailure() ||
     GPTimeoutFailure() ||

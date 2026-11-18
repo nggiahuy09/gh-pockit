@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../../../../core/database/database.dart';
+import '../../../../core/database/owner_context.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
@@ -18,23 +20,27 @@ final class CategoryRepositoryImpl implements CategoryRepository {
     required CategoryDao dao,
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
-    required String ownerId,
+    required GPOwnerContext ownerContext,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerId = ownerId;
+       _ownerContext = ownerContext;
 
   final GPClock _clock;
   final CategoryDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
-  final String _ownerId;
+  final GPOwnerContext _ownerContext;
+
+  /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
+  String get _ownerId => _ownerContext.current;
 
   @override
   Stream<List<CategoryEntity>> watchCategories([CategoryType? type]) {
-    return _dao
-        .watchCategories(ownerId: _ownerId, type: type?.storageValue)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchCategories(ownerId: ownerId, type: type?.storageValue))
         .transform(
           StreamTransformer<List<CategoryRow>, List<CategoryEntity>>.fromHandlers(
             handleData: (rows, sink) {
@@ -60,8 +66,9 @@ final class CategoryRepositoryImpl implements CategoryRepository {
 
   @override
   Stream<CategoryEntity?> watchCategory(String id) {
-    return _dao
-        .watchCategory(id: id, ownerId: _ownerId)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchCategory(id: id, ownerId: ownerId))
         .transform(
           StreamTransformer<CategoryRow?, CategoryEntity?>.fromHandlers(
             handleData: (row, sink) {

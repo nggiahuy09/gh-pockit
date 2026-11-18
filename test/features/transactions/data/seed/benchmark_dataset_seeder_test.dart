@@ -12,6 +12,7 @@ import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_size_
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 
 late GPAppDatabase _db;
 late FakeClock _clock;
@@ -24,14 +25,14 @@ void main() {
     _clock = FakeClock(DateTime.utc(2026, 11, 2, 2));
     _transactionDao = TransactionDao(_db);
     final categoryDao = CategoryDao(_db);
-    await CategorySeeder(clock: _clock, dao: categoryDao, uuidGenerator: FakeUuidGenerator('cat'), ownerId: localOwnerId).seedDefaults();
+    await CategorySeeder(clock: _clock, dao: categoryDao, uuidGenerator: FakeUuidGenerator('cat'), ownerContext: FixedOwnerContext()).seedDefaults();
     _seeder = BenchmarkDatasetSeeder(
       accountDao: AccountDao(_db),
       categoryDao: categoryDao,
       clock: _clock,
       generator: BenchmarkDatasetGenerator(uuidGenerator: FakeUuidGenerator('bench')),
       transactionDao: _transactionDao,
-      ownerId: localOwnerId,
+      ownerContext: FixedOwnerContext(),
     );
   });
 

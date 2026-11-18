@@ -82,6 +82,9 @@ final class GPLocaleEnError implements GPLocaleBaseError {
   String get validationAuthPasswordWeak => 'Choose a stronger password.';
 
   @override
+  String get validationAuthDeviceOwnedByAnotherAccount => "This device still holds another account's data. Sign out of that account first.";
+
+  @override
   String get conflict => 'This item was changed on another device.';
 
   @override

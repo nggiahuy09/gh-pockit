@@ -12,11 +12,13 @@ import 'package:ghpockit/core/localization/localization_scope.dart';
 import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/device_owner_repository.dart';
 import 'package:ghpockit/features/auth/presentation/auth_form_mode_enum.dart';
 import 'package:ghpockit/features/auth/presentation/pages/auth_page.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../helpers/fake_auth_repository.dart';
+import '../../../../helpers/fake_device_owner_repository.dart';
 import '../../../../helpers/localization_harness.dart';
 
 late FakeAuthRepository _repository;
@@ -62,7 +64,9 @@ Finder _submitButton(String label) => find.widgetWithText(FilledButton, label);
 void main() {
   setUp(() {
     _repository = FakeAuthRepository();
-    getIt.registerSingleton<AuthRepository>(_repository);
+    getIt
+      ..registerSingleton<AuthRepository>(_repository)
+      ..registerSingleton<DeviceOwnerRepository>(FakeDeviceOwnerRepository());
   });
 
   tearDown(getIt.reset);

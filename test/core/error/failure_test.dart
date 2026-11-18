@@ -36,6 +36,7 @@ const allFailures = <GPFailure>[
   GPValidationFailure(GPValidationCode.authPasswordEmpty),
   GPValidationFailure(GPValidationCode.authPasswordTooShort),
   GPValidationFailure(GPValidationCode.authPasswordWeak),
+  GPValidationFailure(GPValidationCode.authDeviceOwnedByAnotherAccount),
   GPConflictFailure(entityId: 'tx-1', localVersion: 3, remoteVersion: 4),
   GPNotFoundFailure(),
   GPDatabaseFailure(),

@@ -8,6 +8,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/utils/value_wrapper.dart';
 import '../../domain/repositories/auth_repository.dart';
+import '../../domain/repositories/device_owner_repository.dart';
 import '../../domain/usecases/sign_in_use_case.dart';
 import '../../domain/usecases/sign_up_use_case.dart';
 import '../auth_form_field_enum.dart';
@@ -22,8 +23,8 @@ final class AuthFormBloc extends Bloc<AuthFormEvent, AuthFormState> {
     on<AuthFormEvent>(_eventHandler, transformer: sequential());
   }
 
-  final _signIn = SignInUseCase(getIt.get<AuthRepository>());
-  final _signUp = SignUpUseCase(getIt.get<AuthRepository>());
+  final _signIn = SignInUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>());
+  final _signUp = SignUpUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>());
 
   var _isSubmitting = false;
 

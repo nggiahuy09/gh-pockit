@@ -14,6 +14,7 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
@@ -55,7 +56,7 @@ void main() {
     clock = FakeClock(_startedAt);
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
-    repository = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+    repository = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
   });
 
   tearDown(() => db.close());
@@ -123,7 +124,7 @@ void main() {
 
     test('never shows another owner an account', () async {
       await _create(repository);
-      final otherOwner = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: 'someone-else');
+      final otherOwner = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext('someone-else'));
 
       expect(await otherOwner.watchAccounts().first, isEmpty);
     });
@@ -286,7 +287,7 @@ void main() {
 
     setUp(() {
       thrown = Exception('disk full');
-      failing = AccountRepositoryImpl(clock: clock, dao: _ThrowingAccountDao(db, () => thrown), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+      failing = AccountRepositoryImpl(clock: clock, dao: _ThrowingAccountDao(db, () => thrown), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
     });
 
     test('createAccount reports it and logs an id, not the row', () async {
@@ -313,7 +314,7 @@ void main() {
     test('a real primary-key collision is a database failure like any other', () async {
       await _create(repository);
       // A fresh FakeUuidGenerator mints the id the first repository already used.
-      final collides = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator(), ownerId: localOwnerId);
+      final collides = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator(), ownerContext: FixedOwnerContext());
 
       final result = await collides.createAccount(initialBalance: Money.zero('VND'), type: AccountType.cash, name: 'Ví');
 
@@ -343,7 +344,7 @@ void main() {
         dao: _FailingStreamAccountDao(db, SqliteException(10, 'disk I/O error')),
         logger: logger,
         uuidGenerator: uuid,
-        ownerId: localOwnerId,
+        ownerContext: FixedOwnerContext(),
       );
 
       await expectLater(failing.watchAccounts(), emitsError(const GPDatabaseFailure()));
@@ -357,7 +358,7 @@ void main() {
         dao: _FailingStreamAccountDao(db, SqliteException(10, 'disk I/O error')),
         logger: logger,
         uuidGenerator: uuid,
-        ownerId: localOwnerId,
+        ownerContext: FixedOwnerContext(),
       );
 
       await expectLater(failing.watchAccount('a1'), emitsError(const GPDatabaseFailure()));
@@ -366,7 +367,13 @@ void main() {
 
     test('an Error is forwarded unchanged — it is a bug and must reach the crash reporter', () async {
       final bug = StateError('broken invariant');
-      final failing = AccountRepositoryImpl(clock: clock, dao: _FailingStreamAccountDao(db, bug), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+      final failing = AccountRepositoryImpl(
+        clock: clock,
+        dao: _FailingStreamAccountDao(db, bug),
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext(),
+      );
 
       await expectLater(failing.watchAccounts(), emitsError(same(bug)));
       await expectLater(failing.watchAccount('a1'), emitsError(same(bug)));

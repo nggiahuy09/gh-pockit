@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../../../../core/database/database.dart';
+import '../../../../core/database/owner_context.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/utils/clock.dart';
@@ -29,33 +31,39 @@ final class TransactionRepositoryImpl implements TransactionRepository {
     required TransactionDao dao,
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
-    required String ownerId,
+    required GPOwnerContext ownerContext,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerId = ownerId;
+       _ownerContext = ownerContext;
 
   final GPClock _clock;
   final TransactionDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
-  final String _ownerId;
+  final GPOwnerContext _ownerContext;
+
+  /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
+  String get _ownerId => _ownerContext.current;
 
   @override
   Stream<TransactionListSnapshot> watchTransactions(TransactionQuery query) {
     // Per stream, not per emission: the list re-runs after every write, and one bad row would log on every edit.
     final logged = <String>{};
 
-    return _dao
-        .watchTransactions(
-          _ownerId,
-          accountIds: query.accountIds,
-          categoryIds: query.categoryIds,
-          types: query.types?.map((type) => type.storageValue).toSet(),
-          fromMillis: query.from?.millisecondsSinceEpoch,
-          limit: query.limit,
-          toMillis: query.to?.millisecondsSinceEpoch,
+    return _ownerContext
+        .watch()
+        .switchMap(
+          (ownerId) => _dao.watchTransactions(
+            ownerId,
+            accountIds: query.accountIds,
+            categoryIds: query.categoryIds,
+            types: query.types?.map((type) => type.storageValue).toSet(),
+            fromMillis: query.from?.millisecondsSinceEpoch,
+            limit: query.limit,
+            toMillis: query.to?.millisecondsSinceEpoch,
+          ),
         )
         .transform(
           StreamTransformer<List<TransactionListRow>, TransactionListSnapshot>.fromHandlers(
@@ -91,8 +99,9 @@ final class TransactionRepositoryImpl implements TransactionRepository {
   Stream<TransactionEntity?> watchTransaction(String id) {
     var logged = false;
 
-    return _dao
-        .watchTransaction(id: id, ownerId: _ownerId)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchTransaction(id: id, ownerId: ownerId))
         .transform(
           StreamTransformer<TransactionRow?, TransactionEntity?>.fromHandlers(
             handleData: (row, sink) {
@@ -225,8 +234,9 @@ final class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Stream<List<AccountBalance>> watchAccountBalances() {
-    return _dao
-        .watchAccountBalances(_ownerId)
+    return _ownerContext
+        .watch()
+        .switchMap(_dao.watchAccountBalances)
         .transform(
           StreamTransformer<List<({AccountRow account, int balanceMinor})>, List<AccountBalance>>.fromHandlers(
             handleData: (rows, sink) {
@@ -253,8 +263,9 @@ final class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Stream<IncomeExpenseTotals> watchIncomeExpenseTotals({required String currencyCode, required DateTime from, required DateTime to}) {
-    return _dao
-        .watchIncomeExpenseTotals(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchIncomeExpenseTotals(ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch))
         .transform(
           StreamTransformer<({int incomeMinor, int expenseMinor}), IncomeExpenseTotals>.fromHandlers(
             handleData: (row, sink) => sink.add(IncomeExpenseTotals(income: Money(row.incomeMinor, currencyCode), expense: Money(row.expenseMinor, currencyCode))),
@@ -265,8 +276,9 @@ final class TransactionRepositoryImpl implements TransactionRepository {
 
   @override
   Stream<List<CategorySpending>> watchSpendingByCategory({required String currencyCode, required DateTime from, required DateTime to}) {
-    return _dao
-        .watchSpendingByCategory(_ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchSpendingByCategory(ownerId, currencyCode: currencyCode, fromMillis: from.millisecondsSinceEpoch, toMillis: to.millisecondsSinceEpoch))
         .transform(
           StreamTransformer<List<({CategoryRow? category, int spentMinor})>, List<CategorySpending>>.fromHandlers(
             handleData: (rows, sink) {

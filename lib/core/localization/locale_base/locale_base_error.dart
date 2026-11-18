@@ -31,6 +31,7 @@ abstract class GPLocaleBaseError {
   String get validationAuthPasswordEmpty;
   String get validationAuthPasswordTooShort;
   String get validationAuthPasswordWeak;
+  String get validationAuthDeviceOwnedByAnotherAccount;
   String get conflict;
   String get notFound;
   String get database;

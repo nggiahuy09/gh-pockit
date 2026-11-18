@@ -5,11 +5,13 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/device_owner_repository.dart';
 import 'package:ghpockit/features/auth/presentation/auth_form_field_enum.dart';
 import 'package:ghpockit/features/auth/presentation/auth_form_mode_enum.dart';
 import 'package:ghpockit/features/auth/presentation/bloc/auth_form_bloc.dart';
 
 import '../../../../helpers/fake_auth_repository.dart';
+import '../../../../helpers/fake_device_owner_repository.dart';
 
 late FakeAuthRepository _repository;
 
@@ -37,7 +39,9 @@ AuthFormBloc _filled({AuthFormMode mode = AuthFormMode.signIn, String email = 'h
 void main() {
   setUp(() {
     _repository = FakeAuthRepository();
-    getIt.registerSingleton<AuthRepository>(_repository);
+    getIt
+      ..registerSingleton<AuthRepository>(_repository)
+      ..registerSingleton<DeviceOwnerRepository>(FakeDeviceOwnerRepository());
   });
 
   tearDown(getIt.reset);

@@ -15,6 +15,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_type.
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
@@ -48,8 +49,8 @@ void main() {
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
 
-    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
-    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
     deleteAccount = DeleteAccountUseCase(accounts, transactions);
 
     for (final id in ['acc-cash', 'acc-bank']) {
@@ -108,7 +109,7 @@ void main() {
   test('deletes nothing when the question cannot be answered', () async {
     final failing = DeleteAccountUseCase(
       accounts,
-      TransactionRepositoryImpl(clock: clock, dao: _LookupFailingTransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
+      TransactionRepositoryImpl(clock: clock, dao: _LookupFailingTransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext()),
     );
 
     expect(await failing.execute(const DeleteAccountInput('acc-cash')), const GPErr<void>(GPDatabaseFailure()));

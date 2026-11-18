@@ -25,7 +25,8 @@ enum AccountFormField {
       GPValidationCode.authEmailTaken ||
       GPValidationCode.authPasswordEmpty ||
       GPValidationCode.authPasswordTooShort ||
-      GPValidationCode.authPasswordWeak => null,
+      GPValidationCode.authPasswordWeak ||
+      GPValidationCode.authDeviceOwnedByAnotherAccount => null,
     },
     GPNetworkFailure() ||
     GPTimeoutFailure() ||

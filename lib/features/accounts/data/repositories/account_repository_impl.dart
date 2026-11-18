@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import '../../../../core/database/database.dart';
+import '../../../../core/database/owner_context.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
+import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/utils/clock.dart';
@@ -19,23 +21,27 @@ final class AccountRepositoryImpl implements AccountRepository {
     required AccountDao dao,
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
-    required String ownerId,
+    required GPOwnerContext ownerContext,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerId = ownerId;
+       _ownerContext = ownerContext;
 
   final GPClock _clock;
   final AccountDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
-  final String _ownerId;
+  final GPOwnerContext _ownerContext;
+
+  /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
+  String get _ownerId => _ownerContext.current;
 
   @override
   Stream<List<AccountEntity>> watchAccounts([bool includeArchived = false]) {
-    return _dao
-        .watchAccounts(_ownerId, includeArchived: includeArchived)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchAccounts(ownerId, includeArchived: includeArchived))
         .transform(
           StreamTransformer<List<AccountRow>, List<AccountEntity>>.fromHandlers(
             handleData: (rows, sink) {
@@ -61,8 +67,9 @@ final class AccountRepositoryImpl implements AccountRepository {
 
   @override
   Stream<AccountEntity?> watchAccount(String id) {
-    return _dao
-        .watchAccount(id: id, ownerId: _ownerId)
+    return _ownerContext
+        .watch()
+        .switchMap((ownerId) => _dao.watchAccount(id: id, ownerId: ownerId))
         .transform(
           StreamTransformer<AccountRow?, AccountEntity?>.fromHandlers(
             handleData: (row, sink) {

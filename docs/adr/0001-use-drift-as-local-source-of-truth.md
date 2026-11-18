@@ -230,3 +230,9 @@ than something to delete.
 ## Still open
 
 Nothing. The three questions this ADR opened are answered above.
+
+## Amended 2026-11-16 (W12) — the claim exists
+
+The step section 1 named is ADR-0040. A sign-in or a sign-up claims the `'local'` rows in one transaction:
+`version + 1`, `updated_at = now`. Seeded categories are re-derived for the user's id. The device's owner becomes a `settings` row that
+only an explicit sign-out resets. The rows stay `pending`, and W13 enqueues them as section 1 said.
