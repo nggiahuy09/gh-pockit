@@ -1433,13 +1433,32 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [ ] **Còn lại / chưa kiểm:** đăng nhập thật rồi mở lại app (cần T5 để vào màn đăng nhập); đo lại cold start có session (ADR-0026);
       Android auto-backup vẫn bật (DB + prefs của secure storage lên Google Drive) — quyết định riêng.
 
-**Claim dữ liệu `'local'`** (nợ W8; quyết định A + B)
+**Claim dữ liệu `'local'`** (nợ W8; quyết định A + B) ✅ (16/11, ADR-0040)
 
-- [ ] `GPOwnerContext` thay `localOwnerId` ở mọi repository, seeder và DAO đọc owner.
-- [ ] Lần đăng nhập đầu: một transaction, cha trước con — đổi id danh mục seed (B), rồi trên ba bảng:
-      `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'`.
-      Chưa có outbox: giữ `sync_status = 'pending'`, W13 T5 backfill mutation.
-- [ ] Test: ghi offline vài ngày rồi đăng ký → còn nguyên, thuộc uid, không danh mục trùng; chạy claim lần hai không đổi gì.
+> Bạn chốt thêm (16/11): **máy có một owner**, một dòng `owner.id` trong `settings`: `'local'` tới lần claim, rồi uid, chỉ đổi lại khi đăng xuất
+> có chủ đích (T6, xoá máy). Session tự hết (server từ chối refresh token) thì giữ nguyên owner — dữ liệu vẫn hiện, vẫn của người đó.
+
+- [x] **`GPOwnerContext`** (`core/database`) thay hằng `localOwnerId` ở cả ba repository, `CategorySeeder` và `BenchmarkDatasetSeeder`:
+      `current` cho lần ghi / đọc một lần, `watch()` cho truy vấn — mọi `watch…` chạy qua `switchMap` trên nó, nên một danh sách đang mở theo
+      owner mới thay vì trống. `GPSettingsOwnerContext` giữ bản cache; bootstrap `load()` sau khi mở DB, trước mọi lần đọc / seed. `switchMap`
+      chuyển vào `core/extensions` (transformer `restartable` của bloc dùng chung).
+- [x] **Claim một transaction** (`DeviceOwnerDao`): `PRAGMA defer_foreign_keys = ON` (pragma này chạy được trong transaction, khác
+      `foreign_keys`); danh mục seed đổi id sang v5(`uid|name_key`) (`CategorySeeder.seededId`, một chỗ duy nhất) và giao dịch đi theo; nếu seed
+      của user đã có trên máy thì xoá hẳn bản `'local'` (chưa sync bao giờ, không cần tombstone); danh mục tự tạo giữ id v7. Rồi ba bảng
+      `'local'` → uid với `updated_at = now`, `version + 1`, cùng dòng `owner.id`. `sync_status` giữ `pending` — W13 T5 backfill mutation.
+- [x] **Ngay sau commit, `adopt(uid)` đồng bộ** — không đọc lại DB: test bắt được danh sách đang mở phát `[]` một nhịp khi drift chạy lại truy
+      vấn cho `'local'` trước khi owner kịp đổi.
+- [x] **Khi nào claim** (`ClaimLocalDataUseCase`): sau đăng nhập / đăng ký; và lúc mở app cho session khôi phục (`RestoreSessionUseCase`) — lần
+      claim trước bị crash / lỗi DB thì claim ở đây. Owner `'local'` → claim; owner là chính user → không làm gì; owner là tài khoản khác →
+      đăng xuất lại + `authDeviceOwnedByAnotherAccount` lên banner ("Máy này còn giữ dữ liệu của một tài khoản khác. Hãy đăng xuất tài khoản đó
+      trước."). Claim lỗi DB không huỷ đăng nhập: dòng vẫn `'local'`, log, lần mở sau claim lại.
+- [x] Test: claim trên DB thật trong bộ nhớ (8 — ghi offline vài ngày rồi đăng ký còn nguyên và thuộc uid; id seed tính lại, giao dịch đi theo,
+      `foreign_key_check` rỗng; seed sau claim không thêm gì; claim lần hai không đổi gì; danh sách đang mở không bao giờ trống; seed của user đã
+      có; trigger chặn bảng cuối → rollback toàn bộ; owner còn sau khi mở lại), use case (8), `GPSettingsOwnerContext` (4), `switchMap` (3), DI.
+      `FixedOwnerContext` thay `ownerId:` ở ~35 chỗ dựng repository trong test. Format / analyze sạch; 1157 → 1181 xanh + 1 skip. Simulator:
+      dev + dữ liệu mẫu mở Home bình thường qua owner context.
+- [ ] **Chưa kiểm:** claim thật trên máy sau khi đăng nhập (cần T5); thời gian claim ở 50k (ADR-0026). Đăng nhập tài khoản khác khi máy còn giữ
+      dữ liệu tài khoản cũ hiện chỉ bị từ chối — nút đăng xuất để gỡ là T6.
 
 **T5 — route đăng nhập + guard** (quyết định E: đăng nhập tùy chọn)
 
