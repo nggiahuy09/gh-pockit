@@ -1352,7 +1352,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 | T3   | Login + Register UI + validation ✅ Done (15/11, làm sớm) — `AuthCredentials` + 3 use case, `AuthFormBloc` một form cho cả đăng nhập / đăng ký, lỗi theo trường từng cái một (ADR-0016), `GPTextField` có mật khẩu; chưa nối router (T5); chi tiết ở _Kế hoạch W12_ dưới                                                                    |
 | T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated) ✅ Done (16/11, làm sớm) — session trong Keychain / Keystore (`flutter_secure_storage` 10.3.4), khôi phục không cần mạng trước frame đầu, bỏ sau khi cài lại, dừng refresh khi app ở nền; ADR-0039; chi tiết ở _Kế hoạch W12_ dưới         |
 | T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn ✅ Done (18/11, làm sớm) — `/login`, `/register` ngoài shell, guard chỉ trên hai route đó, `AuthBloc` trên router, thẻ Đồng bộ trong Cài đặt; đăng ký → claim → mở lại app chạy thật trên simulator; ADR-0041; chi tiết ở _Kế hoạch W12_ dưới |
-| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009)                                                                                                                                                                                       |
+| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) ✅ Done (24/11, làm sớm) — từ chối khi còn thay đổi chưa sync, xoá con trước cha trong một transaction, giữ `settings`, owner về `'local'` + seed lại; ADR-0042                       |
 | Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                                                                                            |
 | Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                                                                                                                      |
 
@@ -1479,12 +1479,25 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
       có `owner.id` và `auth.session_kept`. Mở lại app → vẫn đăng nhập (T4), Trang chủ số liệu y nguyên (Claim).
 - [ ] Deep link OS vào `/login` lúc khởi động lạnh sẽ gặp `unknown` và mở form dù đã đăng nhập — chưa đăng ký deep link nào.
 
-**T6 — logout** (quyết định C + D)
+**T6 — logout** (quyết định C + D) ✅ (24/11, ADR-0042)
 
-- [ ] Chặn khi còn dòng pending (C). Không chặn: cancel sync (chỗ để sẵn) → xoá con trước cha (transactions → categories → accounts) trong
-      một transaction → xoá session trong secure storage → `signOut`. Giữ `settings` (D); không xoá file DB.
-- [ ] Sau logout app về trạng thái chưa đăng nhập và vẫn dùng được (E): owner về `'local'`, `CategorySeeder` seed lại danh mục mặc định.
-- [ ] Test: bị chặn khi còn pending; sau logout không còn dòng tài chính nào, FK không lỗi, user sau không thấy dữ liệu user trước.
+- [x] **Chặn khi còn thay đổi chưa sync** (`countUnsyncedChanges`): mọi tài khoản, danh mục tự tạo / đã đổi tên / đã xoá, giao dịch `pending`
+      (kể cả đã xoá mềm — lệnh xoá cũng phải sync); danh mục seed chưa đụng không tính. Trước outbox chỉ `transactions` có `sync_status`, nên
+      tài khoản luôn tính → trước P4 máy có dữ liệu là không đăng xuất được (cố ý: thà kẹt còn hơn mất). W13 làm số này chính xác, W14 đổi thành
+      hộp xác nhận kèm số.
+- [x] `SignOutUseCase`: đếm (tự kiểm lại, không caller nào bỏ qua được) → xoá máy → kết thúc session. Xoá hỏng → vẫn đăng nhập, không mất gì.
+- [x] **Xoá một transaction** (`DeviceOwnerDao.wipeOwnerRows`): `transactions` → `categories` → `accounts` (con trước cha), xoá dòng
+      `owner.id`. Xoá cứng bản trên máy, server vẫn giữ — không enqueue gì. **Giữ `settings`** (ngôn ngữ). Máy chưa claim (`'local'`) không bao
+      giờ bị xoá.
+- [x] Sau đó app dùng được ngay (E): owner `adopt('local')`, seed lại danh mục mặc định. Huỷ sync: chưa có engine — W14.
+- [x] UI: nút Đăng xuất trên thẻ Đồng bộ (đã đăng nhập), `SignOutBloc` (idle / checking / blocked(n) / confirming / in progress / done /
+      error); hộp "Chưa thể đăng xuất" (một nút Đã hiểu) hoặc "Đăng xuất khỏi Pockit?" (Hủy / Đăng xuất), snackbar "Đã đăng xuất.". Use case của
+      bloc `late` — listener của Cài đặt dựng bloc mỗi lần vào trang, bản local-only không bao giờ bấm.
+- [x] Test: DB thật (đếm 4, release 3), use case 4, bloc 5, app thật 3 (bị chặn, xác nhận → xoá + đăng xuất, huỷ). 1194 → 1212 xanh + 1 skip.
+      Simulator (session T5, 5 tài khoản + 105 giao dịch): hộp chặn ghi đúng "Còn 110 thay đổi", không xoá gì. Đường xác nhận chỉ chạy được
+      trên máy khi đã có push.
+- [ ] Session tự hết → thẻ hiện Đăng nhập, không có Đăng xuất: dữ liệu vẫn của người cũ; đăng nhập tài khoản khác vẫn bị từ chối tới khi có cách
+      gỡ (P4).
 
 **Thêm — chế độ giao diện: sáng / tối / theo hệ thống** (thêm 15/11)
 
