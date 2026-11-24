@@ -1481,7 +1481,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 **T6 — logout** (quyết định C + D) ✅ (24/11, ADR-0042)
 
-- [x] **Chặn khi còn thay đổi chưa sync** (`countUnsyncedChanges`): mọi tài khoản, danh mục tự tạo / đã đổi tên / đã xoá, giao dịch `pending`
+- [x] **Chặn khi còn thay đổi chưa sync** (`countUnsyncedChanges`): mọi tài khoản, danh mục tự tạo, danh mục seed không còn y như lúc seed (đổi tên / icon / màu / đã xoá — so với `DefaultCategory`), giao dịch `pending`
       (kể cả đã xoá mềm — lệnh xoá cũng phải sync); danh mục seed chưa đụng không tính. Trước outbox chỉ `transactions` có `sync_status`, nên
       tài khoản luôn tính → trước P4 máy có dữ liệu là không đăng xuất được (cố ý: thà kẹt còn hơn mất). W13 làm số này chính xác, W14 đổi thành
       hộp xác nhận kèm số.
@@ -1493,7 +1493,9 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [x] UI: nút Đăng xuất trên thẻ Đồng bộ (đã đăng nhập), `SignOutBloc` (idle / checking / blocked(n) / confirming / in progress / done /
       error); hộp "Chưa thể đăng xuất" (một nút Đã hiểu) hoặc "Đăng xuất khỏi Pockit?" (Hủy / Đăng xuất), snackbar "Đã đăng xuất.". Use case của
       bloc `late` — listener của Cài đặt dựng bloc mỗi lần vào trang, bản local-only không bao giờ bấm.
-- [x] Test: DB thật (đếm 4, release 3), use case 4, bloc 5, app thật 3 (bị chặn, xác nhận → xoá + đăng xuất, huỷ). 1194 → 1212 xanh + 1 skip.
+- [x] **Sau review (24/11):** sửa đếm bỏ sót đổi icon / màu trên danh mục seed (đăng xuất sẽ xoá mất); bloc không nhận lần đăng xuất thứ hai trong
+      cùng lần vào Cài đặt (đăng xuất → đăng nhập lại → đăng xuất). Mỗi lỗi một test.
+- [x] Test: DB thật (đếm 5, release 3), use case 4, bloc 6, app thật 3 (bị chặn, xác nhận → xoá + đăng xuất, huỷ). 1194 → 1214 xanh + 1 skip.
       Simulator (session T5, 5 tài khoản + 105 giao dịch): hộp chặn ghi đúng "Còn 110 thay đổi", không xoá gì. Đường xác nhận chỉ chạy được
       trên máy khi đã có push.
 - [ ] Session tự hết → thẻ hiện Đăng nhập, không có Đăng xuất: dữ liệu vẫn của người cũ; đăng nhập tài khoản khác vẫn bị từ chối tới khi có cách
