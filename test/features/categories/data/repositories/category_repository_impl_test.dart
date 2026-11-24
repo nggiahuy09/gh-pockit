@@ -1,7 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
-import 'package:ghpockit/core/database/owner_id.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
@@ -14,6 +13,7 @@ import 'package:ghpockit/features/categories/domain/entities/category_type.dart'
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
 
@@ -41,8 +41,8 @@ void main() {
     clock = FakeClock(_startedAt);
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
-    repository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
-    seeder = CategorySeeder(clock: clock, dao: dao, uuidGenerator: uuid, ownerId: localOwnerId);
+    repository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    seeder = CategorySeeder(clock: clock, dao: dao, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
   });
 
   tearDown(() => db.close());
@@ -84,7 +84,7 @@ void main() {
 
     test('hides rows belonging to another owner', () async {
       await _create(repository);
-      final otherRepository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerId: 'someone-else');
+      final otherRepository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext('someone-else'));
 
       expect(await otherRepository.watchCategories().first, isEmpty);
     });
@@ -212,7 +212,13 @@ void main() {
 
     setUp(() {
       error = SqliteException(10, 'disk I/O error');
-      failing = CategoryRepositoryImpl(clock: clock, dao: _FailingStreamCategoryDao(db, () => error), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId);
+      failing = CategoryRepositoryImpl(
+        clock: clock,
+        dao: _FailingStreamCategoryDao(db, () => error),
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext(),
+      );
     });
 
     test('watchCategories reports an exception and logs an entity type, nothing else', () async {

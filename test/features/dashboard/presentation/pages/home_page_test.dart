@@ -5,12 +5,15 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_balance.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_page.dart';
 import 'package:ghpockit/features/dashboard/presentation/pages/home_view.dart';
@@ -21,6 +24,7 @@ import 'package:ghpockit/features/transactions/domain/repositories/transaction_r
 
 import '../../../../helpers/fake_transaction_repository.dart';
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/in_memory_theme_preference_store.dart';
 import '../../../../helpers/localization_harness.dart';
 import '../../../../helpers/results.dart';
 
@@ -40,12 +44,20 @@ void main() {
     getIt
       ..registerSingleton<AccountRepository>(_repositories.accounts)
       ..registerSingleton<TransactionRepository>(_repositories.transactions)
-      ..registerSingleton<GPClock>(_repositories.clock);
+      ..registerSingleton<GPClock>(_repositories.clock)
+      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository())
+      ..registerSingleton<GPAppearance>(GPAppearance(InMemoryThemePreferenceStore()));
   });
 
   tearDown(() async {
     await getIt.reset();
     await _repositories.close();
+  });
+
+  testWidgets('greets without a name: sign-up asks for none yet', (tester) async {
+    await _pumpApp(tester);
+
+    expect(find.widgetWithText(AppBar, 'Hello'), findsOneWidget);
   });
 
   testWidgets('with no account, offers to add one', (tester) async {

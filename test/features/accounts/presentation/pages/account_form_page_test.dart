@@ -5,6 +5,7 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/widgets/field.dart';
 import 'package:ghpockit/core/widgets/form_failure_banner.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
@@ -12,9 +13,12 @@ import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/accounts_page.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/in_memory_theme_preference_store.dart';
 import '../../../../helpers/localization_harness.dart';
 import '../../../../helpers/results.dart';
 
@@ -46,7 +50,9 @@ void main() {
     _repositories = InMemoryRepositories();
     getIt
       ..registerSingleton<AccountRepository>(_repositories.accounts)
-      ..registerSingleton<TransactionRepository>(_repositories.transactions);
+      ..registerSingleton<TransactionRepository>(_repositories.transactions)
+      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository())
+      ..registerSingleton<GPAppearance>(GPAppearance(InMemoryThemePreferenceStore()));
   });
 
   tearDown(() async {

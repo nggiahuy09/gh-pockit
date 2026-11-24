@@ -4,17 +4,25 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import '../core/database/database.dart';
+import '../core/database/settings_owner_context.dart';
+import '../core/domain/use_case.dart';
 import '../core/error/result.dart';
 import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/logging/app_logger.dart';
+import '../core/theme/appearance.dart';
 import '../core/utils/clock.dart';
 import '../features/accounts/domain/repositories/account_repository.dart';
+import '../features/auth/domain/repositories/auth_repository.dart';
+import '../features/auth/domain/repositories/device_owner_repository.dart';
+import '../features/auth/domain/usecases/restore_session_use_case.dart';
 import '../features/categories/data/seed/category_seeder.dart';
 import '../features/settings/presentation/debug/sample_data.dart';
 import '../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../features/transactions/domain/repositories/transaction_repository.dart';
 import '../features/transactions/domain/usecases/seed_sample_data_use_case.dart';
+import 'backend_config_error_app.dart';
+import 'config/backend_config.dart';
 import 'database_error_app.dart';
 import 'di/injector.dart';
 
@@ -27,6 +35,15 @@ Future<void> bootstrap(Widget Function() builder) async {
   configureCategoriesDependencies();
   configureTransactionsDependencies();
   final logger = getIt.get<GPAppLogger>();
+
+  // Before the database opens: a wrong env file must not touch this flavor's data (ADR-0038).
+  final backendConfig = GPBackendConfig.fromEnvironment(appFlavor);
+  if (backendConfig case GPInvalidBackendConfig(:final problem)) {
+    logger.error('backend config invalid', fields: {'flavor': appFlavor, 'problem': problem.name});
+    runApp(GPBackendConfigErrorApp(locale: GPLocale.fromPlatform(PlatformDispatcher.instance.locale), problem: problem));
+    return;
+  }
+  configureAuthDependencies(backendConfig);
 
   final previousOnError = FlutterError.onError;
   FlutterError.onError = (details) {
@@ -50,11 +67,20 @@ Future<void> bootstrap(Widget Function() builder) async {
     return;
   }
 
+  // Before any read or seed: every query filters on the owner (ADR-0040).
+  await getIt.get<GPSettingsOwnerContext>().load();
+
+  // No network call; also claims for a restored user whose last claim did not land (ADR-0039, ADR-0040).
+  await RestoreSessionUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>()).execute(const GPNoInput());
+
   // `DateFormat` throws for `vi` until these are loaded.
   await initializeDateFormatting();
 
   // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
   await getIt.get<GPLocalization>().init(PlatformDispatcher.instance.locale);
+
+  // Before the first frame too, so a dark choice never flashes light (ADR-0043).
+  await getIt.get<GPAppearance>().init();
 
   // Every launch, and idempotent, so one missed run cannot leave the categories empty for good. Not in `onUpgrade`: a migration has no owner or
   // clock, and would resurrect categories the user deleted.
@@ -84,6 +110,6 @@ Future<void> bootstrap(Widget Function() builder) async {
     }
   }
 
-  logger.info('app bootstrapped', fields: {'flavor': appFlavor});
+  logger.info('app bootstrapped', fields: {'flavor': appFlavor, 'backend': backendConfig is GPRemoteBackendConfig ? 'remote' : 'local_only'});
   runApp(builder.call());
 }

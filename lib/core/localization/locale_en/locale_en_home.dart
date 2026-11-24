@@ -4,7 +4,7 @@ final class GPLocaleEnHome implements GPLocaleBaseHome {
   const GPLocaleEnHome();
 
   @override
-  String get title => 'Home';
+  String get greeting => 'Hello';
 
   @override
   String get seeAllAccounts => 'See all';

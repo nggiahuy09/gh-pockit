@@ -6,9 +6,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/error/failure_extension.dart';
 import '../../../../core/localization/locale.dart';
 import '../../../../core/localization/localization_scope.dart';
+import '../../../../core/theme/appearance_scope.dart';
 import '../../../../core/theme/theme_context.dart';
+import '../../../../core/theme/theme_preference.dart';
 import '../../../../core/widgets/button.dart';
+import '../../../../core/widgets/dialog.dart';
 import '../../../../core/widgets/radio.dart';
+import '../../../auth/presentation/bloc/sign_out_bloc.dart';
+import '../../../auth/presentation/widgets/sync_account_card_widget.dart';
 import '../bloc/sample_data_bloc.dart';
 
 final class SettingsView extends StatelessWidget {
@@ -19,28 +24,84 @@ final class SettingsView extends StatelessWidget {
   /// Fire and forget: the notifier drives the repaint, and a local-only write has nothing to roll back (ADR-0004).
   void _handleLocaleChange(BuildContext context, GPLocale locale) => unawaited(context.localization.changeLocale(locale));
 
+  /// Same as the language: device-local, applied at once (ADR-0043).
+  void _handleAppearanceChange(BuildContext context, GPThemePreference preference) => unawaited(context.appearance.change(preference));
+
   @override
   Widget build(BuildContext context) {
     final locale = context.l10n;
     final viewLocale = locale.settings;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(viewLocale.title)),
-      body: ListView(
-        padding: EdgeInsets.all(context.spacing.md),
-        children: [
-          GPRadioList<GPLocale>(
-            // Untranslated on purpose: each language names itself.
-            options: [for (final option in GPLocale.values) GPRadioOption(locale: option.toPlatformLocale(), value: option, label: option.displayName)],
-            value: locale.locale,
-            label: viewLocale.language,
-            title: viewLocale.language,
-            onChanged: (selected) => _handleLocaleChange(context, selected),
-          ),
-          if (showsDebugTools) const _DebugTools(),
-        ],
+    return BlocListener<SignOutBloc, SignOutState>(
+      listener: _handleSignOutState,
+      child: Scaffold(
+        appBar: AppBar(title: Text(viewLocale.title)),
+        body: ListView(
+          padding: EdgeInsets.all(context.spacing.md),
+          children: [
+            const SyncAccountCardWidget(),
+            GPRadioList<GPLocale>(
+              // Untranslated on purpose: each language names itself.
+              options: [for (final option in GPLocale.values) GPRadioOption(locale: option.toPlatformLocale(), value: option, label: option.displayName)],
+              value: locale.locale,
+              label: viewLocale.language,
+              title: viewLocale.language,
+              onChanged: (selected) => _handleLocaleChange(context, selected),
+            ),
+            SizedBox(height: context.spacing.lg),
+            GPRadioList<GPThemePreference>(
+              options: [
+                GPRadioOption(value: GPThemePreference.system, description: viewLocale.appearanceSystemBody, label: viewLocale.appearanceSystem),
+                GPRadioOption(value: GPThemePreference.light, label: viewLocale.appearanceLight),
+                GPRadioOption(value: GPThemePreference.dark, label: viewLocale.appearanceDark),
+              ],
+              value: context.appearance.preference,
+              label: viewLocale.appearance,
+              title: viewLocale.appearance,
+              onChanged: (selected) => _handleAppearanceChange(context, selected),
+            ),
+            if (showsDebugTools) const _DebugTools(),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _handleSignOutState(BuildContext context, SignOutState state) async {
+    final locale = context.l10n;
+    final viewLocale = locale.auth;
+    final bloc = context.read<SignOutBloc>();
+    switch (state) {
+      case SignOutBlockedState(:final count):
+        await showGPDialog<void>(
+          actions: [GPDialogAction(value: null, label: viewLocale.gotIt)],
+          context: context,
+          icon: Icons.cloud_upload_outlined,
+          tone: GPDialogTone.warning,
+          message: viewLocale.signOutBlockedBody(count),
+          title: viewLocale.signOutBlockedTitle,
+        );
+        if (!bloc.isClosed) bloc.add(const SignOutCancelEvent());
+      case SignOutConfirmingState():
+        final confirmed = await showGPDialog<bool>(
+          actions: [
+            GPDialogAction.cancel(value: false, label: locale.root.cancel),
+            GPDialogAction(value: true, variant: GPButtonVariant.danger, label: viewLocale.signOut),
+          ],
+          context: context,
+          icon: Icons.logout,
+          tone: GPDialogTone.danger,
+          message: viewLocale.signOutConfirmBody,
+          title: viewLocale.signOutConfirmTitle,
+        );
+        if (!bloc.isClosed) bloc.add((confirmed ?? false) ? const SignOutConfirmEvent() : const SignOutCancelEvent());
+      case SignOutDoneState() when context.mounted:
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(viewLocale.signedOut)));
+      case SignOutErrorState(:final failure) when context.mounted:
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(failure.getMessage(locale))));
+      case SignOutIdleState() || SignOutCheckingState() || SignOutInProgressState() || SignOutDoneState() || SignOutErrorState():
+        break;
+    }
   }
 }
 

@@ -1005,12 +1005,12 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W10 · 09–15/11 🔴 Migration
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                    |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Migration chịu được bị ngắt giữa chừng: bọc `onUpgrade` trong một transaction; test cố ý ném lỗi giữa một bước → DB vẫn nguyên ở version cũ, lần mở sau chạy lại đủ. ADR ✅ Done (05/11, làm sớm) — mỗi bước một transaction kèm `user_version`, ADR-0029; chi tiết ở _W10 T2_ dưới                                      |
 | T3   | Chuyển sang `stepByStep` của drift (`drift_dev make-migrations`): mỗi bước dùng schema của chính version đó → bỏ `_v4AccountIndex` và guard `to >= 5`; fixture có kiểu thay SQL thô ✅ Done (05/11, làm sớm) — `migrationSteps` sinh từ dump, không dùng `make-migrations`; amendment ADR-0029; chi tiết ở _W10 T3_ dưới |
 | T4   | Chính sách hạ version (DB mới hơn app — TestFlight / sideload): chọn từ chối mở có màn lỗi hay chạy tiếp; test + ADR ✅ Done (05/11, làm sớm) — phương án A: từ chối, giữ nguyên file, màn lỗi riêng; ADR-0030; chi tiết ở _W10 T4_ dưới                                                                                 |
-| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng ⏩ Chuyển sang Flex W11 (05/11, theo bạn) ✅ Done (12/11, ở Flex W11) — DB thật đã ở v5 sẵn; dựng lại v4 từ bản sao, cài đè: giữ đủ mọi dòng; 50k: 145 ms; chi tiết ở _W11 Flex_        |
+| T5   | v4 → v5 trên máy thật: cài đè lên DB thật (sao lưu trước, so sau) và DB benchmark 50k — đo thời gian dựng lại index trên 50k dòng ⏩ Chuyển sang Flex W11 (05/11, theo bạn) ✅ Done (12/11, ở Flex W11) — DB thật đã ở v5 sẵn; dựng lại v4 từ bản sao, cài đè: giữ đủ mọi dòng; 50k: 145 ms; chi tiết ở _W11 Flex_       |
 | T6   | Một chuỗi đủ v1 → v5 có dữ liệu ở mỗi bước (settings v1, accounts v2, categories v3, transactions v4) → assert từng dòng còn nguyên ở v5 ✅ Done (05/11, làm sớm) — so từng cột ở v5 + app đọc được; chi tiết ở _W10 T6_ dưới                                                                                            |
 | Flex | ADR _Soft delete cho entity đồng bộ_ (golden rule 5 chưa có ADR). Checklist "khi đổi schema" vào CLAUDE.md §6. PR `task/W9` + `task/W10` → `dev`, `dev` → `main`, tag — ADR + checklist ✅ Done (05/11, ADR-0031); PR + tag chờ bạn; chi tiết ở _W10 Flex_ dưới                                                          |
 
@@ -1120,8 +1120,8 @@ deleted_at)` thay vì thêm hai index mới (probe: 4,9 so với 4,0 ms, nhỏ h
 
 ## W11 · 16–22/11 🔴 Supabase schema + RLS
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | Tạo Supabase project (dev), enable Auth email/password + flavor dev/prod + `env/dev.json`; bước build của CI thêm `--flavor dev` (W4 Q15, CLAUDE.md §9) ✅ Done (08/11, làm sớm) — flavor dev / prod cả Android lẫn iOS, `env/` ngoài git, CI build `--flavor dev`, project dev có email/password, tắt _Confirm email_; ADR-0032; chi tiết ở _W11 T2_ dưới                                                                                                   |
 | T3   | Postgres schema mirror local: accounts, categories, transactions (+ `version`, `updated_at`, `deleted_at`) ✅ Done (08/11, làm sớm) — `bigint` ms, CHECK từ vựng + FK theo owner chỉ ở server, RLS bật chưa policy, 35 assertion pgTAP, đã push lên dev; ADR-0033; chi tiết ở _W11 T3_ dưới                                                                                                                                                                  |
 | T4   | RLS policy: user chỉ đọc/ghi được row có `owner_id = auth.uid()`. **Test bằng cách thử đọc row của user khác — phải fail** ✅ Done (08/11, làm sớm) — 3 policy / bảng cho `authenticated`, không delete, thu hẹp grant, PK `(owner_id, id)`, 60 assertion pgTAP (local + dev), CI chạy chúng; ADR-0034; chi tiết ở _W11 T4_ dưới                                                                                                                             |
@@ -1346,19 +1346,224 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 ## W12 · 23–29/11 🔴 Auth client
 
-| Ngày | Task                                                                                                                                                  |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out)                                                                                       |
-| T3   | Login + Register UI + validation                                                                                                                      |
-| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated)                                                      |
-| T5   | `go_router` redirect guard theo auth state                                                                                                            |
-| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) |
-| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                      |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out) ✅ Done (15/11, làm sớm) — gói Dart thuần `supabase`, session trong bộ nhớ tới T4, file env có `ENV_FLAVOR`, file rỗng = local-only; ADR-0038; chi tiết ở _W12 T2_ dưới                                                                                                     |
+| T3   | Login + Register UI + validation ✅ Done (15/11, làm sớm) — `AuthCredentials` + 3 use case, `AuthFormBloc` một form cho cả đăng nhập / đăng ký, lỗi theo trường từng cái một (ADR-0016), `GPTextField` có mật khẩu; chưa nối router (T5); chi tiết ở _Kế hoạch W12_ dưới                                                                    |
+| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated) ✅ Done (16/11, làm sớm) — session trong Keychain / Keystore (`flutter_secure_storage` 10.3.4), khôi phục không cần mạng trước frame đầu, bỏ sau khi cài lại, dừng refresh khi app ở nền; ADR-0039; chi tiết ở _Kế hoạch W12_ dưới         |
+| T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn ✅ Done (18/11, làm sớm) — `/login`, `/register` ngoài shell, guard chỉ trên hai route đó, `AuthBloc` trên router, thẻ Đồng bộ trong Cài đặt; đăng ký → claim → mở lại app chạy thật trên simulator; ADR-0041; chi tiết ở _Kế hoạch W12_ dưới |
+| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) ✅ Done (24/11, làm sớm) — từ chối khi còn thay đổi chưa sync, xoá con trước cha trong một transaction, giữ `settings`, owner về `'local'` + seed lại; ADR-0042                       |
+| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không ✅ Done (24/11) — token đã ở Keychain / Keystore từ T4 (ADR-0039); audit sạch, test chặn listener `package:logging` / print, redactor che `session` / `jwt`; Trang chủ chào "Xin chào" |
+| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới) ✅ Done (24/11) — `GPAppearance` đọc trước frame đầu, key `theme.mode`, radio list trong Cài đặt; ADR-0043 |
 
 > **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
 > `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
 > enqueue như mutation tạo mới (ADR-0001). Test: ghi offline vài ngày rồi mới đăng ký → dữ liệu còn nguyên và thuộc user. Không có bước này thì bản có
 > auth làm ẩn dữ liệu đang ghi trên máy, và T6 (logout xoá DB) xoá luôn. Cùng tuần: lời chào "Xin chào, <tên>" trên Home (canvas `W8Home`) khi đã có hồ sơ.
+
+### Kế hoạch W12 (chốt 15/11)
+
+> Bạn chốt (15/11) năm quyết định dưới đây, mỗi cái thành một ADR **cùng PR với code của nó** (golden rule 10). Thứ tự làm khác bảng: claim
+> dữ liệu `'local'` đi trước T5 / T6, vì logout xoá DB mà chạy trước claim là xoá luôn dữ liệu đang ghi trên máy.
+>
+> **Thứ tự:** T2 ✅ → T3 → T4 (gồm secure storage của Flex) → Claim → T5 → T6 → chế độ giao diện → Flex. UI của login / đăng ký / chế độ
+> giao diện vẽ trước trên canvas _Pockit Design_.
+
+**Năm quyết định đã chốt**
+
+- **A — repository biết owner qua `GPOwnerContext`** (core), đọc ở mỗi lần gọi; thay hằng `localOwnerId` đang tiêm lúc DI. Không đăng ký lại
+  repository khi auth đổi: một singleton đổi giá trị dễ test hơn một scope get_it, và không bloc nào giữ repository cũ.
+- **B — claim đổi id danh mục seed sang v5(uid, key)**, cập nhật `category_id` của giao dịch theo, cùng một transaction với lần đổi owner.
+  Giữ v5(`'local'`, key) thì máy thứ hai seed ra v5(uid, key) → danh mục trùng, và `CategorySeeder` seed thêm một bộ cho uid.
+- **C — chặn logout khi còn dòng chưa sync** (`sync_status = 'pending'`), tới khi push chạy được (W14). Trước đó mọi dòng đều pending, nên
+  logout ở W12–W13 bị chặn và màn hình nói vì sao; nới ra thành hộp xác nhận kèm số dòng khi P4 có push.
+- **D — logout giữ bảng `settings`** (ngôn ngữ, chế độ giao diện): cài đặt của máy, không phải dữ liệu của người dùng, và không sync.
+- **E — đăng nhập là tùy chọn, chỉ để sao lưu và đồng bộ** (offline-first). App dùng đầy đủ khi chưa đăng nhập, dữ liệu thuộc `'local'`;
+  màn đăng nhập mở từ thẻ "Đồng bộ nhiều thiết bị" trong Hồ sơ, có nút đóng. Không redirect người chưa đăng nhập về `/login`, không splash
+  chờ auth: UI đọc DB local, trạng thái auth chỉ đổi thẻ Đồng bộ. Thay cho "chặn theo auth state" ở dòng T5 của bảng.
+
+**T3 — Login + Register UI + validation** ✅ (15/11)
+
+- [x] **`AuthCredentials`** (value object trong `domain/entities/`): email trim, rỗng → `authEmailEmpty`, sai dạng (`a@b.c`, không khoảng
+      trắng — server quyết phần còn lại) → `authEmailInvalid`; mật khẩu không trim, rỗng → `authPasswordEmpty`; sign-up < 6 →
+      `authPasswordTooShort` (khớp `minimum_password_length` trong `supabase/config.toml`). Sign-in không kiểm độ dài: tài khoản cũ có thể có
+      mật khẩu ngắn hơn luật mới, để server quyết. Kiểm email trước mật khẩu → lỗi đầu tiên là trường trên cùng (ADR-0016).
+- [x] Ba mã mới (`authEmailEmpty`, `authPasswordEmpty`, `authPasswordTooShort`), copy en / vi không ghi con số (quy ước: giới hạn nằm ở
+      domain, hiện cạnh trường — helper "Ít nhất 6 ký tự." dưới ô mật khẩu lúc đăng ký).
+- [x] `SignInUseCase`, `SignUpUseCase` (kiểm `AuthCredentials` rồi mới gọi repository), `SignOutUseCase` (chỉ kết thúc session; xoá dữ liệu là
+      T6). Input `toLog()` rỗng: cả hai trường là thông tin đăng nhập.
+- [x] **Một `AuthFormBloc` thay vì hai bloc**, `AuthFormMode { signIn, signUp }` đổi tại chỗ và giữ cả email lẫn mật khẩu — "Email này đã có
+      tài khoản" có nút "Đăng nhập với email này". Form một state (`status`, `_copyWith`), sửa trường nào xoá lỗi của trường đó hoặc lỗi không
+      thuộc trường nào (ADR-0016); gửi thêm lần nữa hay đổi mode lúc đang gửi đều bị bỏ qua. `toString` không in email / mật khẩu.
+- [x] `AuthFormField.fromFailure` không wildcard: email / mật khẩu lên trường; sai thông tin, rate limit, mạng, không có backend lên banner.
+- [x] **`GPTextField`** thêm `obscureText` (luôn tắt autocorrect + gợi ý), `autocorrect`, `autofillHints`, `trailing` (nút hiện / ẩn mật khẩu).
+- [x] `AuthPage` / `AuthView`: nút đóng (`popOrGoNamed` về Home), `AutofillGroup` + `finishAutofillContext` lúc thành công để trình quản lý
+      mật khẩu lưu; thành công → đóng + snackbar "Đã đăng nhập." / "Đã tạo tài khoản." (canvas vẽ một màn xác nhận có câu claim — để tới khi
+      có Claim). Chuỗi mới ở `GPLocaleBaseAuth`, cả en / vi. Chưa nối router (T5).
+- [x] Test: `AuthCredentials` (11), ba use case (8), field enum (3), bloc (13), trang qua `GoRouter` thật (11, có tiếng Việt), `GPTextField`
+      (+2). Format / analyze sạch; test 1081 → 1129 xanh + 1 skip.
+- [x] Canvas `W12Auth`: lỗi theo trường từng cái một (trước vẽ cả hai cùng lúc), copy "Mật khẩu quá ngắn." khớp code.
+
+**T4 — session restore + `AuthBloc`** ✅ (16/11, ADR-0039; secure storage của Flex dời vào đây)
+
+- [x] `flutter_secure_storage` **10.3.4** (bạn duyệt 16/11; bản mới nhất resolve được trên Dart 3.9.2, 11.x đã có) sau `GPSecureStore`
+      (`core/security`) — chỉ `GPFlutterSecureStore` import gói. iOS `first_unlock_this_device`: sync nền đọc được sau lần mở khoá đầu, không
+      vào bản sao lưu iCloud, không sang máy khác. Pod cài được, build simulator chạy.
+- [x] **`SupabaseSessionKeeper`** (data): ghi session (JSON của chính GoTrue) vào `auth.session` khi `signedIn` / `tokenRefreshed` /
+      `userUpdated`, xoá khi `signedOut`; ghi lần lượt (xoá của sign-out không bao giờ chạy trước lần ghi nó theo sau). Ghi hỏng → log, session
+      vẫn chạy trong bộ nhớ.
+- [x] **Khôi phục không gọi mạng** (`setInitialSession`, không `recoverSession` — cái sau refresh token hết hạn qua mạng trước, offline là
+      mất session). Token hết hạn vẫn về, ticker làm mới khi có mạng; chỉ khi server từ chối refresh token mới đăng xuất.
+- [x] **Cài lại thì bỏ session cũ:** Keychain iOS sống qua lần gỡ app, DB thì không → mỗi lần giữ session ghi kèm dòng
+      `auth.session_kept` trong `settings` (ghi trước session); thấy session mà không có dấu → của lần cài trước → xoá. Giá trị đọc không
+      được → xoá; store không đọc được → bắt đầu như chưa đăng nhập. Không cái nào chặn việc mở app.
+- [x] `startAutoRefresh` / `stopAutoRefresh` theo lifecycle (`AppLifecycleListener`: dừng khi `paused`, chạy lại khi `resumed`).
+- [x] Bootstrap gọi `RestoreSessionUseCase` sau khi mở DB, trước frame đầu → trạng thái đầu tiên đã là thật, thẻ Đồng bộ không nháy. Tốn một
+      lần đọc Keychain + một query `settings`, chỉ ở bản có backend.
+- [x] `AuthRepository.watchAuthStatus()` (`AuthSignedIn(user)` / `AuthSignedOut` / `AuthLocalOnly`) + `restoreSession()`. Bản Supabase đọc
+      session hiện tại ở mỗi event và bỏ lặp: `onAuthStateChange` là `ReplaySubject`, phát lại cả lịch sử cho người nghe mới. Viết bằng
+      `StreamController`, không `async*` — huỷ một `async*` đang dừng ở `await for` thì chờ một event có khi không bao giờ tới (test đã treo
+      đúng chỗ này).
+- [x] `AuthBloc`: `AuthUnknownState` → `AuthSignedInState(user)` / `AuthSignedOutState` / `AuthLocalOnlyState`; chỉ theo dõi, không khôi phục.
+      Chưa provide — T5 đặt nó trên router. State không tên `AuthState` (trùng GoTrue).
+- [x] `unknown` không chặn gì (E): shell hiện ngay từ DB local, chỉ thẻ Đồng bộ trong Hồ sơ chờ trạng thái.
+- [x] Test: keeper 12 (GoTrue thật qua `MockClient`, DB + secure store trong bộ nhớ; lifecycle: không refresh lúc ở nền, refresh khi quay lại),
+      repository watch / restore 3, bloc 4, `AuthStatus` 2, use case +2, local-only +2, DI. Fixture GoTrue gom vào `test/helpers/gotrue_fixtures.dart`.
+      Test refresh offline bằng retry thật của GoTrue mất 12 s → thay bằng client con phát lỗi thẳng. Format / analyze sạch; 1132 → 1157 xanh + 1 skip.
+- [ ] **Còn lại / chưa kiểm:** đăng nhập thật rồi mở lại app (cần T5 để vào màn đăng nhập); đo lại cold start có session (ADR-0026);
+      Android auto-backup vẫn bật (DB + prefs của secure storage lên Google Drive) — quyết định riêng.
+
+**Claim dữ liệu `'local'`** (nợ W8; quyết định A + B) ✅ (16/11, ADR-0040)
+
+> Bạn chốt thêm (16/11): **máy có một owner**, một dòng `owner.id` trong `settings`: `'local'` tới lần claim, rồi uid, chỉ đổi lại khi đăng xuất
+> có chủ đích (T6, xoá máy). Session tự hết (server từ chối refresh token) thì giữ nguyên owner — dữ liệu vẫn hiện, vẫn của người đó.
+
+- [x] **`GPOwnerContext`** (`core/database`) thay hằng `localOwnerId` ở cả ba repository, `CategorySeeder` và `BenchmarkDatasetSeeder`:
+      `current` cho lần ghi / đọc một lần, `watch()` cho truy vấn — mọi `watch…` chạy qua `switchMap` trên nó, nên một danh sách đang mở theo
+      owner mới thay vì trống. `GPSettingsOwnerContext` giữ bản cache; bootstrap `load()` sau khi mở DB, trước mọi lần đọc / seed. `switchMap`
+      chuyển vào `core/extensions` (transformer `restartable` của bloc dùng chung).
+- [x] **Claim một transaction** (`DeviceOwnerDao`): `PRAGMA defer_foreign_keys = ON` (pragma này chạy được trong transaction, khác
+      `foreign_keys`); danh mục seed đổi id sang v5(`uid|name_key`) (`CategorySeeder.seededId`, một chỗ duy nhất) và giao dịch đi theo; nếu seed
+      của user đã có trên máy thì xoá hẳn bản `'local'` (chưa sync bao giờ, không cần tombstone); danh mục tự tạo giữ id v7. Rồi ba bảng
+      `'local'` → uid với `updated_at = now`, `version + 1`, cùng dòng `owner.id`. `sync_status` giữ `pending` — W13 T5 backfill mutation.
+- [x] **Ngay sau commit, `adopt(uid)` đồng bộ** — không đọc lại DB: test bắt được danh sách đang mở phát `[]` một nhịp khi drift chạy lại truy
+      vấn cho `'local'` trước khi owner kịp đổi.
+- [x] **Khi nào claim** (`ClaimLocalDataUseCase`): sau đăng nhập / đăng ký; và lúc mở app cho session khôi phục (`RestoreSessionUseCase`) — lần
+      claim trước bị crash / lỗi DB thì claim ở đây. Owner `'local'` → claim; owner là chính user → không làm gì; owner là tài khoản khác →
+      đăng xuất lại + `authDeviceOwnedByAnotherAccount` lên banner ("Máy này còn giữ dữ liệu của một tài khoản khác. Hãy đăng xuất tài khoản đó
+      trước."). Claim lỗi DB không huỷ đăng nhập: dòng vẫn `'local'`, log, lần mở sau claim lại.
+- [x] Test: claim trên DB thật trong bộ nhớ (8 — ghi offline vài ngày rồi đăng ký còn nguyên và thuộc uid; id seed tính lại, giao dịch đi theo,
+      `foreign_key_check` rỗng; seed sau claim không thêm gì; claim lần hai không đổi gì; danh sách đang mở không bao giờ trống; seed của user đã
+      có; trigger chặn bảng cuối → rollback toàn bộ; owner còn sau khi mở lại), use case (8), `GPSettingsOwnerContext` (4), `switchMap` (3), DI.
+      `FixedOwnerContext` thay `ownerId:` ở ~35 chỗ dựng repository trong test. Format / analyze sạch; 1157 → 1181 xanh + 1 skip. Simulator:
+      dev + dữ liệu mẫu mở Home bình thường qua owner context.
+- [ ] **Chưa kiểm:** claim thật trên máy sau khi đăng nhập (cần T5); thời gian claim ở 50k (ADR-0026). Đăng nhập tài khoản khác khi máy còn giữ
+      dữ liệu tài khoản cũ hiện chỉ bị từ chối — nút đăng xuất để gỡ là T6.
+
+**T5 — route đăng nhập + guard** (quyết định E: đăng nhập tùy chọn) ✅ (18/11, ADR-0041)
+
+- [x] `/login`, `/register` ngoài shell (che dock), cùng `AuthPage` (mode theo route, vẫn đổi tại chỗ). Đóng / thành công → `popOrGoNamed`
+      về Cài đặt. Chưa có màn Hồ sơ: Cài đặt (mở từ Trang chủ) đóng vai đó, đúng chỗ canvas đặt thẻ "Đồng bộ nhiều thiết bị".
+- [x] **Guard chỉ trên hai route này** (`authRouteRedirect`, hàm thuần): chưa đăng nhập / unknown → mở; đã đăng nhập / local-only → về Cài
+      đặt. Không route nào trong shell cần đăng nhập, không splash. **Không `refreshListenable`:** refresh cũng chạy khi chính form đăng nhập
+      xong và đang tự đóng — hai bên giành nhau một route.
+- [x] `AuthBloc` trên router trong `GPApp`, `lazy: false` — trạng thái đã có trước lần điều hướng đầu tiên.
+- [x] **Thẻ Đồng bộ** (`SyncAccountCardWidget`) đầu trang Cài đặt: unknown / local-only → ẩn; chưa đăng nhập → lời giải thích + nút Đăng nhập;
+      đã đăng nhập → email. Đăng xuất và số thay đổi chưa sao lưu là T6 / P4.
+- [x] Test: bảng redirect (4); app thật với auth giả (9 — thẻ mở đăng nhập che dock rồi đóng về Cài đặt; `/register` mở đăng ký; đăng nhập
+      xong về Cài đặt có email; đã đăng nhập / local-only bị đẩy khỏi hai route; local-only không thẻ; unknown vẫn mở Trang chủ). `GPApp` cần
+      `AuthRepository` trong test → `registerShellFakes` đăng ký bản local-only; Cài đặt chạy riêng cần `AuthBloc`. 1181 → 1194 xanh + 1 skip.
+- [x] **Chạy thật lần đầu (simulator, dev, `supabase start` trên localhost — không tạo tài khoản trên project dev):** Cài đặt → Đăng nhập →
+      Tạo tài khoản → về Cài đặt, thẻ hiện email, snackbar "Đã tạo tài khoản."; iOS gợi ý "Use Strong Password" (autofill `newPassword` tới
+      được hệ điều hành). DB trong container app: 5 tài khoản / 11 danh mục / 105 giao dịch thuộc uid, `version` 2, giao dịch vẫn `pending`,
+      có `owner.id` và `auth.session_kept`. Mở lại app → vẫn đăng nhập (T4), Trang chủ số liệu y nguyên (Claim).
+- [ ] Deep link OS vào `/login` lúc khởi động lạnh sẽ gặp `unknown` và mở form dù đã đăng nhập — chưa đăng ký deep link nào.
+
+**T6 — logout** (quyết định C + D) ✅ (24/11, ADR-0042)
+
+- [x] **Chặn khi còn thay đổi chưa sync** (`countUnsyncedChanges`): mọi tài khoản, danh mục tự tạo, danh mục seed không còn y như lúc seed (đổi tên / icon / màu / đã xoá — so với `DefaultCategory`), giao dịch `pending`
+      (kể cả đã xoá mềm — lệnh xoá cũng phải sync); danh mục seed chưa đụng không tính. Trước outbox chỉ `transactions` có `sync_status`, nên
+      tài khoản luôn tính → trước P4 máy có dữ liệu là không đăng xuất được (cố ý: thà kẹt còn hơn mất). W13 làm số này chính xác, W14 đổi thành
+      hộp xác nhận kèm số.
+- [x] `SignOutUseCase`: đếm (tự kiểm lại, không caller nào bỏ qua được) → xoá máy → kết thúc session. Xoá hỏng → vẫn đăng nhập, không mất gì.
+- [x] **Xoá một transaction** (`DeviceOwnerDao.wipeOwnerRows`): `transactions` → `categories` → `accounts` (con trước cha), xoá dòng
+      `owner.id`. Xoá cứng bản trên máy, server vẫn giữ — không enqueue gì. **Giữ `settings`** (ngôn ngữ). Máy chưa claim (`'local'`) không bao
+      giờ bị xoá.
+- [x] Sau đó app dùng được ngay (E): owner `adopt('local')`, seed lại danh mục mặc định. Huỷ sync: chưa có engine — W14.
+- [x] UI: nút Đăng xuất trên thẻ Đồng bộ (đã đăng nhập), `SignOutBloc` (idle / checking / blocked(n) / confirming / in progress / done /
+      error); hộp "Chưa thể đăng xuất" (một nút Đã hiểu) hoặc "Đăng xuất khỏi Pockit?" (Hủy / Đăng xuất), snackbar "Đã đăng xuất.". Use case của
+      bloc `late` — listener của Cài đặt dựng bloc mỗi lần vào trang, bản local-only không bao giờ bấm.
+- [x] **Sau review (24/11):** sửa đếm bỏ sót đổi icon / màu trên danh mục seed (đăng xuất sẽ xoá mất); bloc không nhận lần đăng xuất thứ hai trong
+      cùng lần vào Cài đặt (đăng xuất → đăng nhập lại → đăng xuất). Mỗi lỗi một test.
+- [x] Test: DB thật (đếm 5, release 3), use case 4, bloc 6, app thật 3 (bị chặn, xác nhận → xoá + đăng xuất, huỷ). 1194 → 1214 xanh + 1 skip.
+      Simulator (session T5, 5 tài khoản + 105 giao dịch): hộp chặn ghi đúng "Còn 110 thay đổi", không xoá gì. Đường xác nhận chỉ chạy được
+      trên máy khi đã có push.
+- [ ] Session tự hết → thẻ hiện Đăng nhập, không có Đăng xuất: dữ liệu vẫn của người cũ; đăng nhập tài khoản khác vẫn bị từ chối tới khi có cách
+      gỡ (P4).
+
+**Thêm — chế độ giao diện: sáng / tối / theo hệ thống** ✅ (24/11, ADR-0043)
+
+- [x] `GPThemePreference { system, light, dark }` (lưu theo `storageValue`, không theo tên Dart; giá trị lạ → coi như chưa chọn, không đoán),
+      `GPThemePreferenceStore` + `GPDriftThemePreferenceStore` (key `theme.mode`, đọc / ghi hỏng không bao giờ ném lỗi), theo đúng mẫu ngôn ngữ.
+- [x] `GPAppearance` (singleton, `ChangeNotifier`): bootstrap `init()` ngay sau ngôn ngữ, trước `runApp` → chọn Tối không bao giờ loé một frame
+      sáng. `GPApp` nghe cả ngôn ngữ lẫn giao diện, đưa `themeMode` cho `MaterialApp`, và `GPAppearanceScope` cho Cài đặt (`context.appearance`).
+- [x] Cài đặt: radio list "Giao diện" dưới "Ngôn ngữ" — Theo hệ thống (kèm mô tả) / Sáng / Tối, chọn là đổi ngay. Nằm thẳng trong Cài đặt
+      như ngôn ngữ, chưa tách màn riêng như canvas — chờ có màn Hồ sơ. Không sync, giữ khi đăng xuất.
+- [x] Test: preference / controller / store trên DB thật (9), `GPApp` theo lựa chọn + chọn Tối trong Cài đặt đổi cả app (2), DI. 1214 → 1226
+      xanh + 1 skip. Simulator (bản local-only, máy để Sáng): Cài đặt → Tối → cả app tối ngay, `settings` có `theme.mode = dark`, mở lại vẫn tối.
+
+**Flex** ✅ (24/11)
+
+- [x] **Audit log:** không có listener `package:logging` (`Logger.root`, `onRecord`), không `print` / `debugPrint` trong `lib/`; mọi dòng log
+      của auth chỉ mang kiểu lỗi, mã GoTrue, HTTP status, uid, số đếm — không email, mật khẩu, token, message hay object exception. Khoá lại bằng
+      `logging_listener_guard_test.dart` (hỏng khi ai đó thêm listener / print — GoTrue log cả session ở FINEST) và thêm `session`, `jwt` vào
+      khoá nhạy cảm của redactor. ADR-0039 có mục _Amended_.
+- [x] **Lời chào trên Trang chủ:** thanh trên cùng đổi từ "Trang chủ" (trùng nhãn tab ngay dưới) thành "Xin chào" / "Hello". Đăng ký chưa hỏi
+      tên nên chưa có "Xin chào, <tên>" — chờ màn Hồ sơ.
+- [x] Test +3 (redactor, guard, lời chào). 1226 → 1229 xanh + 1 skip.
+- [ ] PR W12 → tag `v0.3-auth` (sau PR `dev` → `main` và tag của W10).
+
+### W12 T2 — auth sau một repository, trên client Supabase Dart thuần, file env tự khai flavor (15/11, làm sớm, ADR-0038)
+
+> Bạn chọn (15/11): gói Dart thuần `supabase` 2.16.1 thay `supabase_flutter` (11 gói thay vì 33, không plugin native, không singleton, không
+> lưu session vào SharedPreferences mặc định); session chỉ trong bộ nhớ tới T4; `SUPABASE_URL` rỗng = local-only. Hỏi lại lần hai: prod chưa có
+> project và `env/prod.json` rỗng, nên "từ chối ở prod" sẽ khoá bản prod đang giữ dữ liệu thật → prod cũng local-only tới khi có project prod.
+
+- [x] **Domain:** `UserEntity(id, email)` — `id` là uid của server, sau này là `owner_id`; `toString` chỉ in id. `AuthRepository`: `signUp`,
+      `signIn`, `signOut` trả `GPResult`. Chưa có use case: T3 thêm cùng bloc (ADR-0013), kèm validate email / mật khẩu phía client.
+- [x] **`SupabaseAuthRepository`:** nhận `GoTrueClient`, map mã GoTrue → failure. Đã đọc response thật từ GoTrue local (`supabase start`,
+      chỉ db + auth + kong): sai mật khẩu và email chưa đăng ký **cùng** `400 invalid_credentials` → một failure, copy không được nói cái nào;
+      `user_already_exists` / `email_exists` → `authEmailTaken`; `weak_password` → `authPasswordWeak`; `email_address_invalid` →
+      `authEmailInvalid`; 429 / `over_*_rate_limit` → `GPRateLimitedFailure` (mới); không tới được server → `GPNetworkFailure`; 5xx, mã lạ,
+      200 không parse được → `GPUnknownFailure`. **`validation_failed` để unknown có chủ đích:** GoTrue trả nó cho cả email sai dạng lẫn mật
+      khẩu rỗng, không chỉ ra trường nào → T3 phải chặn cả hai trước khi gọi. Không dùng `GPAuthenticationFailure` (đó là 401 có refresh, W19).
+- [x] **Sign-out luôn đăng xuất máy:** GoTrue bỏ session local trước khi gọi `/logout`; offline thì log `warn` và vẫn `GPOk`. 401/403/404 lúc
+      revoke = session đã mất, GoTrue tự bỏ qua (đã thấy `403 session_not_found` ở lần logout thứ hai).
+- [x] **Implicit flow, không PKCE:** PKCE cần chỗ lưu verifier — GoTrue `assert` có store ở mỗi `signUp`, thiếu là crash — và chỉ phục vụ
+      đăng nhập qua redirect, email/password không dùng.
+- [x] **Log:** chỉ kiểu exception, mã GoTrue, HTTP status; không email, mật khẩu, token, message của server, không object exception. Test chạy
+      mọi nhánh rồi tìm từng thứ trong log. Lưu ý cho Flex: GoTrue tự log cả session (kèm token) ở mức FINEST qua `package:logging`; app chưa
+      có listener nào nên bị bỏ — Sentry (`LoggingIntegration`) hay bất cứ ai gắn `Logger.root.onRecord` sau này phải lọc nó.
+- [x] **Không dùng bản cũ:** sign-up qua `supabase_flutter` mặc định ghi refresh token vào SharedPreferences — đúng thứ blueprint §34 cấm.
+      Bỏ nó thì T4 tự viết phần dừng / chạy lại auto refresh theo lifecycle (~15 dòng), và chưa có deep link (reset mật khẩu qua email cần
+      `app_links` + PKCE sau này).
+- [x] **`ENV_FLAVOR` trong `env/<flavor>.json`, kiểm trước khi mở DB** (`GPBackendConfig.resolve`): hai key rỗng → local-only, bất kể
+      `ENV_FLAVOR` (nới 15/11: `fvm flutter run` trơn không có file env từng ra màn `flavorMismatch` — không có backend thì không có gì để
+      nhầm); có backend mà lệch flavor hoặc thiếu key → `flavorMismatch`; local-only (`LocalOnlyAuthRepository`: sign up / in trả `GPBackendUnavailableFailure` mới, sign out
+      `GPOk`); một rỗng một có → `backendIncomplete`; URL không phải origin trần (path / query / fragment — bắt được link dashboard dán nhầm
+      hồi W11) → `urlMalformed`; `http://` chỉ được ở dev (stack local), prod thì `urlMalformed`. Bị từ chối → `GPBackendConfigErrorApp`
+      ghi tên lỗi lên màn hình (iOS không hiện log của app), dùng chung khung `GPStartupErrorApp` với màn lỗi DB.
+- [x] **DI:** `configureAuthDependencies(config)` — remote dựng một `SupabaseClient` (implicit flow) rồi đưa `auth` cho repository; local-only
+      không dựng client. `app/di/injector.dart` là file duy nhất ngoài `data/` import `supabase` (ADR-0037 sửa lại câu "chỉ `data/`").
+- [x] **Kiểm:** 21 test repository chạy `GoTrueClient` thật qua `MockClient` (`http` 1.6.0, dev dependency, vốn đã trong lock qua
+      `supabase`), response chép từ GoTrue local; 16 test config; DI, màn lỗi config, entity, mapper. Format / analyze sạch; test 1031 → 1081
+      xanh + 1 skip. Tay: repository dựng từ DI chạy với GoTrue local — sign up, email trùng, sai mật khẩu, mật khẩu yếu, sign in, sign out
+      (session mất); file probe đã xoá. Simulator iPhone 17 Pro: `--flavor prod` + `env/dev.json` → màn "This build is misconfigured" ghi
+      `flavorMismatch`; `--flavor dev` + `env/dev.json` → Home như cũ.
+- [x] `env/example.json`, `env/dev.json`, `env/prod.json` đã thêm `ENV_FLAVOR` (hai file sau gitignored, chỉ thêm key, giữ nguyên giá trị).
+      ADR-0038; ADR-0037 và ADR-0032 có mục _Amended_; CLAUDE.md §2 / §5 / §14; README (_Flavors and env_).
+- **Còn lại:** chưa soát trên máy thật. Khi tạo project prod: file prod rỗng
+  phải thành bị từ chối, cùng PR. Mỗi clone cũ có file env đã điền backend phải thêm `ENV_FLAVOR`, không thì app không mở.
 
 **🏁 Milestone P3:** **Tag `v0.3-auth`.**
 

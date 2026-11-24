@@ -117,5 +117,30 @@ void main() {
       expect(find.bySemanticsLabel(RegExp('Name')), findsOneWidget);
       semantics.dispose();
     });
+
+    testWidgets('an obscured field never autocorrects or suggests, and passes its autofill hints', (tester) async {
+      await pumpOnPhone(
+        tester,
+        localization: en,
+        child: const GPTextField(autofillHints: [AutofillHints.password], label: 'Password', obscureText: true),
+      );
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.obscureText, isTrue);
+      expect(field.autocorrect, isFalse);
+      expect(field.enableSuggestions, isFalse);
+      expect(field.autofillHints, [AutofillHints.password]);
+    });
+
+    testWidgets('autocorrect can be turned off, and a trailing widget sits inside the box', (tester) async {
+      await pumpOnPhone(
+        tester,
+        localization: en,
+        child: const GPTextField(trailing: Icon(Icons.visibility_outlined), label: 'Email', autocorrect: false),
+      );
+
+      expect(tester.widget<TextField>(find.byType(TextField)).autocorrect, isFalse);
+      expect(find.descendant(of: find.byType(GPFieldBox), matching: find.byIcon(Icons.visibility_outlined)), findsOneWidget);
+    });
   });
 }

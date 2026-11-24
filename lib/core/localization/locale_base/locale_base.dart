@@ -6,6 +6,8 @@ part 'locale_base_home.dart';
 
 part 'locale_base_accounts.dart';
 
+part 'locale_base_auth.dart';
+
 part 'locale_base_transactions.dart';
 
 part 'locale_base_budgets.dart';
@@ -27,6 +29,7 @@ abstract class GPLocaleBase {
   GPLocaleBaseRoot get root;
   GPLocaleBaseHome get home;
   GPLocaleBaseAccounts get accounts;
+  GPLocaleBaseAuth get auth;
   GPLocaleBaseTransactions get transactions;
   GPLocaleBaseBudgets get budgets;
   GPLocaleBaseCategories get categories;

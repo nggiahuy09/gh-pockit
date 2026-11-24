@@ -16,6 +16,7 @@ import 'package:ghpockit/features/transactions/domain/usecases/create_transactio
 
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
+import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 
 final _occurredAt = DateTime.utc(2026, 9, 30, 5, 30);
@@ -33,9 +34,9 @@ void main() {
     final logger = RecordingLogger(clock);
 
     createTransaction = CreateTransactionUseCase(
-      CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
+      CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext()),
       clock,
-      TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerId: localOwnerId),
+      TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext()),
     );
 
     for (final id in ['acc-cash', 'acc-bank']) {

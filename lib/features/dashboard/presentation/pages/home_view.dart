@@ -30,7 +30,7 @@ final class HomeView extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(locale.home.title),
+        title: Text(locale.home.greeting),
         actions: [IconButton(tooltip: locale.settings.title, icon: const Icon(Icons.settings_outlined), onPressed: () => context.goNamed(RouteNames.settings))],
       ),
       body: BlocBuilder<HomeAccountsBloc, HomeAccountsState>(builder: (_, state) => _HomeBody(state: state)),

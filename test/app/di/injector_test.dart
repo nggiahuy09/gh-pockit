@@ -1,17 +1,31 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:ghpockit/app/config/backend_config.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/database/database.dart';
+import 'package:ghpockit/core/database/owner_context.dart';
+import 'package:ghpockit/core/database/settings_owner_context.dart';
 import 'package:ghpockit/core/localization/drift_locale_store.dart';
 import 'package:ghpockit/core/localization/locale_store.dart';
 import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
+import 'package:ghpockit/core/security/flutter_secure_store.dart';
+import 'package:ghpockit/core/security/secure_store.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
+import 'package:ghpockit/core/theme/drift_theme_preference_store.dart';
+import 'package:ghpockit/core/theme/theme_preference_store.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
 import 'package:ghpockit/features/accounts/data/repositories/account_repository_impl.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/datasources/supabase_session_keeper.dart';
+import 'package:ghpockit/features/auth/data/repositories/device_owner_repository_impl.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/supabase_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/device_owner_repository.dart';
 import 'package:ghpockit/features/categories/data/daos/category_dao.dart';
 import 'package:ghpockit/features/categories/data/repositories/category_repository_impl.dart';
 import 'package:ghpockit/features/categories/data/seed/category_seeder.dart';
@@ -20,6 +34,7 @@ import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/repositories/transaction_repository_impl.dart';
 import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   group('configureCoreDependencies', () {
@@ -32,7 +47,15 @@ void main() {
 
     tearDown(() => container.reset());
 
-    test('registers the three core abstractions', () {
+    test('registers the appearance on the settings table, once', () async {
+      await _useMemoryDatabase(container);
+
+      expect(container.get<GPThemePreferenceStore>(), isA<GPDriftThemePreferenceStore>());
+      expect(container.get<GPAppearance>(), same(container.get<GPAppearance>()));
+    });
+
+    test('registers the core abstractions', () {
+      expect(container.get<GPSecureStore>(), isA<GPFlutterSecureStore>());
       expect(container.get<GPClock>(), isA<GPSystemClock>());
       expect(container.get<GPUuidGenerator>(), isA<GPUuidGeneratorImpl>());
       expect(container.get<GPAppLogger>(), isA<GPDeveloperLogger>());
@@ -160,6 +183,48 @@ void main() {
       configureCategoriesDependencies(container);
 
       expect(container.get<BenchmarkDatasetSeeder>(), isA<BenchmarkDatasetSeeder>());
+    });
+  });
+
+  group('configureAuthDependencies', () {
+    late GetIt container;
+
+    setUp(() async {
+      container = GetIt.asNewInstance();
+      configureCoreDependencies(container);
+      await _useMemoryDatabase(container);
+      // The device owner reseeds the default categories after a sign-out.
+      configureCategoriesDependencies(container);
+    });
+
+    tearDown(() => container.reset());
+
+    test('a remote config binds the Supabase repository, built on one shared client and one keeper', () {
+      configureAuthDependencies(const GPRemoteBackendConfig(url: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_test'), container);
+
+      expect(container.get<AuthRepository>(), isA<SupabaseAuthRepository>());
+      expect(container.get<SupabaseClient>(), same(container.get<SupabaseClient>()));
+      expect(container.get<SupabaseSessionKeeper>(), same(container.get<SupabaseSessionKeeper>()));
+      expect(container.isRegistered<SupabaseAuthRepository>(), isFalse);
+    });
+
+    test('both configs bind the device owner repository, on the one owner context the repositories read', () {
+      configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
+
+      expect(container.get<DeviceOwnerRepository>(), isA<DeviceOwnerRepositoryImpl>());
+      expect(container.get<GPOwnerContext>(), same(container.get<GPSettingsOwnerContext>()));
+    });
+
+    test('a local-only config binds the local-only repository and builds no client or keeper', () {
+      configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
+
+      expect(container.get<AuthRepository>(), isA<LocalOnlyAuthRepository>());
+      expect(container.isRegistered<SupabaseClient>(), isFalse);
+      expect(container.isRegistered<SupabaseSessionKeeper>(), isFalse);
+    });
+
+    test('an invalid config never reaches DI', () {
+      expect(() => configureAuthDependencies(const GPInvalidBackendConfig(GPBackendConfigProblem.flavorMismatch), container), throwsArgumentError);
     });
   });
 }

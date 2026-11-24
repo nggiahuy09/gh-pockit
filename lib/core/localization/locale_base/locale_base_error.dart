@@ -7,6 +7,8 @@ abstract class GPLocaleBaseError {
   String get timeout;
   String get authentication;
   String get authorization;
+  String get rateLimited;
+  String get backendUnavailable;
 
   /// No limits in the copy ("max 100 characters"): they live in the entities, and the form shows them with a live counter.
   String get validationAccountNameEmpty;
@@ -22,6 +24,15 @@ abstract class GPLocaleBaseError {
   String get validationTransactionTransferCurrenciesDiffer;
   String get validationTransactionCategoryTypeMismatch;
   String get validationTransactionDateInFuture;
+  String get validationAuthInvalidCredentials;
+  String get validationAuthEmailEmpty;
+  String get validationAuthEmailInvalid;
+  String get validationAuthEmailTaken;
+  String get validationAuthPasswordEmpty;
+  String get validationAuthPasswordTooShort;
+  String get validationAuthPasswordWeak;
+  String get validationAuthDeviceOwnedByAnotherAccount;
+  String get validationSignOutUnsyncedChanges;
   String get conflict;
   String get notFound;
   String get database;
@@ -34,4 +45,8 @@ abstract class GPLocaleBaseError {
   String get databaseTooNewBody;
   String get databaseOpenFailedTitle;
   String get databaseOpenFailedBody;
+
+  /// The misconfigured-build screen (ADR-0038); the problem code follows the body.
+  String get backendConfigInvalidTitle;
+  String get backendConfigInvalidBody;
 }

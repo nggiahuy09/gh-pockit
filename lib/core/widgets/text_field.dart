@@ -9,11 +9,13 @@ import 'utf16_length_limit.dart';
 final class GPTextField extends StatefulWidget {
   const GPTextField({
     super.key,
+    this.autofillHints,
     this.inputFormatters,
     this.controller,
     this.focusNode,
     this.keyboardType,
     this.leading,
+    this.trailing,
     this.textAlign = TextAlign.start,
     this.textCapitalization = TextCapitalization.none,
     this.textInputAction,
@@ -26,20 +28,28 @@ final class GPTextField extends StatefulWidget {
     this.suffixText,
     this.maxLength,
     this.maxLines = 1,
+    this.autocorrect = true,
     this.autofocus = false,
     this.clearable = false,
     this.enabled = true,
     this.enableInteractiveSelection = true,
+    this.obscureText = false,
     this.tabularFigures = false,
     this.onChanged,
     this.onSubmitted,
-  }) : assert(controller == null || initialValue == null, 'Pass a controller or an initialValue, not both.');
+  }) : assert(controller == null || initialValue == null, 'Pass a controller or an initialValue, not both.'),
+       assert(!obscureText || maxLines == 1, 'An obscured field is one line.');
 
+  final Iterable<String>? autofillHints;
   final List<TextInputFormatter>? inputFormatters;
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final TextInputType? keyboardType;
   final IconData? leading;
+
+  /// After the suffix and the clear button, e.g. a password toggle.
+  final Widget? trailing;
+
   final TextAlign textAlign;
   final TextCapitalization textCapitalization;
   final TextInputAction? textInputAction;
@@ -63,6 +73,9 @@ final class GPTextField extends StatefulWidget {
   /// Null grows with the text.
   final int? maxLines;
 
+  /// Off for an email; an obscured field never autocorrects.
+  final bool autocorrect;
+
   final bool autofocus;
 
   /// Shows a clear button while focused and not empty.
@@ -70,6 +83,7 @@ final class GPTextField extends StatefulWidget {
 
   final bool enabled;
   final bool enableInteractiveSelection;
+  final bool obscureText;
   final bool tabularFigures;
   final void Function(String text)? onChanged;
   final void Function(String text)? onSubmitted;
@@ -175,6 +189,10 @@ final class _GPTextFieldState extends State<GPTextField> {
                   textAlign: widget.textAlign,
                   maxLines: widget.maxLines,
                   enableInteractiveSelection: widget.enableInteractiveSelection,
+                  obscureText: widget.obscureText,
+                  autocorrect: widget.autocorrect && !widget.obscureText,
+                  enableSuggestions: widget.autocorrect && !widget.obscureText,
+                  autofillHints: widget.autofillHints,
                   inputFormatters: [...?widget.inputFormatters, if (maxLength != null) GPUtf16LengthLimitingFormatter(maxLength)],
                   style: text.bodyLarge.copyWith(
                     color: enabled ? colors.onSurface : colors.onSurfaceVariant,
@@ -210,6 +228,7 @@ final class _GPTextFieldState extends State<GPTextField> {
                     ),
                   ),
                 ),
+              ?widget.trailing,
             ],
           ),
         ),

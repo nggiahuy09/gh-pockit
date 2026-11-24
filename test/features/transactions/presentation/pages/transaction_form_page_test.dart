@@ -10,6 +10,7 @@ import 'package:ghpockit/core/error/failure_extension.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/date_picker.dart';
 import 'package:ghpockit/core/widgets/dialog.dart';
@@ -20,6 +21,8 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
@@ -33,6 +36,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import '../../../../helpers/fake_account_repository.dart';
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/in_memory_theme_preference_store.dart';
 import '../../../../helpers/localization_harness.dart';
 import '../../../../helpers/results.dart';
 
@@ -48,7 +52,9 @@ void main() {
       ..registerSingleton<AccountRepository>(_repositories.accounts)
       ..registerSingleton<CategoryRepository>(_repositories.categories)
       ..registerSingleton<TransactionRepository>(_repositories.transactions)
-      ..registerSingleton<GPClock>(_repositories.clock);
+      ..registerSingleton<GPClock>(_repositories.clock)
+      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository())
+      ..registerSingleton<GPAppearance>(GPAppearance(InMemoryThemePreferenceStore()));
   });
 
   tearDown(() async {

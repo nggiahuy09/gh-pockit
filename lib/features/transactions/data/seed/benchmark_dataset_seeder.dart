@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../../../core/database/owner_context.dart';
 import '../../../../core/utils/clock.dart';
 import '../../../accounts/data/daos/account_dao.dart';
 import '../../../accounts/data/mapper/account_mapper.dart';
@@ -19,27 +20,28 @@ final class BenchmarkDatasetSeeder {
     required GPClock clock,
     required BenchmarkDatasetGenerator generator,
     required TransactionDao transactionDao,
-    required String ownerId,
+    required GPOwnerContext ownerContext,
   }) : _accountDao = accountDao,
        _categoryDao = categoryDao,
        _clock = clock,
        _generator = generator,
        _transactionDao = transactionDao,
-       _ownerId = ownerId;
+       _ownerContext = ownerContext;
 
   final AccountDao _accountDao;
   final CategoryDao _categoryDao;
   final GPClock _clock;
   final BenchmarkDatasetGenerator _generator;
   final TransactionDao _transactionDao;
-  final String _ownerId;
+  final GPOwnerContext _ownerContext;
 
   /// Returns how many transactions were written: 0 once the owner has any, so a restart does not double the dataset. Runs after the category seed,
   /// or every row lands uncategorised.
   Future<int> seed(BenchmarkDatasetSize size) async {
-    if (await _transactionDao.hasAnyTransaction(_ownerId)) return 0;
+    final ownerId = _ownerContext.current;
+    if (await _transactionDao.hasAnyTransaction(ownerId)) return 0;
 
-    final categories = await _categoryDao.watchCategories(ownerId: _ownerId).first;
+    final categories = await _categoryDao.watchCategories(ownerId: ownerId).first;
     final now = _clock.nowUtc();
     final dataset = _generator.generate(
       categoryIds: {for (final row in categories) ?DefaultCategory.fromNameKey(row.nameKey ?? ''): row.id},
@@ -51,11 +53,11 @@ final class BenchmarkDatasetSeeder {
 
     return _transactionDao.transaction(() async {
       for (final account in dataset.accounts) {
-        await _accountDao.insertAccount(account.toInsert(_ownerId));
+        await _accountDao.insertAccount(account.toInsert(ownerId));
       }
       await _transactionDao.insertTransactions([
         for (final transaction in transactions)
-          deletedIds.contains(transaction.id) ? transaction.toInsert(_ownerId).copyWith(deletedAt: Value(now.millisecondsSinceEpoch)) : transaction.toInsert(_ownerId),
+          deletedIds.contains(transaction.id) ? transaction.toInsert(ownerId).copyWith(deletedAt: Value(now.millisecondsSinceEpoch)) : transaction.toInsert(ownerId),
       ]);
 
       return transactions.length;

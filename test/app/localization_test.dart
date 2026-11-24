@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
 import 'package:ghpockit/core/localization/locale.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 
 import '../helpers/localization_harness.dart';
@@ -21,7 +25,7 @@ void main() {
 
       expect(dockLabel('Trang chủ'), findsOneWidget);
       expect(dockLabel('Giao dịch'), findsOneWidget);
-      expect(find.widgetWithText(AppBar, 'Trang chủ'), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Xin chào'), findsOneWidget);
     });
 
     testWidgets('hands the locale to Material as well, not just to our own strings', (tester) async {
@@ -66,7 +70,7 @@ void main() {
   group('SettingsPage in isolation', () {
     testWidgets('pumps with no service locator configured', (tester) async {
       final localization = await localizationFor(GPLocale.en);
-      await tester.pumpWidget(localizedHarness(localization: localization, child: const SettingsPage()));
+      await tester.pumpWidget(localizedHarness(localization: localization, child: _withAuth(const SettingsPage())));
 
       expect(find.text('Language'), findsOneWidget);
       // Every language names itself, whatever the UI language is.
@@ -76,7 +80,7 @@ void main() {
 
     testWidgets('a tap records the choice on the controller', (tester) async {
       final localization = await localizationFor(GPLocale.en);
-      await tester.pumpWidget(localizedHarness(localization: localization, child: const SettingsPage()));
+      await tester.pumpWidget(localizedHarness(localization: localization, child: _withAuth(const SettingsPage())));
 
       await tester.tap(find.text('Tiếng Việt'));
       await tester.pumpAndSettle();
@@ -86,4 +90,10 @@ void main() {
       expect(find.text('Ngôn ngữ'), findsOneWidget);
     });
   });
+}
+
+/// Settings shows the sync card, which reads the app's `AuthBloc`; a local-only repository keeps the card hidden.
+Widget _withAuth(Widget child) {
+  if (!getIt.isRegistered<AuthRepository>()) getIt.registerSingleton<AuthRepository>(const LocalOnlyAuthRepository());
+  return BlocProvider(create: (_) => AuthBloc(), child: child);
 }

@@ -18,6 +18,7 @@ import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_seede
 import 'package:ghpockit/features/transactions/data/seed/benchmark_dataset_size_enum.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
 
+import '../helpers/fixed_owner_context.dart';
 import '../helpers/recording_logger.dart';
 import 'benchmark_timing.dart';
 
@@ -96,7 +97,7 @@ void main() {
       clock: clock,
       dao: categoryDao,
       uuidGenerator: GPUuidGeneratorImpl(clock: clock),
-      ownerId: localOwnerId,
+      ownerContext: FixedOwnerContext(),
     ).seedDefaults();
 
     final stopwatch = Stopwatch()..start();
@@ -108,7 +109,7 @@ void main() {
         uuidGenerator: GPUuidGeneratorImpl(clock: clock, random: Random(BenchmarkDatasetGenerator.defaultSeed)),
       ),
       transactionDao: dao,
-      ownerId: localOwnerId,
+      ownerContext: FixedOwnerContext(),
     ).seed(size);
     final seedMillis = stopwatch.elapsedMilliseconds;
 
@@ -117,7 +118,7 @@ void main() {
       dao: dao,
       logger: RecordingLogger(clock),
       uuidGenerator: GPUuidGeneratorImpl(clock: clock),
-      ownerId: localOwnerId,
+      ownerContext: FixedOwnerContext(),
     );
     busiestAccountId = await _accountByTraffic(db, busiest: true);
     quietestAccountId = await _accountByTraffic(db, busiest: false);

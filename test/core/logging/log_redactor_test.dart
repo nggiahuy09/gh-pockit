@@ -32,6 +32,12 @@ void main() {
       expect(result.keys, containsAll(<String>['amountMinor', 'balance', 'note', 'email', 'accessToken']));
     });
 
+    test('redacts a whole auth session or JWT, whatever it is called', () {
+      final result = redactSensitiveFields({'session': '{"access_token": "eyJ"}', 'currentSession': 'x', 'jwt': 'eyJ', 'user_id': 'u-1'});
+
+      expect(result, {'session': redactedPlaceholder, 'currentSession': redactedPlaceholder, 'jwt': redactedPlaceholder, 'user_id': 'u-1'});
+    });
+
     test('ignores case and separators in a key', () {
       final result = redactSensitiveFields({
         'AMOUNT_MINOR': 1,

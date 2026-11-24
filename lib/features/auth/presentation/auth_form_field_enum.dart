@@ -1,0 +1,41 @@
+import '../../../core/error/failure.dart';
+
+/// The fields a refused sign-in or sign-up can point at (ADR-0016).
+enum AuthFormField {
+  email,
+  password;
+
+  /// Null: the failure belongs in the banner. No wildcard, so a new code must be placed.
+  static AuthFormField? fromFailure(GPFailure failure) => switch (failure) {
+    GPValidationFailure(:final code) => switch (code) {
+      GPValidationCode.authEmailEmpty || GPValidationCode.authEmailInvalid || GPValidationCode.authEmailTaken => AuthFormField.email,
+      GPValidationCode.authPasswordEmpty || GPValidationCode.authPasswordTooShort || GPValidationCode.authPasswordWeak => AuthFormField.password,
+      GPValidationCode.accountNameEmpty ||
+      GPValidationCode.accountNameTooLong ||
+      GPValidationCode.accountHasTransactions ||
+      GPValidationCode.categoryNameEmpty ||
+      GPValidationCode.categoryNameTooLong ||
+      GPValidationCode.transactionAmountNotPositive ||
+      GPValidationCode.transactionDestinationMissing ||
+      GPValidationCode.transactionDestinationSameAsSource ||
+      GPValidationCode.transactionNoteTooLong ||
+      GPValidationCode.transactionCurrencyMismatch ||
+      GPValidationCode.transactionTransferCurrenciesDiffer ||
+      GPValidationCode.transactionCategoryTypeMismatch ||
+      GPValidationCode.transactionDateInFuture ||
+      GPValidationCode.authInvalidCredentials ||
+      GPValidationCode.signOutUnsyncedChanges ||
+      GPValidationCode.authDeviceOwnedByAnotherAccount => null,
+    },
+    GPNetworkFailure() ||
+    GPTimeoutFailure() ||
+    GPAuthenticationFailure() ||
+    GPAuthorizationFailure() ||
+    GPRateLimitedFailure() ||
+    GPBackendUnavailableFailure() ||
+    GPConflictFailure() ||
+    GPNotFoundFailure() ||
+    GPDatabaseFailure() ||
+    GPUnknownFailure() => null,
+  };
+}

@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
@@ -10,6 +13,7 @@ import 'fake_account_repository.dart';
 import 'fake_category_repository.dart';
 import 'fake_clock.dart';
 import 'fake_transaction_repository.dart';
+import 'in_memory_theme_preference_store.dart';
 
 /// Scoped to the dock: an open tab's name also appears in the app bar.
 Finder dockLabel(String label) => find.descendant(of: find.byKey(AppShell.dockKey), matching: find.text(label));
@@ -31,5 +35,8 @@ void registerShellFakes() {
     ..registerSingleton<AccountRepository>(const FakeAccountRepository())
     ..registerSingleton<CategoryRepository>(const FakeCategoryRepository())
     ..registerSingleton<TransactionRepository>(FakeTransactionRepository())
-    ..registerSingleton<GPClock>(FakeClock());
+    ..registerSingleton<GPClock>(FakeClock())
+    // `GPApp` starts an `AuthBloc` above the router.
+    ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository())
+    ..registerSingleton<GPAppearance>(GPAppearance(InMemoryThemePreferenceStore()));
 }

@@ -2,18 +2,33 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:get_it/get_it.dart';
+import 'package:supabase/supabase.dart';
+
 import '../../core/database/database.dart';
-import '../../core/database/owner_id.dart';
+import '../../core/database/owner_context.dart';
+import '../../core/database/settings_owner_context.dart';
 import '../../core/localization/drift_locale_store.dart';
 import '../../core/localization/locale_store.dart';
 import '../../core/localization/localization.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/logging/developer_logger.dart';
+import '../../core/security/flutter_secure_store.dart';
+import '../../core/security/secure_store.dart';
+import '../../core/theme/appearance.dart';
+import '../../core/theme/drift_theme_preference_store.dart';
+import '../../core/theme/theme_preference_store.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/uuid_generator.dart';
 import '../../features/accounts/data/daos/account_dao.dart';
 import '../../features/accounts/data/repositories/account_repository_impl.dart';
 import '../../features/accounts/domain/repositories/account_repository.dart';
+import '../../features/auth/data/daos/device_owner_dao.dart';
+import '../../features/auth/data/datasources/supabase_session_keeper.dart';
+import '../../features/auth/data/repositories/device_owner_repository_impl.dart';
+import '../../features/auth/data/repositories/local_only_auth_repository.dart';
+import '../../features/auth/data/repositories/supabase_auth_repository.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/domain/repositories/device_owner_repository.dart';
 import '../../features/categories/data/daos/category_dao.dart';
 import '../../features/categories/data/repositories/category_repository_impl.dart';
 import '../../features/categories/data/seed/category_seeder.dart';
@@ -24,6 +39,7 @@ import '../../features/transactions/data/seed/benchmark_dataset_generator.dart';
 import '../../features/transactions/data/seed/benchmark_dataset_seeder.dart';
 import '../../features/transactions/data/seed/benchmark_dataset_size_enum.dart';
 import '../../features/transactions/domain/repositories/transaction_repository.dart';
+import '../config/backend_config.dart';
 
 /// Use cases are never registered here: blocs build them from repositories resolved through this (ADR-0013).
 final GetIt getIt = GetIt.instance;
@@ -45,6 +61,13 @@ void configureCoreDependencies([GetIt? container]) {
       dispose: (db) => db.close(),
     )
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
+    // Must stay a singleton: every repository reads its cache (ADR-0040).
+    ..registerLazySingleton<GPSettingsOwnerContext>(
+      () => GPSettingsOwnerContext(database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
+      dispose: (context) => context.dispose(),
+    )
+    ..registerLazySingleton<GPOwnerContext>(() => c.get<GPSettingsOwnerContext>())
+    ..registerLazySingleton<GPSecureStore>(GPFlutterSecureStore.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
     ..registerLazySingleton<GPUuidGenerator>(() => GPUuidGeneratorImpl(clock: c.get<GPClock>()))
     ..registerLazySingleton<GPAppLogger>(
@@ -52,7 +75,57 @@ void configureCoreDependencies([GetIt? container]) {
     )
     ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()))
     // Must stay a singleton: it holds the active language, and a second instance would leave part of the tree in the old one.
-    ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()));
+    ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()))
+    ..registerLazySingleton<GPThemePreferenceStore>(
+      () => GPDriftThemePreferenceStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
+    )
+    // Must stay a singleton, like the localization: `GPApp` repaints from it.
+    ..registerLazySingleton<GPAppearance>(() => GPAppearance(c.get<GPThemePreferenceStore>()));
+}
+
+/// The one place outside `data/` that names Supabase (ADR-0038).
+void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
+  final c = container ?? getIt;
+
+  c
+    ..registerLazySingleton<DeviceOwnerDao>(() => DeviceOwnerDao(c.get<GPAppDatabase>()))
+    ..registerLazySingleton<DeviceOwnerRepository>(
+      () => DeviceOwnerRepositoryImpl(
+        clock: c.get<GPClock>(),
+        dao: c.get<DeviceOwnerDao>(),
+        logger: c.get<GPAppLogger>(),
+        ownerContext: c.get<GPSettingsOwnerContext>(),
+        seeder: c.get<CategorySeeder>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+      ),
+    );
+
+  switch (config) {
+    case GPRemoteBackendConfig(:final url, :final publishableKey):
+      c
+        ..registerLazySingleton<SupabaseClient>(
+          // Implicit flow: PKCE needs a verifier store, and email/password never redirects.
+          () => SupabaseClient(url, publishableKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)),
+          dispose: (client) => client.dispose(),
+        )
+        ..registerLazySingleton<SupabaseSessionKeeper>(
+          () => SupabaseSessionKeeper(
+            auth: c.get<SupabaseClient>().auth,
+            clock: c.get<GPClock>(),
+            database: c.get<GPAppDatabase>(),
+            logger: c.get<GPAppLogger>(),
+            store: c.get<GPSecureStore>(),
+          ),
+          dispose: (keeper) => keeper.dispose(),
+        )
+        ..registerLazySingleton<AuthRepository>(
+          () => SupabaseAuthRepository(auth: c.get<SupabaseClient>().auth, keeper: c.get<SupabaseSessionKeeper>(), logger: c.get<GPAppLogger>()),
+        );
+    case GPLocalOnlyBackendConfig():
+      c.registerLazySingleton<AuthRepository>(LocalOnlyAuthRepository.new);
+    case GPInvalidBackendConfig(:final problem):
+      throw ArgumentError.value(problem, 'config', 'the bootstrap stops on an invalid config before DI');
+  }
 }
 
 void configureAccountsDependencies([GetIt? container]) {
@@ -66,8 +139,7 @@ void configureAccountsDependencies([GetIt? container]) {
         dao: c.get<AccountDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        // The sentinel owner until auth. Passed, never defaulted, so every site is greppable.
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }
@@ -78,7 +150,7 @@ void configureCategoriesDependencies([GetIt? container]) {
   c
     ..registerLazySingleton<CategoryDao>(() => CategoryDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<CategorySeeder>(
-      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), uuidGenerator: c.get<GPUuidGenerator>(), ownerId: localOwnerId),
+      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), ownerContext: c.get<GPOwnerContext>(), uuidGenerator: c.get<GPUuidGenerator>()),
     )
     ..registerLazySingleton<CategoryRepository>(
       () => CategoryRepositoryImpl(
@@ -86,7 +158,7 @@ void configureCategoriesDependencies([GetIt? container]) {
         dao: c.get<CategoryDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }
@@ -102,7 +174,7 @@ void configureTransactionsDependencies([GetIt? container]) {
         dao: c.get<TransactionDao>(),
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     )
     // Built only when a non-release run passes `--dart-define=DATASET`.
@@ -116,7 +188,7 @@ void configureTransactionsDependencies([GetIt? container]) {
           uuidGenerator: GPUuidGeneratorImpl(clock: c.get<GPClock>(), random: Random(BenchmarkDatasetGenerator.defaultSeed)),
         ),
         transactionDao: c.get<TransactionDao>(),
-        ownerId: localOwnerId,
+        ownerContext: c.get<GPOwnerContext>(),
       ),
     );
 }

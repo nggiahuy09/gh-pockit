@@ -10,6 +10,21 @@ final class GPLocaleEnSettings implements GPLocaleBaseSettings {
   String get language => 'Language';
 
   @override
+  String get appearance => 'Appearance';
+
+  @override
+  String get appearanceSystem => 'Match the system';
+
+  @override
+  String get appearanceSystemBody => 'Light or dark, as the device is set';
+
+  @override
+  String get appearanceLight => 'Light';
+
+  @override
+  String get appearanceDark => 'Dark';
+
+  @override
   String get debugTitle => 'Debug';
 
   @override

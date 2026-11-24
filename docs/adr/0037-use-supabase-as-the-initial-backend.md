@@ -3,7 +3,8 @@
 ## Status
 
 Accepted — 2026-11-09 (W11 Flex). The blueprint reserved this as "0005", a number that went to design tokens. The decision has been in
-effect since W11 T2; this records why, and the limits it sets. No schema change.
+effect since W11 T2; this records why, and the limits it sets. No schema change. Amended 2026-11-15 (W12 T2): the package is the pure-Dart
+`supabase`, not `supabase_flutter` (ADR-0038).
 
 ## Context
 
@@ -95,3 +96,14 @@ rely on.
 
 **A self-hosted backend in one binary, such as PocketBase.** It is simple to start, but running it, backing it up and securing it all
 fall on the project. Its SQLite store is single-node.
+
+## Amended 2026-11-15 (W12 T2) — the pure-Dart client, built in DI
+
+Decision 4 named `supabase_flutter`. W12 T2 added the pure-Dart `supabase` 2.16.1 instead, the client `supabase_flutter` wraps (ADR-0038):
+
+- no native plugins (`app_links`, `url_launcher` and `shared_preferences` come only with the wrapper);
+- no global `Supabase.instance`: `configureAuthDependencies` builds one `SupabaseClient` and hands its `auth` to `SupabaseAuthRepository`;
+- no default storage that writes the session to SharedPreferences.
+
+"Only `data/` imports it" now reads: `data/`, plus `app/di/injector.dart`, which builds the client. Presentation and the domain still never
+do. The swap boundary is unchanged: replacing Supabase touches the data layer and that one DI function.

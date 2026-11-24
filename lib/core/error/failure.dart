@@ -29,6 +29,16 @@ final class GPAuthorizationFailure extends GPFailure {
   const GPAuthorizationFailure();
 }
 
+/// HTTP 429. Retryable, after a wait.
+final class GPRateLimitedFailure extends GPFailure {
+  const GPRateLimitedFailure();
+}
+
+/// An env file with no backend (ADR-0038).
+final class GPBackendUnavailableFailure extends GPFailure {
+  const GPBackendUnavailableFailure();
+}
+
 final class GPValidationFailure extends GPFailure {
   const GPValidationFailure(this.code);
 
@@ -85,4 +95,23 @@ enum GPValidationCode {
 
   /// Checked by the use cases: it needs today's date (ADR-0022).
   transactionDateInFuture,
+
+  /// A wrong password and an unknown email alike: the copy must not say which.
+  authInvalidCredentials,
+
+  authEmailEmpty,
+  authEmailInvalid,
+  authEmailTaken,
+  authPasswordEmpty,
+
+  /// Sign-up only: sign-in leaves an older, shorter password to the server.
+  authPasswordTooShort,
+
+  authPasswordWeak,
+
+  /// Another account's data is still on the device (ADR-0040).
+  authDeviceOwnedByAnotherAccount,
+
+  /// Checked by `SignOutUseCase`: a sign-out would delete rows not yet on the server (ADR-0042).
+  signOutUnsyncedChanges,
 }
