@@ -25,7 +25,7 @@ void main() {
 
       expect(dockLabel('Trang chủ'), findsOneWidget);
       expect(dockLabel('Giao dịch'), findsOneWidget);
-      expect(find.widgetWithText(AppBar, 'Trang chủ'), findsOneWidget);
+      expect(find.widgetWithText(AppBar, 'Xin chào'), findsOneWidget);
     });
 
     testWidgets('hands the locale to Material as well, not just to our own strings', (tester) async {

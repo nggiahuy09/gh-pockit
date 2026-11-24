@@ -3,7 +3,8 @@ part of 'locale_base.dart';
 abstract class GPLocaleBaseHome {
   const GPLocaleBaseHome();
 
-  String get title;
+  /// No name yet: sign-up asks for none. A greeting with a name waits for a profile.
+  String get greeting;
 
   String get seeAllAccounts;
 

@@ -4,7 +4,7 @@ final class GPLocaleViHome implements GPLocaleBaseHome {
   const GPLocaleViHome();
 
   @override
-  String get title => 'Trang chủ';
+  String get greeting => 'Xin chào';
 
   @override
   String get seeAllAccounts => 'Xem tất cả';

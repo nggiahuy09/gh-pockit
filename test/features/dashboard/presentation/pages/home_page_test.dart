@@ -54,6 +54,12 @@ void main() {
     await _repositories.close();
   });
 
+  testWidgets('greets without a name: sign-up asks for none yet', (tester) async {
+    await _pumpApp(tester);
+
+    expect(find.widgetWithText(AppBar, 'Hello'), findsOneWidget);
+  });
+
   testWidgets('with no account, offers to add one', (tester) async {
     await _pumpApp(tester);
 

@@ -110,3 +110,17 @@ reinstall apart.
 
 **Restoring in `AuthBloc` on start.** The first frame would be signed out, and the Profile sync card would flicker. The bloc would also need
 to be alive before anything else reads auth.
+
+## Amended 2026-11-24 (W12 Flex) — the log audit
+
+Decision 9 relied on nothing listening to `package:logging`. The audit found that still true:
+- no `Logger.root` listener, no `onRecord`, no `print` or `debugPrint` anywhere in `lib/`;
+- every auth log line carries only types, GoTrue codes, HTTP statuses, the uid and counts.
+
+Two changes keep it true:
+
+- **`logging_listener_guard_test.dart`** fails on any `package:logging` import, `Logger.root`, `onRecord` or `print` in `lib/`. Whoever adds
+  one (a Sentry logging integration, a debug dump) must first filter GoTrue's FINEST records, which hold the whole session.
+- **The redactor treats `session` and `jwt` keys as sensitive,** like `token` and `email`, so a session dumped under either name is
+  redacted.
+

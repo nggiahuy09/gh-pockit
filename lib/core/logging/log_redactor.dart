@@ -14,6 +14,9 @@ const Set<String> sensitiveFieldTokens = {
   'displayname',
   'password',
   'token',
+  // A GoTrue session or a JWT carries both tokens and the email.
+  'session',
+  'jwt',
   'secret',
   'apikey',
   'credential',
