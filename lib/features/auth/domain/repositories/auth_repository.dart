@@ -3,14 +3,14 @@ import '../../../../core/error/result.dart';
 import '../entities/auth_status.dart';
 import '../entities/user_entity.dart';
 
-/// On a build with no backend, sign-up and sign-in answer [GPBackendUnavailableFailure] and sign-out succeeds (ADR-0038).
+/// With no backend, sign-up and sign-in fail with [GPBackendUnavailableFailure] (ADR-0038).
 abstract class AuthRepository {
   const AuthRepository();
 
-  /// The current status at once, then each change. Never an error: a refresh that fails offline keeps the session (offline-first).
+  /// The current status at once, then each change; never an error.
   Stream<AuthStatus> watchAuthStatus();
 
-  /// Puts back the session this device kept, with no network call, and keeps every later one. Once, at launch, before the first frame.
+  /// No network call; once, at launch.
   Future<GPResult<void>> restoreSession();
 
   /// Signs the new user in as well.
@@ -18,6 +18,6 @@ abstract class AuthRepository {
 
   Future<GPResult<UserEntity>> signIn({required String email, required String password});
 
-  /// Signs this device out even offline. A revocation that does not reach the server is logged, not returned (ADR-0038).
+  /// Even offline: a failed revoke is logged, not returned.
   Future<GPResult<void>> signOut();
 }

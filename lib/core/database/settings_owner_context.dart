@@ -5,7 +5,7 @@ import 'database.dart';
 import 'owner_context.dart';
 import 'owner_id.dart';
 
-/// The owner is a `settings` row, written in the same transaction as the rows it moves (ADR-0040); this class only caches and announces it.
+/// Caches the `owner.id` settings row, which the claim writes (ADR-0040).
 final class GPSettingsOwnerContext implements GPOwnerContext {
   GPSettingsOwnerContext({required GPAppDatabase database, required GPAppLogger logger}) : _database = database, _logger = logger;
 
@@ -36,14 +36,13 @@ final class GPSettingsOwnerContext implements GPOwnerContext {
     return controller.stream;
   }
 
-  /// Once in the bootstrap, after the database opens.
   Future<void> load() async {
     final String owner;
     try {
       final row = await (_database.select(_database.settingsTable)..where((t) => t.key.equals(storageKey))).getSingleOrNull();
       owner = row?.value ?? localOwnerId;
     } on Exception catch (error) {
-      // Keeps what it had: at launch that is 'local', which hides a claimed user's rows until the next launch rather than mixing owners.
+      // Keeps the last owner rather than guess.
       _logger.error('owner read failed', fields: {'error': error.runtimeType.toString()});
       return;
     }
@@ -53,8 +52,7 @@ final class GPSettingsOwnerContext implements GPOwnerContext {
     _changes.add(owner);
   }
 
-  /// After a transaction that wrote the row commits: synchronous, so every open query switches before drift re-runs it for the old owner and
-  /// emits an empty list in between.
+  /// Synchronous right after the claim commits, so no open query re-runs for the old owner.
   void adopt(String ownerId) {
     if (ownerId == _current) return;
 

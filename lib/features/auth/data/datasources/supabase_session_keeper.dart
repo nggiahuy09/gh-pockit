@@ -9,8 +9,7 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/security/secure_store.dart';
 import '../../../../core/utils/clock.dart';
 
-/// Keeps GoTrue's session across launches (ADR-0039): the session in the secure store, a marker in `settings` saying this install wrote it,
-/// and token refresh paused while the app is in the background. Logs never carry the session, only event and error types (golden rule 9).
+/// Keeps the session across launches and pauses refresh in the background (ADR-0039). Logs types only.
 final class SupabaseSessionKeeper {
   SupabaseSessionKeeper({required GoTrueClient auth, required GPClock clock, required GPAppDatabase database, required GPAppLogger logger, required GPSecureStore store})
     : _auth = auth,
@@ -21,7 +20,7 @@ final class SupabaseSessionKeeper {
 
   static const sessionKey = 'auth.session';
 
-  /// A `settings` row, so it goes with the database. An iOS Keychain item outlives an uninstall; the database does not.
+  /// In `settings`: a Keychain item outlives an uninstall, the database does not.
   static const keptMarkerKey = 'auth.session_kept';
 
   final GoTrueClient _auth;
@@ -33,20 +32,18 @@ final class SupabaseSessionKeeper {
   StreamSubscription<AuthState>? _subscription;
   AppLifecycleListener? _lifecycle;
 
-  // Writes run one after another: a sign-out's delete must never land before the sign-in's write it follows.
+  // Sequential: a sign-out's delete never lands before the write it follows.
   Future<void> _writes = Future.value();
 
-  /// Completes when every write queued so far has landed.
   @visibleForTesting
   Future<void> get idle => _writes;
 
-  /// Idempotent.
   void start() {
     _subscription ??= _auth.onAuthStateChange.listen(_handleAuthState, onError: _handleAuthError);
     _lifecycle ??= AppLifecycleListener(onResume: _auth.startAutoRefresh, onPause: _auth.stopAutoRefresh);
   }
 
-  /// With no network call: an expired token stays in place and the refresh ticker renews it once there is a connection (offline-first).
+  /// No network call; an expired token is renewed by the refresh ticker.
   Future<void> restore() async {
     final String? stored;
     try {
@@ -84,25 +81,25 @@ final class SupabaseSessionKeeper {
         if (session != null) _enqueue(() => _keep(session));
       case AuthChangeEvent.signedOut:
         _enqueue(_deleteSession);
-      // Named rather than a wildcard, so a new GoTrue event does not compile until it is placed; `userDeleted` is deprecated but still a value.
+      // Named, not a wildcard, so a new event must be placed.
       // ignore: deprecated_member_use
       case AuthChangeEvent.initialSession || AuthChangeEvent.passwordRecovery || AuthChangeEvent.userDeleted:
         break;
     }
   }
 
-  // A refresh that fails offline lands here every tick until the network is back; the session stays.
+  // A failed refresh while offline; the session stays.
   void _handleAuthError(Object error) => _logger.debug('auth state error', fields: {'error': error.runtimeType.toString()});
 
   void _enqueue(Future<void> Function() write) => _writes = _writes.then((_) => write());
 
-  /// The marker first: a crash between the two leaves a marker with no session, which restores nothing.
+  /// Marker first: a marker without a session restores nothing.
   Future<void> _keep(Session session) async {
     try {
       await _database.into(_database.settingsTable).insertOnConflictUpdate(SettingsTableCompanion.insert(key: keptMarkerKey, value: '1', updatedAt: _clock.nowEpochMillis()));
       await _store.write(sessionKey, jsonEncode(session.toJson()));
     } on Exception catch (error) {
-      // The session still works in memory; the next launch starts signed out.
+      // The session still works in memory.
       _logger.warn('session keep failed', fields: {'error': error.runtimeType.toString()});
     }
   }

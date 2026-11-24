@@ -4,7 +4,7 @@ import '../../domain/entities/auth_status.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/repositories/auth_repository.dart';
 
-/// Bound when the env file leaves both backend keys empty (ADR-0038).
+/// For a build with no backend (ADR-0038).
 final class LocalOnlyAuthRepository implements AuthRepository {
   const LocalOnlyAuthRepository();
 

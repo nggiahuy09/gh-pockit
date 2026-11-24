@@ -35,12 +35,12 @@ final class DeviceOwnerRepositoryImpl implements DeviceOwnerRepository {
     try {
       moved = await _dao.claimLocalRows(userId: userId, nowMillis: _clock.nowEpochMillis(), uuidGenerator: _uuidGenerator);
     } on Exception catch (error, stackTrace) {
-      // Rolled back whole: the rows stay 'local', and the next launch claims them again.
+      // Rolled back; the next launch claims again.
       _logger.error('local data claim failed', fields: {'user_id': userId}, error: error, stackTrace: stackTrace);
       return const GPErr(GPDatabaseFailure());
     }
 
-    // Right after the commit, before any await: every open query switches to the new owner and finds its rows moved.
+    // Before any await: open queries switch to the new owner at once.
     _ownerContext.adopt(userId);
     _logger.info('local data claimed', fields: {'user_id': userId, 'count': moved});
     return GPOk(moved);

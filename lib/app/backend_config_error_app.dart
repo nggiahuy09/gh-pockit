@@ -4,7 +4,7 @@ import '../core/localization/locale.dart';
 import 'config/backend_config.dart';
 import 'startup_error_app.dart';
 
-/// Run instead of `GPApp` when the env file does not fit the build (ADR-0038). The code names the problem, since iOS shows no app log.
+/// Names the problem on screen: iOS shows no app log (ADR-0038).
 final class GPBackendConfigErrorApp extends StatelessWidget {
   const GPBackendConfigErrorApp({super.key, required this.locale, required this.problem});
 

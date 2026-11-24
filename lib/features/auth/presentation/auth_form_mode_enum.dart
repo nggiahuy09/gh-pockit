@@ -1,2 +1,2 @@
-/// One form for both, so a switch keeps what was typed: a taken email moves to sign-in as it is.
+/// One form for both, so switching keeps what was typed.
 enum AuthFormMode { signIn, signUp }

@@ -27,7 +27,7 @@ final class AuthSignedOut extends AuthStatus {
   const AuthSignedOut();
 }
 
-/// This build has no backend (ADR-0038): nothing to sign in to, ever.
+/// No backend in this build (ADR-0038).
 final class AuthLocalOnly extends AuthStatus {
   const AuthLocalOnly();
 }

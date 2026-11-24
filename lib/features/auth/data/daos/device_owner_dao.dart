@@ -6,16 +6,14 @@ import '../../../../core/database/settings_owner_context.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../../categories/data/seed/category_seeder.dart';
 
-/// The claim's SQL, in one transaction (ADR-0040). Raw statements: each moves a whole table at once, and `version = version + 1` has no typed
-/// companion form.
+/// The claim, in one transaction (ADR-0040). Raw SQL: `version = version + 1` has no typed form.
 final class DeviceOwnerDao {
   const DeviceOwnerDao(this._db);
 
   final GPAppDatabase _db;
 
   Future<int> claimLocalRows({required String userId, required int nowMillis, required GPUuidGenerator uuidGenerator}) => _db.transaction(() async {
-    // A seeded category changes id below while transactions still point at the old one; the check waits for the commit. Unlike
-    // `foreign_keys`, this pragma works inside a transaction, and resets itself at its end.
+    // Seeded categories change id below; unlike `foreign_keys`, this works inside a transaction.
     await _db.customStatement('PRAGMA defer_foreign_keys = ON');
 
     final seeded = await (_db.select(_db.categoriesTable)..where((t) => t.ownerId.equals(localOwnerId) & t.nameKey.isNotNull())).get();
@@ -37,7 +35,7 @@ final class DeviceOwnerDao {
     return moved;
   });
 
-  /// The id it would have had if seeded for the user, so another device's seed of the same category is the same row (ADR-0002 amendment).
+  /// Matches the user's own seed on any device (ADR-0002 amendment).
   Future<void> _reIdSeededCategory(CategoryRow row, String newId) async {
     final taken = await (_db.select(_db.categoriesTable)..where((t) => t.id.equals(newId))).getSingleOrNull() != null;
 
@@ -49,8 +47,7 @@ final class DeviceOwnerDao {
     );
 
     if (taken) {
-      // The user's own seed is already here, so this one is a duplicate. Removed outright: a 'local' row was never synced, so no other device
-      // needs a tombstone for it.
+      // A duplicate of the user's own seed; never synced, so no tombstone.
       await _db.customUpdate(
         'DELETE FROM categories WHERE id = ?',
         variables: [Variable.withString(row.id)],

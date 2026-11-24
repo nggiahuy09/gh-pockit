@@ -14,7 +14,7 @@ part 'auth_event.dart';
 
 part 'auth_state.dart';
 
-/// Watches only. The session is restored in the bootstrap, before the first frame, so the first status is already the real one.
+/// Watches only: the bootstrap already restored the session.
 final class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
   AuthBloc() : super(const AuthUnknownState()) {
     on<AuthEvent>(_eventHandler, transformer: restartable());

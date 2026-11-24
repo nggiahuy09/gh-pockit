@@ -5,8 +5,7 @@ enum AuthFormField {
   email,
   password;
 
-  /// Null when the failure is about no field and belongs in the banner: wrong credentials, a rate limit, the network. No wildcard: a new
-  /// validation code must not compile until it is placed.
+  /// Null: the failure belongs in the banner. No wildcard, so a new code must be placed.
   static AuthFormField? fromFailure(GPFailure failure) => switch (failure) {
     GPValidationFailure(:final code) => switch (code) {
       GPValidationCode.authEmailEmpty || GPValidationCode.authEmailInvalid || GPValidationCode.authEmailTaken => AuthFormField.email,

@@ -34,7 +34,7 @@ final class GPRateLimitedFailure extends GPFailure {
   const GPRateLimitedFailure();
 }
 
-/// This build has no backend: an env file with both keys empty runs local-only (ADR-0038).
+/// An env file with no backend (ADR-0038).
 final class GPBackendUnavailableFailure extends GPFailure {
   const GPBackendUnavailableFailure();
 }
@@ -96,7 +96,7 @@ enum GPValidationCode {
   /// Checked by the use cases: it needs today's date (ADR-0022).
   transactionDateInFuture,
 
-  /// The server's answer for a wrong password and for an unknown email alike, so the copy must not say which.
+  /// A wrong password and an unknown email alike: the copy must not say which.
   authInvalidCredentials,
 
   authEmailEmpty,
@@ -104,12 +104,11 @@ enum GPValidationCode {
   authEmailTaken,
   authPasswordEmpty,
 
-  /// Sign-up only, under `AuthCredentials.passwordMinLength`: sign-in leaves an old, shorter password to the server.
+  /// Sign-up only: sign-in leaves an older, shorter password to the server.
   authPasswordTooShort,
 
-  /// The server's password policy, which can be stricter than the client's check.
   authPasswordWeak,
 
-  /// This device still holds another account's data, whose session ended without a sign-out (ADR-0040).
+  /// Another account's data is still on the device (ADR-0040).
   authDeviceOwnedByAnotherAccount,
 }

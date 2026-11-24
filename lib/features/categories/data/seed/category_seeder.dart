@@ -20,11 +20,10 @@ final class CategorySeeder {
   final GPOwnerContext _ownerContext;
   final GPUuidGenerator _uuidGenerator;
 
-  /// v5, not v7: two offline devices must mint the same id for "Food" (ADR-0002 amendment). The owner is in the input, or every user would
-  /// share ids; a claim re-derives it for the new owner (ADR-0040).
+  /// v5 over owner + key: the same id on every device (ADR-0002 amendment); a claim re-derives it (ADR-0040).
   static String seededId(GPUuidGenerator uuidGenerator, {required String nameKey, required String ownerId}) => uuidGenerator.v5('$ownerId|$nameKey');
 
-  /// For the current owner. Returns how many rows were written: 0 on every launch after the first.
+  /// For the current owner; returns how many rows were written.
   Future<int> seedDefaults() {
     final now = _clock.nowEpochMillis();
     final ownerId = _ownerContext.current;

@@ -1,11 +1,10 @@
 import 'package:meta/meta.dart';
 
-/// What `env/<flavor>.json` says about the backend, checked against the flavor this build was made with (ADR-0038).
+/// `env/<flavor>.json`, checked against the build's flavor (ADR-0038).
 @immutable
 sealed class GPBackendConfig {
   const GPBackendConfig();
 
-  /// From `--dart-define-from-file`; [appFlavor] is Flutter's `appFlavor`.
   factory GPBackendConfig.fromEnvironment(String? appFlavor) => GPBackendConfig.resolve(
     appFlavor: appFlavor,
     envFlavor: const String.fromEnvironment('ENV_FLAVOR'),
@@ -14,8 +13,7 @@ sealed class GPBackendConfig {
   );
 
   factory GPBackendConfig.resolve({required String? appFlavor, required String envFlavor, required String url, required String publishableKey}) {
-    // First, and whatever `ENV_FLAVOR` says: with no backend there is nothing to mix up, so a bare `flutter run` starts. Prod too, while there is no
-    // prod project; the change that creates one makes an empty prod file a refusal (ADR-0038).
+    // Before the flavor check: with no backend there is nothing to mix up (ADR-0038).
     if (url.isEmpty && publishableKey.isEmpty) return const GPLocalOnlyBackendConfig();
     if (appFlavor == null || envFlavor != appFlavor) return const GPInvalidBackendConfig(GPBackendConfigProblem.flavorMismatch);
     if (url.isEmpty || publishableKey.isEmpty) return const GPInvalidBackendConfig(GPBackendConfigProblem.backendIncomplete);
@@ -34,7 +32,6 @@ sealed class GPBackendConfig {
   static bool _isOrigin(Uri uri) => uri.host.isNotEmpty && (uri.path.isEmpty || uri.path == '/') && !uri.hasQuery && !uri.hasFragment;
 }
 
-/// Both keys empty, with or without `ENV_FLAVOR`: the app runs as before auth, every row owned by `'local'`.
 final class GPLocalOnlyBackendConfig extends GPBackendConfig {
   const GPLocalOnlyBackendConfig();
 }
@@ -42,10 +39,10 @@ final class GPLocalOnlyBackendConfig extends GPBackendConfig {
 final class GPRemoteBackendConfig extends GPBackendConfig {
   const GPRemoteBackendConfig({required this.url, required this.publishableKey});
 
-  /// The project's API origin, `https://<ref>.supabase.co`, with no trailing slash.
+  /// The API origin, with no trailing slash.
   final String url;
 
-  /// Ships in every build and is not a secret, but stays out of logs and `toString` with every other key.
+  /// Not a secret, but kept out of `toString`.
   final String publishableKey;
 
   @override
@@ -62,12 +59,11 @@ final class GPInvalidBackendConfig extends GPBackendConfig {
 }
 
 enum GPBackendConfigProblem {
-  /// A backend is set but `ENV_FLAVOR` is not the flavor being built: `--flavor prod` with `env/dev.json`, or a filled file from before the key existed.
+  /// A backend set for another flavor, or a file from before `ENV_FLAVOR`.
   flavorMismatch,
 
-  /// One of the two keys is set and the other is empty.
   backendIncomplete,
 
-  /// Not a bare `https://` origin, such as a dashboard link. Plain `http://` passes on dev only, for the local stack.
+  /// Not a bare origin (e.g. a dashboard link); `http://` passes on dev only.
   urlMalformed,
 }

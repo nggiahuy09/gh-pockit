@@ -11,7 +11,7 @@ import '../../domain/repositories/auth_repository.dart';
 import '../datasources/supabase_session_keeper.dart';
 import '../mapper/user_mapper.dart';
 
-/// Logs a failure's GoTrue code and HTTP status only: never the email, the password, a token or the server's message (golden rule 9).
+/// Logs the GoTrue code and HTTP status only (golden rule 9).
 final class SupabaseAuthRepository implements AuthRepository {
   const SupabaseAuthRepository({required GoTrueClient auth, required SupabaseSessionKeeper keeper, required GPAppLogger logger}) : _auth = auth, _keeper = keeper, _logger = logger;
 
@@ -19,8 +19,7 @@ final class SupabaseAuthRepository implements AuthRepository {
   final SupabaseSessionKeeper _keeper;
   final GPAppLogger _logger;
 
-  /// Reads the client's session on each event instead of the event's own: the stream replays its whole history to a new listener. A
-  /// controller, not `async*`: cancelling an `async*` paused in `await for` waits for an auth event that may never come.
+  /// Reads the current session per event, since the stream replays history; a controller, as an `async*` hangs on cancel.
   @override
   Stream<AuthStatus> watchAuthStatus() {
     StreamSubscription<AuthState>? subscription;
@@ -38,7 +37,7 @@ final class SupabaseAuthRepository implements AuthRepository {
     controller = StreamController<AuthStatus>(
       onListen: () {
         emitCurrent();
-        // Its errors are failed refreshes, which keep the session; the keeper logs them.
+        // Errors are failed refreshes; the session stays.
         subscription = _auth.onAuthStateChange.listen((_) => emitCurrent(), onError: (Object _) {});
       },
       onPause: () => subscription?.pause(),
@@ -71,7 +70,7 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<GPResult<void>> signOut() async {
-    // GoTrue drops the local session before it calls the server, so by the time this throws the device is already signed out.
+    // GoTrue drops the local session before calling the server.
     try {
       await _auth.signOut();
     } on AuthException catch (error) {
@@ -93,13 +92,13 @@ final class SupabaseAuthRepository implements AuthRepository {
     } on AuthException catch (error) {
       return GPErr(_reportAuthError(error, message: failedMessage));
     } on Exception catch (error, stackTrace) {
-      // A 200 whose body GoTrue cannot parse (`FormatException`). Only the type is logged: the body may hold a token.
+      // An unparseable 200: only the type is logged, the body may hold a token.
       _logger.error(failedMessage, fields: {'error': error.runtimeType.toString()}, stackTrace: stackTrace);
       return const GPErr(GPUnknownFailure());
     }
 
     final session = response.session;
-    // No session means the project wants the email confirmed first; dev has that off (ADR-0032).
+    // No session: the project requires email confirmation (off on dev, ADR-0032).
     if (session == null) {
       _logger.error(noSessionMessage);
       return const GPErr(GPUnknownFailure());
@@ -123,8 +122,7 @@ final class SupabaseAuthRepository implements AuthRepository {
 
   Map<String, Object?> _errorFields(AuthException error) => {'error': error.runtimeType.toString(), 'code': error.code, 'status': error.statusCode};
 
-  // `validation_failed` stays unknown on purpose: GoTrue sends it for a malformed email and for an empty password alike, so it names no field.
-  // Client-side validation is what catches both, before a request.
+  // `validation_failed` names no field (bad email and empty password alike); client validation catches both.
   static GPFailure _toFailure(AuthException error) => switch (error) {
     AuthWeakPasswordException() => const GPValidationFailure(GPValidationCode.authPasswordWeak),
     AuthRetryableFetchException(statusCode: null) => const GPNetworkFailure(),

@@ -5,7 +5,7 @@ import '../repositories/auth_repository.dart';
 import '../repositories/device_owner_repository.dart';
 import 'claim_local_data_use_case.dart';
 
-/// Then claims for the restored user: a claim that did not land after the last sign-in (a crash, a database error) lands here (ADR-0040).
+/// Also claims for the restored user if the last claim did not land (ADR-0040).
 final class RestoreSessionUseCase with GPUseCase<GPNoInput, void> {
   const RestoreSessionUseCase(this._authRepository, this._deviceOwnerRepository);
 

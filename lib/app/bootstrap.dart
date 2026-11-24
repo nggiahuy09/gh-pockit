@@ -35,7 +35,7 @@ Future<void> bootstrap(Widget Function() builder) async {
   configureTransactionsDependencies();
   final logger = getIt.get<GPAppLogger>();
 
-  // Before the database: a build holding the wrong env file must not open, or later sync, the data of the flavor it claims to be (ADR-0038).
+  // Before the database opens: a wrong env file must not touch this flavor's data (ADR-0038).
   final backendConfig = GPBackendConfig.fromEnvironment(appFlavor);
   if (backendConfig case GPInvalidBackendConfig(:final problem)) {
     logger.error('backend config invalid', fields: {'flavor': appFlavor, 'problem': problem.name});
@@ -66,11 +66,10 @@ Future<void> bootstrap(Widget Function() builder) async {
     return;
   }
 
-  // Before anything reads or seeds a row: every query filters on it (ADR-0040).
+  // Before any read or seed: every query filters on the owner (ADR-0040).
   await getIt.get<GPSettingsOwnerContext>().load();
 
-  // After the database: the keeper reads its marker there (ADR-0039). No network call, so it costs one Keychain / Keystore read, and nothing
-  // on a local-only build. Then claims for a restored user whose last claim did not land (ADR-0040).
+  // No network call; also claims for a restored user whose last claim did not land (ADR-0039, ADR-0040).
   await RestoreSessionUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>()).execute(const GPNoInput());
 
   // `DateFormat` throws for `vi` until these are loaded.

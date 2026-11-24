@@ -9,7 +9,6 @@ import '../repositories/auth_repository.dart';
 import '../repositories/device_owner_repository.dart';
 import 'claim_local_data_use_case.dart';
 
-/// Refuses an empty or malformed email and an empty password before any request.
 final class SignInUseCase with GPUseCase<SignInInput, UserEntity> {
   const SignInUseCase(this._authRepository, this._deviceOwnerRepository);
 

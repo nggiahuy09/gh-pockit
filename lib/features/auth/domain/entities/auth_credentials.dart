@@ -3,15 +3,15 @@ import 'package:meta/meta.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 
-/// Checked in form order, email then password, so the first refusal is the topmost field (ADR-0016).
+/// Email first: the first refusal is the topmost field (ADR-0016).
 @immutable
 final class AuthCredentials {
   const AuthCredentials._(this.email, this.password);
 
-  /// Sign-up only. Matches the server's `minimum_password_length` (`supabase/config.toml`); the server stays the authority.
+  /// Sign-up only; matches `minimum_password_length` in `supabase/config.toml`.
   static const int passwordMinLength = 6;
 
-  /// The password must not be empty; its length is the server's call, since an account may predate a stricter client.
+  /// Length is left to the server: an account may predate a stricter client.
   static GPResult<AuthCredentials> forSignIn({required String email, required String password}) => _create(email: email, password: password, checkLength: false);
 
   static GPResult<AuthCredentials> forSignUp({required String email, required String password}) => _create(email: email, password: password, checkLength: true);
@@ -27,7 +27,7 @@ final class AuthCredentials {
     return GPOk(AuthCredentials._(trimmedEmail, password));
   }
 
-  // Shape only (something@something.tld, no spaces): the server decides what it accepts.
+  // Shape only; the server decides the rest.
   static final RegExp _emailShape = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
   final String email;

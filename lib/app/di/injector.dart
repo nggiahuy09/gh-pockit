@@ -58,12 +58,11 @@ void configureCoreDependencies([GetIt? container]) {
       dispose: (db) => db.close(),
     )
     ..registerLazySingleton<GPClock>(GPSystemClock.new)
-    // Must stay a singleton: it caches the owner every repository reads, and the claim reloads it (ADR-0040).
+    // Must stay a singleton: every repository reads its cache (ADR-0040).
     ..registerLazySingleton<GPSettingsOwnerContext>(
       () => GPSettingsOwnerContext(database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
       dispose: (context) => context.dispose(),
     )
-    // The same instance: repositories read it, the bootstrap and the claim reload it.
     ..registerLazySingleton<GPOwnerContext>(() => c.get<GPSettingsOwnerContext>())
     ..registerLazySingleton<GPSecureStore>(GPFlutterSecureStore.new)
     // Must stay a singleton: `v7()` keeps a counter that orders IDs minted in the same millisecond, which only holds with one generator.
@@ -76,11 +75,10 @@ void configureCoreDependencies([GetIt? container]) {
     ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()));
 }
 
-/// The one place outside `data/` that names Supabase: the client is built here and handed to the repositories (ADR-0038).
+/// The one place outside `data/` that names Supabase (ADR-0038).
 void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
   final c = container ?? getIt;
 
-  // Both builds: a local-only one never claims, but sign-in's use cases are built the same way.
   c
     ..registerLazySingleton<DeviceOwnerDao>(() => DeviceOwnerDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<DeviceOwnerRepository>(
@@ -97,7 +95,7 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
     case GPRemoteBackendConfig(:final url, :final publishableKey):
       c
         ..registerLazySingleton<SupabaseClient>(
-          // Implicit flow: PKCE needs a store for its verifier and only serves redirect sign-ins, which email/password never makes.
+          // Implicit flow: PKCE needs a verifier store, and email/password never redirects.
           () => SupabaseClient(url, publishableKey, authOptions: const AuthClientOptions(authFlowType: AuthFlowType.implicit)),
           dispose: (client) => client.dispose(),
         )

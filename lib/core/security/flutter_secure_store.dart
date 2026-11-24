@@ -7,7 +7,7 @@ final class GPFlutterSecureStore implements GPSecureStore {
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            // Readable once the phone was unlocked after boot, so a background sync can use it; never in an iCloud backup or on another device.
+            // Readable after first unlock (background sync); never backed up or moved to another device.
             iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
           );
 

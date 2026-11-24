@@ -9,7 +9,7 @@ sealed class AuthBlocState with Equatable {
   List<Object?> get props => const [];
 }
 
-/// Before the first status. Blocks nothing: the app reads the local database either way, and signing in is optional.
+/// Before the first status; blocks nothing.
 final class AuthUnknownState extends AuthBlocState {
   const AuthUnknownState();
 }
@@ -30,7 +30,6 @@ final class AuthSignedOutState extends AuthBlocState {
   const AuthSignedOutState();
 }
 
-/// No backend in this build: the sign-in entry points are hidden, not refused.
 final class AuthLocalOnlyState extends AuthBlocState {
   const AuthLocalOnlyState();
 }

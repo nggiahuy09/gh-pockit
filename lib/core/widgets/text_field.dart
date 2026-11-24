@@ -47,7 +47,7 @@ final class GPTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final IconData? leading;
 
-  /// At the end of the box, after the suffix and the clear button: a password's show / hide toggle.
+  /// After the suffix and the clear button, e.g. a password toggle.
   final Widget? trailing;
 
   final TextAlign textAlign;
@@ -73,7 +73,7 @@ final class GPTextField extends StatefulWidget {
   /// Null grows with the text.
   final int? maxLines;
 
-  /// Off for an email or a code; an obscured field never autocorrects or suggests.
+  /// Off for an email; an obscured field never autocorrects.
   final bool autocorrect;
 
   final bool autofocus;

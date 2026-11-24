@@ -31,7 +31,7 @@ final class AuthFormState with Equatable {
     return failure == null ? null : AuthFormField.fromFailure(failure);
   }
 
-  /// On sign-up, the one refusal a sign-in fixes: offered as a switch that keeps the email.
+  /// The one sign-up refusal a sign-in fixes.
   bool get isEmailTaken => isSignUp && failure == const GPValidationFailure(GPValidationCode.authEmailTaken);
 
   @override
@@ -47,7 +47,7 @@ final class AuthFormState with Equatable {
         isPasswordVisible: isPasswordVisible ?? this.isPasswordVisible,
       );
 
-  /// No email or password: states can end up in logs and failed `expect`s (golden rule 9).
+  /// No email or password (golden rule 9).
   @override
   String toString() => 'AuthFormState(mode: ${mode.name}, status: ${status.name}, failure: $failure)';
 }

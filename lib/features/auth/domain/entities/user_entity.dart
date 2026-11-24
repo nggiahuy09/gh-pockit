@@ -5,7 +5,7 @@ import 'package:meta/meta.dart';
 final class UserEntity with Equatable {
   const UserEntity({required this.id, required this.email});
 
-  /// The server's uid: the `owner_id` of every row this user syncs.
+  /// The server's uid, and the `owner_id` of the user's rows.
   final String id;
 
   final String email;
@@ -13,7 +13,7 @@ final class UserEntity with Equatable {
   @override
   List<Object?> get props => [id, email];
 
-  // No email: a log line or a failed `expect` must not print it (golden rule 9).
+  // No email (golden rule 9).
   @override
   String toString() => 'UserEntity(id: $id)';
 }

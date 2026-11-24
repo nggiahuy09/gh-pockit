@@ -49,7 +49,6 @@ final class AuthFormBloc extends Bloc<AuthFormEvent, AuthFormState> {
 
   void _passwordVisibilityToggleHandler(Emitter<AuthFormState> emit) => emit(state._copyWith(isPasswordVisible: !state.isPasswordVisible));
 
-  /// Keeps both fields; a failure from the other mode no longer applies.
   void _modeChangeHandler(AuthFormMode mode, Emitter<AuthFormState> emit) {
     if (state.isSubmitting || state.isSucceeded || mode == state.mode) return;
 

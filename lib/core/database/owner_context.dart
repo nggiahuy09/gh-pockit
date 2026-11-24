@@ -1,8 +1,7 @@
-/// Whose rows this device reads and writes (ADR-0040): `localOwnerId` until a sign-in claims them, then that user's uid, until an explicit
-/// sign-out wipes the device. A session that ends by itself leaves it as it is.
+/// Whose rows the device holds: `localOwnerId` until a claim, then the uid until an explicit sign-out (ADR-0040).
 abstract interface class GPOwnerContext {
   String get current;
 
-  /// [current] at once, then each change. A query built on it must follow, or a claim would leave it filtering on the old owner.
+  /// [current] at once, then each change; a query must follow it, or a claim empties it.
   Stream<String> watch();
 }

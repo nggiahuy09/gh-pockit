@@ -1,7 +1,7 @@
 import 'dart:async';
 
 extension GPStreamExtension<S> on Stream<S> {
-  /// Each value starts [convert]'s stream and cancels the previous one first, so a stale inner stream never emits after a newer one began.
+  /// Cancels the previous inner stream before starting the next.
   Stream<T> switchMap<T>(Stream<T> Function(S value) convert) {
     final controller = isBroadcast ? StreamController<T>.broadcast(sync: true) : StreamController<T>(sync: true);
     StreamSubscription<S>? outer;

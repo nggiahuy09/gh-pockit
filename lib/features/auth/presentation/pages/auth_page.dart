@@ -8,7 +8,6 @@ import 'auth_view.dart';
 final class AuthPage extends StatelessWidget {
   const AuthPage({super.key, this.mode = AuthFormMode.signIn});
 
-  /// Where the form opens; the user can switch in place.
   final AuthFormMode mode;
 
   @override

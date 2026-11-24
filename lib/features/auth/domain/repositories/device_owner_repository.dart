@@ -4,10 +4,9 @@ import '../../../../core/error/result.dart';
 abstract class DeviceOwnerRepository {
   const DeviceOwnerRepository();
 
-  /// `localOwnerId` until a claim, then the claiming user's id, until an explicit sign-out wipes the device.
+  /// `localOwnerId` until a claim, then the uid until a sign-out.
   String get ownerId;
 
-  /// Gives every `'local'` row to [userId] and makes [userId] the device owner, in one transaction: all of it or none. Returns how many rows
-  /// moved. A no-op when nothing is `'local'`.
+  /// Moves every `'local'` row to [userId] in one transaction; returns how many moved.
   Future<GPResult<int>> claimLocalData(String userId);
 }

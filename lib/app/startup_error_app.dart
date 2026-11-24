@@ -8,13 +8,13 @@ import '../core/localization/locale_vi/locale_vi.dart';
 import '../core/widgets/empty_state.dart';
 import 'theme/app_theme.dart';
 
-/// Run instead of `GPApp` when the bootstrap stops before the app can start. Nothing here reads the database, `getIt` or a stored language.
+/// Run instead of `GPApp` when the bootstrap stops; reads no database, `getIt` or stored language.
 final class GPStartupErrorApp extends StatelessWidget {
   const GPStartupErrorApp({super.key, required this.icon, required this.locale, required this.message, required this.title});
 
   final IconData icon;
 
-  /// The device's: the chosen language is stored in the database.
+  /// The device's: the chosen one is in the database.
   final GPLocale locale;
 
   final String Function(GPLocaleBase strings) message;

@@ -45,8 +45,7 @@ abstract class GPLocaleBaseError {
   String get databaseOpenFailedTitle;
   String get databaseOpenFailedBody;
 
-  /// Shown before the app itself, when the env file does not fit the build (ADR-0038). Only a developer sees it; the body is followed by the
-  /// problem's code.
+  /// The misconfigured-build screen (ADR-0038); the problem code follows the body.
   String get backendConfigInvalidTitle;
   String get backendConfigInvalidBody;
 }
