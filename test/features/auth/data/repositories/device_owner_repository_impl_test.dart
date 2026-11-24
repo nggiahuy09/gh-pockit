@@ -277,6 +277,16 @@ void main() {
       expect(okValue(await deviceOwner.countUnsyncedChanges()), 1);
     });
 
+    test('a seed with a new icon or colour counts', () async {
+      await seeder.seedDefaults();
+      final foodId = await seededId(localOwnerId, CategoryType.expense);
+      final salaryId = await seededId(localOwnerId, CategoryType.income);
+      await db.customStatement("UPDATE categories SET icon_key = 'coffee' WHERE id = ?", [foodId]);
+      await db.customStatement("UPDATE categories SET color_key = 'teal' WHERE id = ?", [salaryId]);
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 2);
+    });
+
     test("only the device owner's rows count", () async {
       await useOffline();
       okValue(await deviceOwner.claimLocalData(_user));

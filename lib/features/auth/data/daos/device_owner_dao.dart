@@ -5,6 +5,7 @@ import '../../../../core/database/owner_id.dart';
 import '../../../../core/database/settings_owner_context.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../../categories/data/seed/category_seeder.dart';
+import '../../../categories/data/seed/default_categories.dart';
 
 /// The claim, in one transaction (ADR-0040). Raw SQL: `version = version + 1` has no typed form.
 final class DeviceOwnerDao {
@@ -65,15 +66,17 @@ final class DeviceOwnerDao {
   }
 
   /// Until the outbox exists only transactions record a sync state, and nothing is pushed: every account and every category the user made
-  /// or changed counts too, deleted ones included (ADR-0042).
+  /// or changed counts too, deleted ones included. A seed counts unless it is exactly as seeded (ADR-0042).
   Future<int> countUnsynced(String ownerId) async {
+    final seeds = [for (final category in DefaultCategory.values) '${category.nameKey}|${category.iconKey}'];
     final row = await _db
         .customSelect(
           'SELECT '
           '(SELECT count(*) FROM accounts WHERE owner_id = ?1) + '
-          '(SELECT count(*) FROM categories WHERE owner_id = ?1 AND (name_key IS NULL OR name IS NOT NULL OR deleted_at IS NOT NULL)) + '
+          '(SELECT count(*) FROM categories WHERE owner_id = ?1 AND (name_key IS NULL OR name IS NOT NULL OR color_key IS NOT NULL '
+          "OR deleted_at IS NOT NULL OR name_key || '|' || COALESCE(icon_key, '') NOT IN (${List.filled(seeds.length, '?').join(', ')}))) + "
           "(SELECT count(*) FROM transactions WHERE owner_id = ?1 AND sync_status = 'pending') AS unsynced",
-          variables: [Variable.withString(ownerId)],
+          variables: [Variable.withString(ownerId), for (final seed in seeds) Variable.withString(seed)],
           readsFrom: {_db.accountsTable, _db.categoriesTable, _db.transactionsTable},
         )
         .getSingle();

@@ -18,10 +18,11 @@ order of the steps. No schema change.
 
 1. **Refused while anything is unsynced** (decision C). `countUnsyncedChanges` counts, for the device owner:
    - every account;
-   - every category the user made, renamed or deleted;
+   - every category the user made, and every seeded one that is no longer exactly as seeded (renamed, re-iconed, coloured or deleted);
    - every pending transaction.
 
-   Deleted rows count, because the deletion has to sync too. Untouched seeded categories do not: every device seeds the same ones.
+   Deleted rows count, because the deletion has to sync too. Untouched seeded categories do not: every device seeds the same ones. The
+   seeds' defaults come from `DefaultCategory`, so a change to them changes the comparison too.
    - With a count above zero, the dialog explains and offers no way through ("Còn N thay đổi chưa được sao lưu…", one button, Đã hiểu).
    - With zero, it asks for confirmation (a danger dialog).
    - `SignOutUseCase` checks the count again itself, so no caller can skip it.
@@ -71,15 +72,16 @@ Negative:
 ## How it is validated
 
 - `device_owner_repository_impl_test.dart`, on a real in-memory database:
-  - the count: untouched seeds 0; offline use 7 (2 accounts, 1 own category, 4 transactions with one deleted); a renamed seed 1; only
-    the owner's rows;
+  - the count: untouched seeds 0; offline use 7 (2 accounts, 1 own category, 4 transactions with one deleted); a renamed seed 1; a
+    re-iconed and a coloured seed 2; only the owner's rows;
   - the release: the owner's rows gone, the language setting kept, `owner.id` gone, the owner back to `'local'`, defaults reseeded, an
     open list emptied, `PRAGMA foreign_key_check` clean;
   - an unclaimed device kept;
   - a refused delete rolls everything back and keeps the owner.
 - `SignOutUseCase`: wipe then sign out; refused when unsynced, with nothing wiped; a failed wipe keeps the session; a failed count
   refuses.
-- `SignOutBloc`: blocked with the count, confirm, cancel, a stray confirm ignored, an error that can be retried.
+- `SignOutBloc`: blocked with the count, confirm, cancel, a stray confirm ignored, an error that can be retried, and a second sign-out
+  on the same screen after signing back in.
 - `auth_routes_test.dart` through the whole app: a blocked sign-out explained, a confirmed one wipes and signs out (the snackbar, then
   the card back to Sign in), and a cancel keeps everything.
 - iPhone 17 Pro simulator, with the T5 session and 110 unsynced rows: the button, the blocked dialog with the right count, and nothing

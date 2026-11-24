@@ -71,4 +71,12 @@ void main() {
     expect(await _after(bloc, const SignOutConfirmEvent()), const SignOutErrorState(GPDatabaseFailure()));
     expect(await _after(bloc, const SignOutRequestEvent()), const SignOutConfirmingState());
   });
+
+  test('after a sign-out, a later sign-out on the same screen is asked again', () async {
+    final bloc = _bloc();
+    await _after(bloc, const SignOutRequestEvent());
+    await _after(bloc, const SignOutConfirmEvent());
+
+    expect(await _after(bloc, const SignOutRequestEvent()), const SignOutConfirmingState());
+  });
 }

@@ -37,7 +37,8 @@ final class SignOutBloc extends Bloc<SignOutEvent, SignOutState> {
   }
 
   Future<void> _requestHandler(Emitter<SignOutState> emit) async {
-    if (state is! SignOutIdleState && state is! SignOutErrorState) return;
+    // Done too: the same Settings visit can sign back in and out again.
+    if (state is! SignOutIdleState && state is! SignOutErrorState && state is! SignOutDoneState) return;
 
     emit(const SignOutCheckingState());
     emit(switch (await _countUnsyncedChanges.execute(const GPNoInput())) {
