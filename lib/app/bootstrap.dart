@@ -10,6 +10,7 @@ import '../core/error/result.dart';
 import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/logging/app_logger.dart';
+import '../core/theme/appearance.dart';
 import '../core/utils/clock.dart';
 import '../features/accounts/domain/repositories/account_repository.dart';
 import '../features/auth/domain/repositories/auth_repository.dart';
@@ -77,6 +78,9 @@ Future<void> bootstrap(Widget Function() builder) async {
 
   // Resolved before the first frame so the app never paints English and then flips to Vietnamese.
   await getIt.get<GPLocalization>().init(PlatformDispatcher.instance.locale);
+
+  // Before the first frame too, so a dark choice never flashes light (ADR-0043).
+  await getIt.get<GPAppearance>().init();
 
   // Every launch, and idempotent, so one missed run cannot leave the categories empty for good. Not in `onUpgrade`: a migration has no owner or
   // clock, and would resurrect categories the user deleted.

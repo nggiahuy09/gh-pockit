@@ -12,6 +12,9 @@ import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
 import 'package:ghpockit/core/security/flutter_secure_store.dart';
 import 'package:ghpockit/core/security/secure_store.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
+import 'package:ghpockit/core/theme/drift_theme_preference_store.dart';
+import 'package:ghpockit/core/theme/theme_preference_store.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/utils/uuid_generator.dart';
 import 'package:ghpockit/features/accounts/data/daos/account_dao.dart';
@@ -43,6 +46,13 @@ void main() {
     });
 
     tearDown(() => container.reset());
+
+    test('registers the appearance on the settings table, once', () async {
+      await _useMemoryDatabase(container);
+
+      expect(container.get<GPThemePreferenceStore>(), isA<GPDriftThemePreferenceStore>());
+      expect(container.get<GPAppearance>(), same(container.get<GPAppearance>()));
+    });
 
     test('registers the core abstractions', () {
       expect(container.get<GPSecureStore>(), isA<GPFlutterSecureStore>());

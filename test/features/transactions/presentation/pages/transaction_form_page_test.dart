@@ -10,6 +10,7 @@ import 'package:ghpockit/core/error/failure_extension.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/core/localization/locale_en/locale_en.dart';
 import 'package:ghpockit/core/money/money.dart';
+import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/core/widgets/date_picker.dart';
 import 'package:ghpockit/core/widgets/dialog.dart';
@@ -35,6 +36,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import '../../../../helpers/fake_account_repository.dart';
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/in_memory_repositories.dart';
+import '../../../../helpers/in_memory_theme_preference_store.dart';
 import '../../../../helpers/localization_harness.dart';
 import '../../../../helpers/results.dart';
 
@@ -51,7 +53,8 @@ void main() {
       ..registerSingleton<CategoryRepository>(_repositories.categories)
       ..registerSingleton<TransactionRepository>(_repositories.transactions)
       ..registerSingleton<GPClock>(_repositories.clock)
-      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository());
+      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository())
+      ..registerSingleton<GPAppearance>(GPAppearance(InMemoryThemePreferenceStore()));
   });
 
   tearDown(() async {

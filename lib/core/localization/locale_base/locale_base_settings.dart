@@ -6,6 +6,11 @@ abstract class GPLocaleBaseSettings {
 
   String get title;
   String get language;
+  String get appearance;
+  String get appearanceSystem;
+  String get appearanceSystemBody;
+  String get appearanceLight;
+  String get appearanceDark;
   String get debugTitle;
   String get debugAddSample;
   String get debugSampleAdded;

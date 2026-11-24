@@ -6,7 +6,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/error/failure_extension.dart';
 import '../../../../core/localization/locale.dart';
 import '../../../../core/localization/localization_scope.dart';
+import '../../../../core/theme/appearance_scope.dart';
 import '../../../../core/theme/theme_context.dart';
+import '../../../../core/theme/theme_preference.dart';
 import '../../../../core/widgets/button.dart';
 import '../../../../core/widgets/dialog.dart';
 import '../../../../core/widgets/radio.dart';
@@ -21,6 +23,9 @@ final class SettingsView extends StatelessWidget {
 
   /// Fire and forget: the notifier drives the repaint, and a local-only write has nothing to roll back (ADR-0004).
   void _handleLocaleChange(BuildContext context, GPLocale locale) => unawaited(context.localization.changeLocale(locale));
+
+  /// Same as the language: device-local, applied at once (ADR-0043).
+  void _handleAppearanceChange(BuildContext context, GPThemePreference preference) => unawaited(context.appearance.change(preference));
 
   @override
   Widget build(BuildContext context) {
@@ -42,6 +47,18 @@ final class SettingsView extends StatelessWidget {
               label: viewLocale.language,
               title: viewLocale.language,
               onChanged: (selected) => _handleLocaleChange(context, selected),
+            ),
+            SizedBox(height: context.spacing.lg),
+            GPRadioList<GPThemePreference>(
+              options: [
+                GPRadioOption(value: GPThemePreference.system, description: viewLocale.appearanceSystemBody, label: viewLocale.appearanceSystem),
+                GPRadioOption(value: GPThemePreference.light, label: viewLocale.appearanceLight),
+                GPRadioOption(value: GPThemePreference.dark, label: viewLocale.appearanceDark),
+              ],
+              value: context.appearance.preference,
+              label: viewLocale.appearance,
+              title: viewLocale.appearance,
+              onChanged: (selected) => _handleAppearanceChange(context, selected),
             ),
             if (showsDebugTools) const _DebugTools(),
           ],

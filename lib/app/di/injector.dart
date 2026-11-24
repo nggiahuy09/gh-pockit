@@ -14,6 +14,9 @@ import '../../core/logging/app_logger.dart';
 import '../../core/logging/developer_logger.dart';
 import '../../core/security/flutter_secure_store.dart';
 import '../../core/security/secure_store.dart';
+import '../../core/theme/appearance.dart';
+import '../../core/theme/drift_theme_preference_store.dart';
+import '../../core/theme/theme_preference_store.dart';
 import '../../core/utils/clock.dart';
 import '../../core/utils/uuid_generator.dart';
 import '../../features/accounts/data/daos/account_dao.dart';
@@ -72,7 +75,12 @@ void configureCoreDependencies([GetIt? container]) {
     )
     ..registerLazySingleton<GPLocaleStore>(() => GPDriftLocaleStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()))
     // Must stay a singleton: it holds the active language, and a second instance would leave part of the tree in the old one.
-    ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()));
+    ..registerLazySingleton<GPLocalization>(() => GPLocalization(c.get<GPLocaleStore>()))
+    ..registerLazySingleton<GPThemePreferenceStore>(
+      () => GPDriftThemePreferenceStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
+    )
+    // Must stay a singleton, like the localization: `GPApp` repaints from it.
+    ..registerLazySingleton<GPAppearance>(() => GPAppearance(c.get<GPThemePreferenceStore>()));
 }
 
 /// The one place outside `data/` that names Supabase (ADR-0038).

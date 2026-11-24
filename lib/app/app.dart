@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/localization/localization_scope.dart';
+import '../core/theme/appearance.dart';
+import '../core/theme/appearance_scope.dart';
 import '../features/auth/presentation/bloc/auth_bloc.dart';
 import 'di/injector.dart';
 import 'router/app_router.dart';
@@ -14,7 +16,10 @@ import 'theme/app_theme.dart';
 
 /// Stateful so the `GoRouter` is built once: rebuilding it on a theme or language change would drop every branch's navigation stack.
 final class GPApp extends StatefulWidget {
-  const GPApp({super.key, this.localization, this.initialLocation});
+  const GPApp({super.key, this.appearance, this.localization, this.initialLocation});
+
+  /// For tests. Null resolves it from `getIt`.
+  final GPAppearance? appearance;
 
   /// For tests. Null resolves it from `getIt`.
   final GPLocalization? localization;
@@ -29,6 +34,7 @@ final class GPApp extends StatefulWidget {
 final class _GPAppState extends State<GPApp> {
   late final GoRouter _router = createRouter(widget.initialLocation ?? Routes.initial);
   late final GPLocalization _localization = widget.localization ?? getIt.get<GPLocalization>();
+  late final GPAppearance _appearance = widget.appearance ?? getIt.get<GPAppearance>();
 
   @override
   void dispose() {
@@ -45,7 +51,7 @@ final class _GPAppState extends State<GPApp> {
   );
 
   Widget _buildApp() => ListenableBuilder(
-    listenable: _localization,
+    listenable: Listenable.merge([_localization, _appearance]),
     builder: (_, _) => GPLocalizationScope(
       localization: _localization,
       child: MaterialApp.router(
@@ -53,10 +59,12 @@ final class _GPAppState extends State<GPApp> {
         title: _localization.current.root.appName,
         theme: GPAppTheme.light(),
         darkTheme: GPAppTheme.dark(),
+        themeMode: _appearance.themeMode,
         locale: _localization.locale.toPlatformLocale(),
         localizationsDelegates: const [GlobalMaterialLocalizations.delegate, GlobalWidgetsLocalizations.delegate, GlobalCupertinoLocalizations.delegate],
         supportedLocales: GPLocale.values.map((locale) => locale.toPlatformLocale()),
         routerConfig: _router,
+        builder: (_, child) => GPAppearanceScope(appearance: _appearance, child: child ?? const SizedBox.shrink()),
       ),
     ),
   );

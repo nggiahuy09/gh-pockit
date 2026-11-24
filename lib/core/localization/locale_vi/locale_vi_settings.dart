@@ -10,6 +10,21 @@ final class GPLocaleViSettings implements GPLocaleBaseSettings {
   String get language => 'Ngôn ngữ';
 
   @override
+  String get appearance => 'Giao diện';
+
+  @override
+  String get appearanceSystem => 'Theo hệ thống';
+
+  @override
+  String get appearanceSystemBody => 'Sáng hay tối theo cài đặt của máy';
+
+  @override
+  String get appearanceLight => 'Sáng';
+
+  @override
+  String get appearanceDark => 'Tối';
+
+  @override
   String get debugTitle => 'Gỡ lỗi';
 
   @override
