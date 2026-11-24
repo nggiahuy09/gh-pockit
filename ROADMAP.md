@@ -1346,15 +1346,15 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 ## W12 · 23–29/11 🔴 Auth client
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                                |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out) ✅ Done (15/11, làm sớm) — gói Dart thuần `supabase`, session trong bộ nhớ tới T4, file env có `ENV_FLAVOR`, file rỗng = local-only; ADR-0038; chi tiết ở _W12 T2_ dưới                                                                                             |
-| T3   | Login + Register UI + validation ✅ Done (15/11, làm sớm) — `AuthCredentials` + 3 use case, `AuthFormBloc` một form cho cả đăng nhập / đăng ký, lỗi theo trường từng cái một (ADR-0016), `GPTextField` có mật khẩu; chưa nối router (T5); chi tiết ở _Kế hoạch W12_ dưới                                                            |
-| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated) ✅ Done (16/11, làm sớm) — session trong Keychain / Keystore (`flutter_secure_storage` 10.3.4), khôi phục không cần mạng trước frame đầu, bỏ sau khi cài lại, dừng refresh khi app ở nền; ADR-0039; chi tiết ở _Kế hoạch W12_ dưới |
-| T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn — `/login`, `/register` mở từ Hồ sơ, guard chỉ đẩy người đã đăng nhập ra khỏi hai route đó; chi tiết ở _Kế hoạch W12_ dưới                                                                                                            |
-| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009)                                                                                                                                                                               |
-| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                                                                                    |
-| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                                                                                                              |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | `AuthRepository` interface + Supabase impl (sign up / in / out) ✅ Done (15/11, làm sớm) — gói Dart thuần `supabase`, session trong bộ nhớ tới T4, file env có `ENV_FLAVOR`, file rỗng = local-only; ADR-0038; chi tiết ở _W12 T2_ dưới                                                                                                     |
+| T3   | Login + Register UI + validation ✅ Done (15/11, làm sớm) — `AuthCredentials` + 3 use case, `AuthFormBloc` một form cho cả đăng nhập / đăng ký, lỗi theo trường từng cái một (ADR-0016), `GPTextField` có mật khẩu; chưa nối router (T5); chi tiết ở _Kế hoạch W12_ dưới                                                                    |
+| T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated) ✅ Done (16/11, làm sớm) — session trong Keychain / Keystore (`flutter_secure_storage` 10.3.4), khôi phục không cần mạng trước frame đầu, bỏ sau khi cài lại, dừng refresh khi app ở nền; ADR-0039; chi tiết ở _Kế hoạch W12_ dưới         |
+| T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn ✅ Done (18/11, làm sớm) — `/login`, `/register` ngoài shell, guard chỉ trên hai route đó, `AuthBloc` trên router, thẻ Đồng bộ trong Cài đặt; đăng ký → claim → mở lại app chạy thật trên simulator; ADR-0041; chi tiết ở _Kế hoạch W12_ dưới |
+| T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009)                                                                                                                                                                                       |
+| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                                                                                            |
+| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                                                                                                                      |
 
 > **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
 > `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
@@ -1460,13 +1460,24 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [ ] **Chưa kiểm:** claim thật trên máy sau khi đăng nhập (cần T5); thời gian claim ở 50k (ADR-0026). Đăng nhập tài khoản khác khi máy còn giữ
       dữ liệu tài khoản cũ hiện chỉ bị từ chối — nút đăng xuất để gỡ là T6.
 
-**T5 — route đăng nhập + guard** (quyết định E: đăng nhập tùy chọn)
+**T5 — route đăng nhập + guard** (quyết định E: đăng nhập tùy chọn) ✅ (18/11, ADR-0041)
 
-- [ ] `/login`, `/register` ngoài shell, mở từ thẻ Đồng bộ trong Hồ sơ; nút đóng quay về chỗ cũ (`popOrGo`).
-- [ ] Guard ngược: `refreshListenable` từ stream `AuthBloc`; đã đăng nhập mà vào `/login` / `/register` → về Hồ sơ; `localOnly` → hai route
-      này không tồn tại (về Hồ sơ), thẻ Đồng bộ ẩn. Không route nào trong shell cần đăng nhập. Giữ nhánh `StatefulShellRoute` (ADR-0003).
-- [ ] Thẻ Đồng bộ trong Hồ sơ theo trạng thái: chưa đăng nhập (nút Đăng nhập), đã đăng nhập (email + số thay đổi chưa sao lưu), local-only (ẩn).
-- [ ] Test: bảng guard trạng thái × route; Hồ sơ ba trạng thái thẻ.
+- [x] `/login`, `/register` ngoài shell (che dock), cùng `AuthPage` (mode theo route, vẫn đổi tại chỗ). Đóng / thành công → `popOrGoNamed`
+      về Cài đặt. Chưa có màn Hồ sơ: Cài đặt (mở từ Trang chủ) đóng vai đó, đúng chỗ canvas đặt thẻ "Đồng bộ nhiều thiết bị".
+- [x] **Guard chỉ trên hai route này** (`authRouteRedirect`, hàm thuần): chưa đăng nhập / unknown → mở; đã đăng nhập / local-only → về Cài
+      đặt. Không route nào trong shell cần đăng nhập, không splash. **Không `refreshListenable`:** refresh cũng chạy khi chính form đăng nhập
+      xong và đang tự đóng — hai bên giành nhau một route.
+- [x] `AuthBloc` trên router trong `GPApp`, `lazy: false` — trạng thái đã có trước lần điều hướng đầu tiên.
+- [x] **Thẻ Đồng bộ** (`SyncAccountCardWidget`) đầu trang Cài đặt: unknown / local-only → ẩn; chưa đăng nhập → lời giải thích + nút Đăng nhập;
+      đã đăng nhập → email. Đăng xuất và số thay đổi chưa sao lưu là T6 / P4.
+- [x] Test: bảng redirect (4); app thật với auth giả (9 — thẻ mở đăng nhập che dock rồi đóng về Cài đặt; `/register` mở đăng ký; đăng nhập
+      xong về Cài đặt có email; đã đăng nhập / local-only bị đẩy khỏi hai route; local-only không thẻ; unknown vẫn mở Trang chủ). `GPApp` cần
+      `AuthRepository` trong test → `registerShellFakes` đăng ký bản local-only; Cài đặt chạy riêng cần `AuthBloc`. 1181 → 1194 xanh + 1 skip.
+- [x] **Chạy thật lần đầu (simulator, dev, `supabase start` trên localhost — không tạo tài khoản trên project dev):** Cài đặt → Đăng nhập →
+      Tạo tài khoản → về Cài đặt, thẻ hiện email, snackbar "Đã tạo tài khoản."; iOS gợi ý "Use Strong Password" (autofill `newPassword` tới
+      được hệ điều hành). DB trong container app: 5 tài khoản / 11 danh mục / 105 giao dịch thuộc uid, `version` 2, giao dịch vẫn `pending`,
+      có `owner.id` và `auth.session_kept`. Mở lại app → vẫn đăng nhập (T4), Trang chủ số liệu y nguyên (Claim).
+- [ ] Deep link OS vào `/login` lúc khởi động lạnh sẽ gặp `unknown` và mở form dù đã đăng nhập — chưa đăng ký deep link nào.
 
 **T6 — logout** (quyết định C + D)
 
