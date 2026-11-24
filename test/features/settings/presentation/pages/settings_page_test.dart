@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/core/error/failure.dart';
@@ -8,6 +10,9 @@ import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
+import 'package:ghpockit/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:ghpockit/features/settings/presentation/pages/settings_page.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
@@ -21,9 +26,11 @@ import '../../../../helpers/results.dart';
 
 /// Fakes, not drift: the write starts from a tap inside the widget test's fake zone, where drift's query timers never fire.
 void main() {
+  tearDown(getIt.reset);
+
   group('debug tools', () {
     testWidgets('are absent from a release build', (tester) async {
-      await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: const SettingsPage(showsDebugTools: false)));
+      await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: _withAuth(const SettingsPage(showsDebugTools: false))));
 
       expect(find.text('Add a sample transaction'), findsNothing);
     });
@@ -50,7 +57,7 @@ void main() {
       tearDown(getIt.reset);
 
       testWidgets('add a sample transaction in the UI language and say so', (tester) async {
-        await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: const SettingsPage()));
+        await tester.pumpWidget(localizedHarness(localization: await localizationFor(GPLocale.en), child: _withAuth(const SettingsPage())));
         await tester.tap(find.text('Add a sample transaction'));
         await tester.pumpAndSettle();
 
@@ -61,7 +68,7 @@ void main() {
       testWidgets('show the failure instead when the write is refused', (tester) async {
         transactions.refuseWith = const GPDatabaseFailure();
         final localization = await localizationFor(GPLocale.en);
-        await tester.pumpWidget(localizedHarness(localization: localization, child: const SettingsPage()));
+        await tester.pumpWidget(localizedHarness(localization: localization, child: _withAuth(const SettingsPage())));
         await tester.tap(find.text('Add a sample transaction'));
         await tester.pumpAndSettle();
 
@@ -103,4 +110,10 @@ final class _RecordingTransactionRepository extends FakeTransactionRepository {
       note: note,
     );
   }
+}
+
+/// Settings shows the sync card, which reads the app's `AuthBloc`; a local-only repository keeps the card hidden.
+Widget _withAuth(Widget child) {
+  if (!getIt.isRegistered<AuthRepository>()) getIt.registerSingleton<AuthRepository>(const LocalOnlyAuthRepository());
+  return BlocProvider(create: (_) => AuthBloc(), child: child);
 }

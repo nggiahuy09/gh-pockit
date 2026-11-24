@@ -56,4 +56,13 @@ final class GPLocaleEnAuth implements GPLocaleBaseAuth {
 
   @override
   String get signedUp => 'Account created.';
+
+  @override
+  String get syncTitle => 'Sync across devices';
+
+  @override
+  String get syncSignedOutBody => 'Optional. Sign in to back up your data and use it on more than one device.';
+
+  @override
+  String syncSignedInBody(String email) => 'Signed in as $email';
 }

@@ -23,7 +23,7 @@ import '../../../../helpers/localization_harness.dart';
 
 late FakeAuthRepository _repository;
 
-/// Opened cold, as a deep link would: closing it lands on Home.
+/// Opened cold, as a deep link would: closing it lands on Settings, where the sync card opened it.
 Future<void> _pump(WidgetTester tester, {AuthFormMode mode = AuthFormMode.signIn, GPLocale locale = GPLocale.en}) async {
   final router = GoRouter(
     initialLocation: '/auth',
@@ -32,6 +32,11 @@ Future<void> _pump(WidgetTester tester, {AuthFormMode mode = AuthFormMode.signIn
         path: Routes.home,
         name: RouteNames.home,
         builder: (_, _) => const Scaffold(body: Text('home')),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        name: RouteNames.settings,
+        builder: (_, _) => const Scaffold(body: Text('settings')),
       ),
       GoRoute(
         path: '/auth',
@@ -138,7 +143,7 @@ void main() {
     await tester.tap(_submitButton('Sign in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('home'), findsOneWidget);
+    expect(find.text('settings'), findsOneWidget);
     expect(find.text('Signed in.'), findsOneWidget);
   });
 
@@ -181,13 +186,13 @@ void main() {
     expect(find.text('Sign in to sync'), findsOneWidget);
   });
 
-  testWidgets('the close button returns to Home', (tester) async {
+  testWidgets('the close button returns to Settings', (tester) async {
     await _pump(tester);
 
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
 
-    expect(find.text('home'), findsOneWidget);
+    expect(find.text('settings'), findsOneWidget);
   });
 
   testWidgets('reads in Vietnamese', (tester) async {

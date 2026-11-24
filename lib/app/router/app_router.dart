@@ -1,8 +1,12 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/utils/clock.dart';
 import '../../features/accounts/presentation/pages/account_form_page.dart';
 import '../../features/accounts/presentation/pages/accounts_page.dart';
+import '../../features/auth/presentation/auth_form_mode_enum.dart';
+import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/budgets/presentation/pages/budgets_page.dart';
 import '../../features/dashboard/presentation/pages/home_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -10,6 +14,7 @@ import '../../features/transactions/presentation/pages/transaction_form_page.dar
 import '../../features/transactions/presentation/pages/transactions_page.dart';
 import '../di/injector.dart';
 import 'app_shell.dart';
+import 'auth_redirect.dart';
 import 'routes.dart';
 
 /// A function, not a global: a `GoRouter` owns navigation state, and a shared one would leak between tests. Each tab keeps its own stack (ADR-0003);
@@ -60,6 +65,18 @@ GoRouter createRouter([String initialLocation = Routes.initial]) => GoRouter(
       builder: (_, state) => TransactionFormPage(clock: getIt.get<GPClock>(), transactionId: state.pathParameters['transactionId']),
     ),
     GoRoute(path: Routes.newAccount, name: RouteNames.newAccount, builder: (_, _) => const AccountFormPage()),
+    GoRoute(
+      path: Routes.login,
+      name: RouteNames.login,
+      redirect: (context, _) => authRouteRedirect(context.read<AuthBloc>().state),
+      builder: (_, _) => const AuthPage(),
+    ),
+    GoRoute(
+      path: Routes.register,
+      name: RouteNames.register,
+      redirect: (context, _) => authRouteRedirect(context.read<AuthBloc>().state),
+      builder: (_, _) => const AuthPage(mode: AuthFormMode.signUp),
+    ),
     GoRoute(
       path: Routes.editAccount,
       name: RouteNames.editAccount,

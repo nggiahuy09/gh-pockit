@@ -15,7 +15,6 @@ import '../auth_form_field_enum.dart';
 import '../auth_form_mode_enum.dart';
 import '../bloc/auth_form_bloc.dart';
 
-/// Optional and dismissible: the app works signed out, and signing in only adds backup and sync.
 final class AuthView extends StatelessWidget {
   const AuthView({super.key});
 
@@ -24,7 +23,7 @@ final class AuthView extends StatelessWidget {
     // Lets a password manager offer to save what was just accepted.
     TextInput.finishAutofillContext();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.isSignUp ? viewLocale.signedUp : viewLocale.signedIn)));
-    context.popOrGoNamed(RouteNames.home);
+    context.popOrGoNamed(RouteNames.settings);
   }
 
   @override
@@ -33,7 +32,7 @@ final class AuthView extends StatelessWidget {
     listener: _handleSucceeded,
     builder: (_, state) => Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.close), tooltip: context.l10n.auth.close, onPressed: () => context.popOrGoNamed(RouteNames.home)),
+        leading: IconButton(icon: const Icon(Icons.close), tooltip: context.l10n.auth.close, onPressed: () => context.popOrGoNamed(RouteNames.settings)),
       ),
       body: _AuthForm(state: state),
     ),
@@ -61,7 +60,7 @@ final class _AuthFormState extends State<_AuthForm> {
   }
 
   void _handleFailure(AuthFormState state) {
-    // A refused field takes focus back, so a screen reader reads its error (ADR-0016).
+    // Focus the refused field, so a screen reader reads its error (ADR-0016).
     switch (state.failedField) {
       case AuthFormField.email:
         _emailFocus.requestFocus();
@@ -148,7 +147,7 @@ final class _AuthFormState extends State<_AuthForm> {
               onChanged: _handlePasswordChange,
               onSubmitted: (_) => _handleSubmit(),
             ),
-            // Only a failure no field owns: wrong credentials, a rate limit, the network, no backend.
+            // Only a failure no field owns.
             if (failure != null && failedField == null) ...[
               SizedBox(height: spacing.md),
               GPFormFailureBanner(message: failure.getMessage(locale)),

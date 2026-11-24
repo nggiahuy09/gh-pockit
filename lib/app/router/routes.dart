@@ -14,6 +14,10 @@ abstract final class Routes {
 
   /// Under Home, not a tab of its own: it opens from Home's app bar and keeps the dock.
   static const String settings = '$home/settings';
+
+  /// Optional, guarded by `authRouteRedirect` (ADR-0041).
+  static const String login = '/login';
+  static const String register = '/register';
 }
 
 abstract final class RouteNames {
@@ -26,4 +30,6 @@ abstract final class RouteNames {
   static const String newAccount = 'newAccount';
   static const String editAccount = 'editAccount';
   static const String settings = 'settings';
+  static const String login = 'login';
+  static const String register = 'register';
 }

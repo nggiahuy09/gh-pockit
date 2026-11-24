@@ -9,6 +9,7 @@ import '../../../../core/localization/localization_scope.dart';
 import '../../../../core/theme/theme_context.dart';
 import '../../../../core/widgets/button.dart';
 import '../../../../core/widgets/radio.dart';
+import '../../../auth/presentation/widgets/sync_account_card_widget.dart';
 import '../bloc/sample_data_bloc.dart';
 
 final class SettingsView extends StatelessWidget {
@@ -29,6 +30,7 @@ final class SettingsView extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.all(context.spacing.md),
         children: [
+          const SyncAccountCardWidget(),
           GPRadioList<GPLocale>(
             // Untranslated on purpose: each language names itself.
             options: [for (final option in GPLocale.values) GPRadioOption(locale: option.toPlatformLocale(), value: option, label: option.displayName)],

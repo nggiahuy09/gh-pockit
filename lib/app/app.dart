@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/localization/locale.dart';
 import '../core/localization/localization.dart';
 import '../core/localization/localization_scope.dart';
+import '../features/auth/presentation/bloc/auth_bloc.dart';
 import 'di/injector.dart';
 import 'router/app_router.dart';
 import 'router/routes.dart';
@@ -34,8 +36,15 @@ final class _GPAppState extends State<GPApp> {
     super.dispose();
   }
 
+  /// Not lazy: the sign-in routes' redirect reads its state (ADR-0041).
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => BlocProvider(
+    create: (_) => AuthBloc(),
+    lazy: false,
+    child: _buildApp(),
+  );
+
+  Widget _buildApp() => ListenableBuilder(
     listenable: _localization,
     builder: (_, _) => GPLocalizationScope(
       localization: _localization,

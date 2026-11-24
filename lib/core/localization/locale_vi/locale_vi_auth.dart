@@ -56,4 +56,13 @@ final class GPLocaleViAuth implements GPLocaleBaseAuth {
 
   @override
   String get signedUp => 'Đã tạo tài khoản.';
+
+  @override
+  String get syncTitle => 'Đồng bộ nhiều thiết bị';
+
+  @override
+  String get syncSignedOutBody => 'Không bắt buộc. Đăng nhập để sao lưu và dùng trên nhiều máy.';
+
+  @override
+  String syncSignedInBody(String email) => 'Đã đăng nhập: $email';
 }

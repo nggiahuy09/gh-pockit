@@ -19,8 +19,15 @@ final class FakeAuthRepository extends AuthRepository {
   /// What `watchAuthStatus` emits; a test adds to it.
   final StreamController<AuthStatus> statuses = StreamController<AuthStatus>.broadcast();
 
+  /// Sent first to every new watcher, like the real repository's current status. Null sends nothing until [statuses] does.
+  AuthStatus? currentStatus;
+
   @override
-  Stream<AuthStatus> watchAuthStatus() => statuses.stream;
+  Stream<AuthStatus> watchAuthStatus() async* {
+    final current = currentStatus;
+    if (current != null) yield current;
+    yield* statuses.stream;
+  }
 
   @override
   Future<GPResult<void>> restoreSession() async {

@@ -20,6 +20,8 @@ import 'package:ghpockit/features/accounts/domain/entities/account_entity.dart';
 import 'package:ghpockit/features/accounts/domain/entities/account_type.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
 import 'package:ghpockit/features/accounts/presentation/pages/account_form_page.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/domain/entities/category_type.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
@@ -48,7 +50,8 @@ void main() {
       ..registerSingleton<AccountRepository>(_repositories.accounts)
       ..registerSingleton<CategoryRepository>(_repositories.categories)
       ..registerSingleton<TransactionRepository>(_repositories.transactions)
-      ..registerSingleton<GPClock>(_repositories.clock);
+      ..registerSingleton<GPClock>(_repositories.clock)
+      ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository());
   });
 
   tearDown(() async {

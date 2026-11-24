@@ -7,7 +7,6 @@ abstract class GPLocaleBaseAuth {
   String get signInLead;
   String get signUpTitle;
 
-  /// Says what happens to the data already on the device: it moves into the new account.
   String get signUpLead;
 
   String get email;
@@ -24,4 +23,7 @@ abstract class GPLocaleBaseAuth {
   String get close;
   String get signedIn;
   String get signedUp;
+  String get syncTitle;
+  String get syncSignedOutBody;
+  String syncSignedInBody(String email);
 }

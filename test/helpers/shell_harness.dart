@@ -3,6 +3,8 @@ import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/core/utils/clock.dart';
 import 'package:ghpockit/features/accounts/domain/repositories/account_repository.dart';
+import 'package:ghpockit/features/auth/data/repositories/local_only_auth_repository.dart';
+import 'package:ghpockit/features/auth/domain/repositories/auth_repository.dart';
 import 'package:ghpockit/features/categories/domain/repositories/category_repository.dart';
 import 'package:ghpockit/features/transactions/domain/repositories/transaction_repository.dart';
 
@@ -31,5 +33,7 @@ void registerShellFakes() {
     ..registerSingleton<AccountRepository>(const FakeAccountRepository())
     ..registerSingleton<CategoryRepository>(const FakeCategoryRepository())
     ..registerSingleton<TransactionRepository>(FakeTransactionRepository())
-    ..registerSingleton<GPClock>(FakeClock());
+    ..registerSingleton<GPClock>(FakeClock())
+    // `GPApp` starts an `AuthBloc` above the router.
+    ..registerSingleton<AuthRepository>(const LocalOnlyAuthRepository());
 }

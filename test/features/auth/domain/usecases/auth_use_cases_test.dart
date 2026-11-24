@@ -86,6 +86,7 @@ void main() {
 
   test('WatchAuthStatusUseCase passes the statuses through', () async {
     final first = WatchAuthStatusUseCase(repository).execute(const GPNoInput()).first;
+    await pumpEventQueue();
     repository.statuses.add(const AuthSignedOut());
 
     expect(await first, const AuthSignedOut());
