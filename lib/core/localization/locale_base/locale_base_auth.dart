@@ -26,4 +26,11 @@ abstract class GPLocaleBaseAuth {
   String get syncTitle;
   String get syncSignedOutBody;
   String syncSignedInBody(String email);
+  String get signOut;
+  String get signOutBlockedTitle;
+  String signOutBlockedBody(int count);
+  String get gotIt;
+  String get signOutConfirmTitle;
+  String get signOutConfirmBody;
+  String get signedOut;
 }

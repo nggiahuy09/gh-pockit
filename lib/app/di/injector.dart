@@ -87,6 +87,7 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
         dao: c.get<DeviceOwnerDao>(),
         logger: c.get<GPAppLogger>(),
         ownerContext: c.get<GPSettingsOwnerContext>(),
+        seeder: c.get<CategorySeeder>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
       ),
     );

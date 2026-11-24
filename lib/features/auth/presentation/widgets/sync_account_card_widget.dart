@@ -7,6 +7,7 @@ import '../../../../core/localization/localization_scope.dart';
 import '../../../../core/theme/theme_context.dart';
 import '../../../../core/widgets/button.dart';
 import '../bloc/auth_bloc.dart';
+import '../bloc/sign_out_bloc.dart';
 
 /// Hidden when unknown or local-only (ADR-0041).
 final class SyncAccountCardWidget extends StatelessWidget {
@@ -25,7 +26,19 @@ final class SyncAccountCardWidget extends StatelessWidget {
           onPressed: () => context.pushNamed(RouteNames.login),
         ),
       ),
-      AuthSignedInState(:final user) => _SyncCard(body: context.l10n.auth.syncSignedInBody(user.email)),
+      AuthSignedInState(:final user) => _SyncCard(
+        body: context.l10n.auth.syncSignedInBody(user.email),
+        action: BlocSelector<SignOutBloc, SignOutState, bool>(
+          selector: (state) => state is SignOutCheckingState || state is SignOutInProgressState,
+          builder: (context, isBusy) => GPButton(
+            variant: GPButtonVariant.text,
+            size: GPButtonSize.small,
+            label: context.l10n.auth.signOut,
+            isLoading: isBusy,
+            onPressed: () => context.read<SignOutBloc>().add(const SignOutRequestEvent()),
+          ),
+        ),
+      ),
     },
   );
 }

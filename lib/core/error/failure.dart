@@ -111,4 +111,7 @@ enum GPValidationCode {
 
   /// Another account's data is still on the device (ADR-0040).
   authDeviceOwnedByAnotherAccount,
+
+  /// Checked by `SignOutUseCase`: a sign-out would delete rows not yet on the server (ADR-0042).
+  signOutUnsyncedChanges,
 }

@@ -65,4 +65,25 @@ final class GPLocaleViAuth implements GPLocaleBaseAuth {
 
   @override
   String syncSignedInBody(String email) => 'Đã đăng nhập: $email';
+
+  @override
+  String get signOut => 'Đăng xuất';
+
+  @override
+  String get signOutBlockedTitle => 'Chưa thể đăng xuất';
+
+  @override
+  String signOutBlockedBody(int count) => 'Còn $count thay đổi chưa được sao lưu lên tài khoản. Đăng xuất bây giờ sẽ xóa chúng khỏi máy này. Hãy đăng xuất sau khi đồng bộ xong.';
+
+  @override
+  String get gotIt => 'Đã hiểu';
+
+  @override
+  String get signOutConfirmTitle => 'Đăng xuất khỏi Pockit?';
+
+  @override
+  String get signOutConfirmBody => 'Dữ liệu sẽ bị xóa khỏi máy này. Mọi thứ đã đồng bộ vẫn còn trong tài khoản; đăng nhập lại để tải về. Ngôn ngữ được giữ.';
+
+  @override
+  String get signedOut => 'Đã đăng xuất.';
 }

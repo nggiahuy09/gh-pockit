@@ -70,9 +70,36 @@ void main() {
     });
   });
 
-  test('SignOutUseCase signs out', () async {
-    expect(await SignOutUseCase(repository).execute(const GPNoInput()), const GPOk<void>(null));
-    expect(repository.signOutCalls, 1);
+  group('SignOutUseCase (ADR-0042)', () {
+    test('nothing unsynced: wipes the device, then signs out', () async {
+      owners.ownerId = 'u-1';
+
+      expect(await SignOutUseCase(repository, owners).execute(const GPNoInput()), const GPOk<void>(null));
+      expect(owners.releases, 1);
+      expect(repository.signOutCalls, 1);
+    });
+
+    test('unsynced changes refuse it: nothing wiped, still signed in', () async {
+      owners.unsyncedResult = const GPOk(3);
+
+      expect(await SignOutUseCase(repository, owners).execute(const GPNoInput()), const GPErr<void>(GPValidationFailure(GPValidationCode.signOutUnsyncedChanges)));
+      expect(owners.releases, 0);
+      expect(repository.signOutCalls, 0);
+    });
+
+    test('a wipe that fails keeps the session', () async {
+      owners.releaseResult = const GPErr(GPDatabaseFailure());
+
+      expect(await SignOutUseCase(repository, owners).execute(const GPNoInput()), const GPErr<void>(GPDatabaseFailure()));
+      expect(repository.signOutCalls, 0);
+    });
+
+    test('a count that fails refuses it', () async {
+      owners.unsyncedResult = const GPErr(GPDatabaseFailure());
+
+      expect(await SignOutUseCase(repository, owners).execute(const GPNoInput()), const GPErr<void>(GPDatabaseFailure()));
+      expect(owners.releases, 0);
+    });
   });
 
   test('RestoreSessionUseCase restores', () async {

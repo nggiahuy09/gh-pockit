@@ -65,4 +65,27 @@ final class GPLocaleEnAuth implements GPLocaleBaseAuth {
 
   @override
   String syncSignedInBody(String email) => 'Signed in as $email';
+
+  @override
+  String get signOut => 'Sign out';
+
+  @override
+  String get signOutBlockedTitle => "You can't sign out yet";
+
+  @override
+  String signOutBlockedBody(int count) =>
+      '${count == 1 ? '1 change is' : '$count changes are'} not backed up to your account yet. Signing out now would delete '
+      "${count == 1 ? 'it' : 'them'} from this device. Sign out once syncing is done.";
+
+  @override
+  String get gotIt => 'Got it';
+
+  @override
+  String get signOutConfirmTitle => 'Sign out of Pockit?';
+
+  @override
+  String get signOutConfirmBody => 'Your data will be removed from this device. Everything synced stays in your account; sign in again to bring it back. Your language stays.';
+
+  @override
+  String get signedOut => 'Signed out.';
 }

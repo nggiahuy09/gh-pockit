@@ -82,6 +82,9 @@ final class GPLocaleViError implements GPLocaleBaseError {
   String get validationAuthPasswordWeak => 'Hãy chọn mật khẩu mạnh hơn.';
 
   @override
+  String get validationSignOutUnsyncedChanges => 'Còn thay đổi chưa được sao lưu, đăng xuất bây giờ sẽ xóa chúng.';
+
+  @override
   String get validationAuthDeviceOwnedByAnotherAccount => 'Máy này còn giữ dữ liệu của một tài khoản khác. Hãy đăng xuất tài khoản đó trước.';
 
   @override

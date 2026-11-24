@@ -14,6 +14,21 @@ final class FakeDeviceOwnerRepository extends DeviceOwnerRepository {
 
   final List<String> claims = [];
 
+  GPResult<int> unsyncedResult = const GPOk(0);
+  GPResult<void> releaseResult = const GPOk(null);
+  int releases = 0;
+
+  @override
+  Future<GPResult<int>> countUnsyncedChanges() async => unsyncedResult;
+
+  /// A successful release gives the device back to `localOwnerId`, as the real one does.
+  @override
+  Future<GPResult<void>> releaseDevice() async {
+    releases++;
+    if (releaseResult is GPOk<void>) ownerId = localOwnerId;
+    return releaseResult;
+  }
+
   @override
   Future<GPResult<int>> claimLocalData(String userId) async {
     claims.add(userId);

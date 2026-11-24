@@ -4,6 +4,7 @@ import 'package:ghpockit/app/app.dart';
 import 'package:ghpockit/app/di/injector.dart';
 import 'package:ghpockit/app/router/app_shell.dart';
 import 'package:ghpockit/app/router/routes.dart';
+import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/localization/locale.dart';
 import 'package:ghpockit/features/auth/domain/entities/auth_status.dart';
 import 'package:ghpockit/features/auth/domain/entities/user_entity.dart';
@@ -22,6 +23,7 @@ import '../../helpers/shell_harness.dart';
 const _user = UserEntity(id: 'u-1', email: 'huy@example.com');
 
 late FakeAuthRepository _auth;
+late FakeDeviceOwnerRepository _owners;
 
 Future<void> _pumpApp(WidgetTester tester, AuthStatus status, [String location = Routes.settings]) async {
   _auth.currentStatus = status;
@@ -41,7 +43,7 @@ void main() {
     await getIt.unregister<AuthRepository>();
     getIt
       ..registerSingleton<AuthRepository>(_auth)
-      ..registerSingleton<DeviceOwnerRepository>(FakeDeviceOwnerRepository());
+      ..registerSingleton<DeviceOwnerRepository>(_owners = FakeDeviceOwnerRepository(ownerId: _user.id));
   });
 
   tearDown(getIt.reset);
@@ -90,6 +92,48 @@ void main() {
 
       expect(find.text('Signed in as huy@example.com'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Sign in'), findsNothing);
+    });
+
+    testWidgets('sign-out with unsynced changes is explained, never offered', (tester) async {
+      _owners.unsyncedResult = const GPOk(4);
+      await _pumpApp(tester, const AuthSignedIn(_user));
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+
+      expect(find.text("You can't sign out yet"), findsOneWidget);
+      expect(find.textContaining('4 changes are not backed up'), findsOneWidget);
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(_auth.signOutCalls, 0);
+      expect(find.text('Signed in as huy@example.com'), findsOneWidget);
+    });
+
+    testWidgets('sign-out with nothing unsynced asks, then wipes and signs out', (tester) async {
+      await _pumpApp(tester, const AuthSignedIn(_user));
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(find.text('Sign out of Pockit?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Sign out').last);
+      await tester.pumpAndSettle();
+
+      expect(_owners.releases, 1);
+      expect(_auth.signOutCalls, 1);
+      expect(find.text('Signed out.'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+    });
+
+    testWidgets('a cancelled sign-out keeps everything', (tester) async {
+      await _pumpApp(tester, const AuthSignedIn(_user));
+
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(_owners.releases, 0);
+      expect(find.text('Signed in as huy@example.com'), findsOneWidget);
     });
 
     for (final route in const [Routes.login, Routes.register]) {

@@ -63,4 +63,36 @@ final class DeviceOwnerDao {
       );
     }
   }
+
+  /// Until the outbox exists only transactions record a sync state, and nothing is pushed: every account and every category the user made
+  /// or changed counts too, deleted ones included (ADR-0042).
+  Future<int> countUnsynced(String ownerId) async {
+    final row = await _db
+        .customSelect(
+          'SELECT '
+          '(SELECT count(*) FROM accounts WHERE owner_id = ?1) + '
+          '(SELECT count(*) FROM categories WHERE owner_id = ?1 AND (name_key IS NULL OR name IS NOT NULL OR deleted_at IS NOT NULL)) + '
+          "(SELECT count(*) FROM transactions WHERE owner_id = ?1 AND sync_status = 'pending') AS unsynced",
+          variables: [Variable.withString(ownerId)],
+          readsFrom: {_db.accountsTable, _db.categoriesTable, _db.transactionsTable},
+        )
+        .getSingle();
+    return row.read<int>('unsynced');
+  }
+
+  /// Hard delete, children first for the foreign keys: the device's copy goes, the server's stays (ADR-0042). `settings` keeps everything but
+  /// the owner.
+  Future<int> wipeOwnerRows(String ownerId) => _db.transaction(() async {
+    var deleted = 0;
+    for (final table in const ['transactions', 'categories', 'accounts']) {
+      deleted += await _db.customUpdate(
+        'DELETE FROM $table WHERE owner_id = ?',
+        variables: [Variable.withString(ownerId)],
+        updates: {_db.accountsTable, _db.categoriesTable, _db.transactionsTable},
+        updateKind: UpdateKind.delete,
+      );
+    }
+    await (_db.delete(_db.settingsTable)..where((t) => t.key.equals(GPSettingsOwnerContext.storageKey))).go();
+    return deleted;
+  });
 }

@@ -24,6 +24,7 @@ enum TransactionFormField {
       GPValidationCode.authPasswordEmpty ||
       GPValidationCode.authPasswordTooShort ||
       GPValidationCode.authPasswordWeak ||
+      GPValidationCode.signOutUnsyncedChanges ||
       GPValidationCode.authDeviceOwnedByAnotherAccount => null,
       GPValidationCode.transactionAmountNotPositive => TransactionFormField.amount,
       // The source was picked first, and the picker offers only destinations it can pair with: the destination is what fixes these.

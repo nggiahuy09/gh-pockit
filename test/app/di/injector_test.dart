@@ -183,6 +183,8 @@ void main() {
       container = GetIt.asNewInstance();
       configureCoreDependencies(container);
       await _useMemoryDatabase(container);
+      // The device owner reseeds the default categories after a sign-out.
+      configureCategoriesDependencies(container);
     });
 
     tearDown(() => container.reset());

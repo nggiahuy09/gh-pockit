@@ -26,6 +26,7 @@ enum AccountFormField {
       GPValidationCode.authPasswordEmpty ||
       GPValidationCode.authPasswordTooShort ||
       GPValidationCode.authPasswordWeak ||
+      GPValidationCode.signOutUnsyncedChanges ||
       GPValidationCode.authDeviceOwnedByAnotherAccount => null,
     },
     GPNetworkFailure() ||

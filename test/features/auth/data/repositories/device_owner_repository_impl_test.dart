@@ -53,7 +53,7 @@ void main() {
     categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner);
     transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner);
     seeder = CategorySeeder(clock: clock, dao: CategoryDao(db), ownerContext: owner, uuidGenerator: uuid);
-    deviceOwner = DeviceOwnerRepositoryImpl(clock: clock, dao: DeviceOwnerDao(db), logger: logger, ownerContext: owner, uuidGenerator: uuid);
+    deviceOwner = DeviceOwnerRepositoryImpl(clock: clock, dao: DeviceOwnerDao(db), logger: logger, ownerContext: owner, seeder: seeder, uuidGenerator: uuid);
   });
 
   tearDown(() async {
@@ -253,5 +253,82 @@ void main() {
     await relaunched.load();
 
     expect(relaunched.current, _user);
+  });
+
+  group('unsynced changes (ADR-0042)', () {
+    test('untouched seeded categories are not changes', () async {
+      await seeder.seedDefaults();
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 0);
+    });
+
+    test('every account, every own category and every pending transaction counts, deleted ones too', () async {
+      await useOffline();
+
+      // 2 accounts, 1 own category, 4 transactions (one deleted).
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 7);
+    });
+
+    test('a renamed or deleted seed counts', () async {
+      await seeder.seedDefaults();
+      final foodId = await seededId(localOwnerId, CategoryType.expense);
+      await db.customStatement("UPDATE categories SET name = 'Ăn uống' WHERE id = ?", [foodId]);
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 1);
+    });
+
+    test("only the device owner's rows count", () async {
+      await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      await db.customStatement("UPDATE transactions SET sync_status = 'synced'");
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 3);
+    });
+  });
+
+  group('release (ADR-0042)', () {
+    test("deletes the owner's rows, keeps settings, gives the device back to 'local' and reseeds", () async {
+      await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      await db.into(db.settingsTable).insert(SettingsTableCompanion.insert(key: 'locale.selected', value: 'vi', updatedAt: 0));
+      final seen = <List<String>>[];
+      final subscription = accounts.watchAccounts().listen((list) => seen.add(list.map((account) => account.id).toList()));
+      addTearDown(subscription.cancel);
+      await pumpEventQueue();
+
+      okValue(await deviceOwner.releaseDevice());
+      await pumpEventQueue();
+
+      expect(await rows('accounts'), isEmpty);
+      expect(await rows('transactions'), isEmpty);
+      final categories = await rows('categories');
+      expect(categories, isNotEmpty);
+      expect(categories.map((row) => row['owner_id']).toSet(), {localOwnerId});
+      expect(categories.every((row) => row['name_key'] != null), isTrue);
+      expect(owner.current, localOwnerId);
+      expect((await db.customSelect('SELECT key FROM settings').get()).map((row) => row.data['key']), isNot(contains('owner.id')));
+      expect((await db.customSelect('SELECT key FROM settings').get()).map((row) => row.data['key']), contains('locale.selected'));
+      expect(seen.last, isEmpty);
+      expect(await db.customSelect('PRAGMA foreign_key_check').get(), isEmpty);
+    });
+
+    test("an unclaimed device keeps its 'local' rows: they belong to no account", () async {
+      await useOffline();
+      final before = (await rows('accounts')).length;
+
+      okValue(await deviceOwner.releaseDevice());
+
+      expect(await rows('accounts'), hasLength(before));
+    });
+
+    test('a wipe that fails rolls back and keeps the owner', () async {
+      await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      await db.customStatement("CREATE TRIGGER refuse_wipe BEFORE DELETE ON accounts BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      expect(await deviceOwner.releaseDevice(), const GPErr<void>(GPDatabaseFailure()));
+      expect(await rows('transactions'), isNotEmpty);
+      expect(owner.current, _user);
+    });
   });
 }

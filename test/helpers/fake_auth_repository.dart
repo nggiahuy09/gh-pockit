@@ -44,6 +44,8 @@ final class FakeAuthRepository extends AuthRepository {
   @override
   Future<GPResult<void>> signOut() async {
     signOutCalls++;
+    // As the real one does: the session's end reaches every watcher.
+    if (statuses.hasListener) statuses.add(const AuthSignedOut());
     return const GPOk(null);
   }
 

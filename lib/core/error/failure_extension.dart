@@ -34,6 +34,7 @@ extension GPFailureExtension on GPFailure {
         GPValidationCode.authPasswordTooShort => errorLocale.validationAuthPasswordTooShort,
         GPValidationCode.authPasswordWeak => errorLocale.validationAuthPasswordWeak,
         GPValidationCode.authDeviceOwnedByAnotherAccount => errorLocale.validationAuthDeviceOwnedByAnotherAccount,
+        GPValidationCode.signOutUnsyncedChanges => errorLocale.validationSignOutUnsyncedChanges,
       },
       GPConflictFailure() => errorLocale.conflict,
       GPNotFoundFailure() => errorLocale.notFound,
