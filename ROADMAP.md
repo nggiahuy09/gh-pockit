@@ -1353,7 +1353,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 | T4   | Session restore khi mở app; `AuthBloc` state machine (unknown → authenticated / unauthenticated) ✅ Done (16/11, làm sớm) — session trong Keychain / Keystore (`flutter_secure_storage` 10.3.4), khôi phục không cần mạng trước frame đầu, bỏ sau khi cài lại, dừng refresh khi app ở nền; ADR-0039; chi tiết ở _Kế hoạch W12_ dưới         |
 | T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn ✅ Done (18/11, làm sớm) — `/login`, `/register` ngoài shell, guard chỉ trên hai route đó, `AuthBloc` trên router, thẻ Đồng bộ trong Cài đặt; đăng ký → claim → mở lại app chạy thật trên simulator; ADR-0041; chi tiết ở _Kế hoạch W12_ dưới |
 | T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) ✅ Done (24/11, làm sớm) — từ chối khi còn thay đổi chưa sync, xoá con trước cha trong một transaction, giữ `settings`, owner về `'local'` + seed lại; ADR-0042                       |
-| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                                                                                            |
+| Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không ✅ Done (24/11) — token đã ở Keychain / Keystore từ T4 (ADR-0039); audit sạch, test chặn listener `package:logging` / print, redactor che `session` / `jwt`; Trang chủ chào "Xin chào" |
 | Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới) ✅ Done (24/11) — `GPAppearance` đọc trước frame đầu, key `theme.mode`, radio list trong Cài đặt; ADR-0043 |
 
 > **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
@@ -1512,11 +1512,15 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [x] Test: preference / controller / store trên DB thật (9), `GPApp` theo lựa chọn + chọn Tối trong Cài đặt đổi cả app (2), DI. 1214 → 1226
       xanh + 1 skip. Simulator (bản local-only, máy để Sáng): Cài đặt → Tối → cả app tối ngay, `settings` có `theme.mode = dark`, mở lại vẫn tối.
 
-**Flex**
+**Flex** ✅ (24/11)
 
-- [ ] Audit log: grep `Logger.root` / `onRecord`; GoTrue log cả session ở FINEST qua `package:logging` → listener nào gắn sau (Sentry) phải lọc.
-      Kiểm `redactSensitiveFields` bắt đủ trường auth.
-- [ ] Lời chào "Xin chào, <tên>": cần tên lúc đăng ký (`user_metadata`) hoặc dời sang khi có hồ sơ — quyết lúc làm T3.
+- [x] **Audit log:** không có listener `package:logging` (`Logger.root`, `onRecord`), không `print` / `debugPrint` trong `lib/`; mọi dòng log
+      của auth chỉ mang kiểu lỗi, mã GoTrue, HTTP status, uid, số đếm — không email, mật khẩu, token, message hay object exception. Khoá lại bằng
+      `logging_listener_guard_test.dart` (hỏng khi ai đó thêm listener / print — GoTrue log cả session ở FINEST) và thêm `session`, `jwt` vào
+      khoá nhạy cảm của redactor. ADR-0039 có mục _Amended_.
+- [x] **Lời chào trên Trang chủ:** thanh trên cùng đổi từ "Trang chủ" (trùng nhãn tab ngay dưới) thành "Xin chào" / "Hello". Đăng ký chưa hỏi
+      tên nên chưa có "Xin chào, <tên>" — chờ màn Hồ sơ.
+- [x] Test +3 (redactor, guard, lời chào). 1226 → 1229 xanh + 1 skip.
 - [ ] PR W12 → tag `v0.3-auth` (sau PR `dev` → `main` và tag của W10).
 
 ### W12 T2 — auth sau một repository, trên client Supabase Dart thuần, file env tự khai flavor (15/11, làm sớm, ADR-0038)
