@@ -1354,7 +1354,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 | T5   | `go_router` redirect guard theo auth state → **đổi 15/11 (quyết định E):** đăng nhập tùy chọn ✅ Done (18/11, làm sớm) — `/login`, `/register` ngoài shell, guard chỉ trên hai route đó, `AuthBloc` trên router, thẻ Đồng bộ trong Cài đặt; đăng ký → claim → mở lại app chạy thật trên simulator; ADR-0041; chi tiết ở _Kế hoạch W12_ dưới |
 | T6   | Logout: **xoá sạch local DB + secure storage + cancel sync**. Đây là chỗ rất hay bị làm ẩu — xoá con trước cha vì FK, hoặc xoá hẳn file DB (ADR-0009) ✅ Done (24/11, làm sớm) — từ chối khi còn thay đổi chưa sync, xoá con trước cha trong một transaction, giữ `settings`, owner về `'local'` + seed lại; ADR-0042                       |
 | Flex | Token lưu ở `flutter_secure_storage`, không SharedPreferences. Audit log xem có leak token không                                                                                                                                                                                                                                            |
-| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới)                                                                                                                                                                                      |
+| Thêm | Chế độ giao diện chọn tay: sáng / tối / theo hệ thống, lưu trong `settings`, đổi ở trang Cài đặt (thêm 15/11, sau T6 — chi tiết ở _Kế hoạch W12_ dưới) ✅ Done (24/11) — `GPAppearance` đọc trước frame đầu, key `theme.mode`, radio list trong Cài đặt; ADR-0043 |
 
 > **Nợ từ W8 (01/11), làm trước T6:** đăng nhập lần đầu phải **claim dữ liệu `'local'`** —
 > `UPDATE … SET owner_id = :uid, updated_at = :now, version = version + 1 WHERE owner_id = 'local'` trên cả ba bảng, trong một transaction, rồi
@@ -1501,15 +1501,16 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - [ ] Session tự hết → thẻ hiện Đăng nhập, không có Đăng xuất: dữ liệu vẫn của người cũ; đăng nhập tài khoản khác vẫn bị từ chối tới khi có cách
       gỡ (P4).
 
-**Thêm — chế độ giao diện: sáng / tối / theo hệ thống** (thêm 15/11)
+**Thêm — chế độ giao diện: sáng / tối / theo hệ thống** ✅ (24/11, ADR-0043)
 
-> Cột ưu tiên thấp của §1 — làm sau T6; không kịp thì sang W17. Không đổi schema: `settings` là key / value.
-
-- [ ] `GPThemePreference { system, light, dark }`, mặc định `system`. `GPThemePreferenceStore` + bản Drift, key `theme.mode`, theo đúng mẫu
-      `GPDriftLocaleStore`: lỗi đọc / ghi không chặn app, giá trị hỏng → `system` (không thành lựa chọn người dùng chưa chọn).
-- [ ] Singleton giữ lựa chọn (như `GPLocalization`), đọc trước frame đầu để app không loé sáng rồi mới tối; `MaterialApp.themeMode` nghe nó.
-- [ ] Trang Cài đặt: một dòng "Giao diện" với ba lựa chọn, theo canvas; chuỗi en / vi. Không sync (cài đặt của máy).
-- [ ] Test: store (đọc / ghi / hỏng / thiếu), app theo lựa chọn, widget Cài đặt. ADR ngắn (key, mặc định, không sync).
+- [x] `GPThemePreference { system, light, dark }` (lưu theo `storageValue`, không theo tên Dart; giá trị lạ → coi như chưa chọn, không đoán),
+      `GPThemePreferenceStore` + `GPDriftThemePreferenceStore` (key `theme.mode`, đọc / ghi hỏng không bao giờ ném lỗi), theo đúng mẫu ngôn ngữ.
+- [x] `GPAppearance` (singleton, `ChangeNotifier`): bootstrap `init()` ngay sau ngôn ngữ, trước `runApp` → chọn Tối không bao giờ loé một frame
+      sáng. `GPApp` nghe cả ngôn ngữ lẫn giao diện, đưa `themeMode` cho `MaterialApp`, và `GPAppearanceScope` cho Cài đặt (`context.appearance`).
+- [x] Cài đặt: radio list "Giao diện" dưới "Ngôn ngữ" — Theo hệ thống (kèm mô tả) / Sáng / Tối, chọn là đổi ngay. Nằm thẳng trong Cài đặt
+      như ngôn ngữ, chưa tách màn riêng như canvas — chờ có màn Hồ sơ. Không sync, giữ khi đăng xuất.
+- [x] Test: preference / controller / store trên DB thật (9), `GPApp` theo lựa chọn + chọn Tối trong Cài đặt đổi cả app (2), DI. 1214 → 1226
+      xanh + 1 skip. Simulator (bản local-only, máy để Sáng): Cài đặt → Tối → cả app tối ngay, `settings` có `theme.mode = dark`, mở lại vẫn tối.
 
 **Flex**
 
