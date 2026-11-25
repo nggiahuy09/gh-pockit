@@ -1614,7 +1614,8 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 - **T3** — `GPSyncMutation` + ba enum (giá trị lưu viết tay, giá trị lạ bị từ chối khi đọc), mapper hai chiều với `SyncMutationRow`, `toLog()` chỉ id +
   loại + mã lỗi. Luật gộp operation là hàm thuần ở đây.
 - **T4** — `GPSyncQueueRepository` + bản Drift: `enqueue` (gộp theo D), `getReadyMutations(now, limit)` theo `created_at, id`, `complete` (xoá cứng),
-  `scheduleRetry`, `markConflict`, `resetOrphans` (`processing` → `pending` lúc mở app), `countUnsynced`. Test có `EXPLAIN QUERY PLAN`.
+  đánh dấu gửi (`sending()`: `processing` + `attempt_count + 1` **trước** khi request đi), `scheduleRetry` (không đếm lần nữa), `markConflict`,
+  `resetOrphans` (`processing` → `pending` lúc mở app, giữ số lần thử), `countUnsynced`. Test có `EXPLAIN QUERY PLAN`.
 - **T5** — nối vào mọi đường ghi trong cùng `database.transaction()`: accounts (create / update / archive / unarchive / delete), categories (create /
   update / delete), transactions (create / update / delete / restore), `CategorySeeder` (A, C), claim, wipe (xoá cả `sync_mutations`), backfill một lần
   lúc khởi động (key trong `sync_metadata`), `countUnsyncedChanges` → đếm outbox (ADR-0042 _Amended_). Benchmark seeder ghi thẳng, không enqueue
@@ -1655,7 +1656,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
       `GPSyncOperation` (`create` / `update` / `delete` — không `upsert`: server phân biệt insert với patch, ADR-0036; xoá mềm là `delete`, khôi
       phục là `update`, ADR-0017), `GPSyncMutationStatus` (`pending` / `processing` / `conflict` / `failed` — không `completed`, xong là xoá).
 - [x] **`GPSyncMutation`** (`Equatable`, payload là `Map` không sửa được, giờ UTC): `enqueued(...)` → `pending`, 0 lần thử, `next_attempt_at =
-    created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key / `created_at`, ném `StateError` nếu đã thử (quyết định D);
+  created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key / `created_at`, ném `StateError` nếu đã thử (quyết định D);
       `toLog()` chỉ id, loại, operation, trạng thái, số lần thử, mã lỗi — không payload, không key.
 - [x] **Luật gộp là hàm thuần** `GPSyncOperation.followedBy`: mở đầu `create` thì vẫn `create`, còn lại lấy cái sau.
 - [x] **Mapper** (`sync_mutation_mapper.dart`): `toInsert()` / `toDomain()`; entity type, operation, trạng thái lạ hoặc payload không phải object JSON
@@ -1665,6 +1666,15 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
       nguồn, gộp + từ chối khi đã thử, log, bằng nhau theo nội dung), mapper qua bảng thật (đi về nguyên vẹn, JSON quá 32 bit / null / bool /
       tiếng Việt / nháy / xuống dòng, 6 dòng không đọc được). Đổi luật thành "luôn lấy cái sau" hoặc bỏ guard → 4 test đỏ. Format / analyze sạch;
       1267 xanh + 1 skip.
+- [x] **Sau code review (25/11), 6 finding, sửa cả 6:**
+  - `sending()` đếm lần thử trước khi request đi. Nếu không, mutation mồ côi giữa lúc push được reset về `pending` / 0 sẽ trông như chưa gửi, và
+    bị gộp payload mới dưới key server có thể đã trả lời.
+  - `followedBy` từ chối `create` sau `update` / `delete`.
+  - Payload phải là một dòng phẳng toàn giá trị JSON đơn (string, int, bool, null). Constructor ném lỗi nêu tên cột, không nêu giá trị; dòng
+    lưu có số lẻ hay giá trị lồng thì đọc thành `malformedPayload`.
+  - Giờ cắt về mili-giây, nên mutation đi qua bảng vẫn bằng chính nó.
+  - Bỏ các chú thích ghi tuần / task trong code.
+  - +14 test; bỏ `+ 1` hoặc bỏ kiểm payload → 8 test đỏ. 1281 xanh + 1 skip. ADR-0044 _Amended — T3_ thêm mục 4, 6, 7, 8.
 
 ## W14 · 07–13/12 🔴 Push
 

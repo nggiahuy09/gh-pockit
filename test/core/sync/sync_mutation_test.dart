@@ -37,6 +37,38 @@ void main() {
       expect(mutation.payload['amount_minor'], 125000);
       expect(() => mutation.payload['amount_minor'] = 2, throwsUnsupportedError);
     });
+
+    test('drops what finer than a millisecond the clock gave, so the mutation survives a write and a read unchanged', () {
+      final fine = DateTime.utc(2026, 11, 25, 3, 0, 0, 123, 456);
+
+      final mutation = _enqueued(createdAt: fine);
+
+      expect(mutation.createdAt, DateTime.utc(2026, 11, 25, 3, 0, 0, 123));
+      expect(mutation.nextAttemptAt, DateTime.utc(2026, 11, 25, 3, 0, 0, 123));
+    });
+
+    group('refuses a payload that is not one flat row of JSON scalars, naming the column and never the value', () {
+      final cases = <String, Object?>{
+        'a time object': DateTime.utc(2026),
+        'a double': 1250.5,
+        'a nested list': ['food'],
+        'a nested map': {'minor': 125000},
+        'an enum': GPSyncOperation.create,
+      };
+
+      for (final MapEntry(key: name, value: value) in cases.entries) {
+        test(name, () {
+          expect(
+            () => _enqueued(payload: {'id': 'tx-1', 'amount_minor': value}),
+            throwsA(isA<ArgumentError>().having((e) => e.message, 'message', allOf(contains('"amount_minor"'), isNot(contains(value.toString()))))),
+          );
+        });
+      }
+    });
+
+    test('takes strings, integers past 32 bits, booleans and nulls', () {
+      expect(_enqueued(payload: {'id': 'tx-1', 'amount_minor': 1000000000000, 'is_archived': false, 'note': null}).payload, hasLength(4));
+    });
   });
 
   group('isUnattempted', () {
@@ -45,6 +77,44 @@ void main() {
       expect(_with(status: GPSyncMutationStatus.processing).isUnattempted, isFalse);
       expect(_with(status: GPSyncMutationStatus.conflict).isUnattempted, isFalse);
       expect(_with(status: GPSyncMutationStatus.failed).isUnattempted, isFalse);
+    });
+
+    test('stays false for a mutation orphaned mid-push and put back to pending', () {
+      final sent = _enqueued().sending();
+
+      // What a kill after the request left, then the reset at launch, leave behind: pending again, the attempt kept.
+      final orphan = _with(attemptCount: sent.attemptCount);
+
+      expect(orphan.isUnattempted, isFalse);
+      expect(() => orphan.coalescedWith(operation: GPSyncOperation.update, payload: const {'id': 'tx-1'}), throwsStateError);
+    });
+  });
+
+  group('sending', () {
+    test('puts the mutation in flight and counts the attempt before any answer', () {
+      final queued = _enqueued();
+
+      final sent = queued.sending();
+
+      expect(sent.status, GPSyncMutationStatus.processing);
+      expect(sent.attemptCount, 1);
+      expect(
+        [sent.id, sent.idempotencyKey, sent.payload, sent.createdAt, sent.nextAttemptAt],
+        [queued.id, queued.idempotencyKey, queued.payload, queued.createdAt, queued.nextAttemptAt],
+      );
+    });
+
+    test('counts on from earlier attempts and keeps the last error code', () {
+      final sent = _with(attemptCount: 3, lastErrorCode: 'network').sending();
+
+      expect(sent.attemptCount, 4);
+      expect(sent.lastErrorCode, 'network');
+    });
+
+    test('refuses a mutation that is not pending', () {
+      for (final status in [GPSyncMutationStatus.processing, GPSyncMutationStatus.conflict, GPSyncMutationStatus.failed]) {
+        expect(() => _with(status: status).sending(), throwsStateError, reason: status.name);
+      }
     });
   });
 

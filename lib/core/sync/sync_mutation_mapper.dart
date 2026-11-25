@@ -38,7 +38,7 @@ extension GPSyncMutationRowMapper on SyncMutationRow {
     final state = GPSyncMutationStatus.fromStorage(status);
     if (state == null) return const GPUnmappableSyncMutationRow(GPSyncMutationMapperReason.unknownStatus);
     final decoded = _decodePayload(payloadJson);
-    if (decoded == null) return const GPUnmappableSyncMutationRow(GPSyncMutationMapperReason.malformedPayload);
+    if (decoded == null || !GPSyncMutation.isFlatJsonRow(decoded)) return const GPUnmappableSyncMutationRow(GPSyncMutationMapperReason.malformedPayload);
 
     return GPMappedSyncMutation(
       GPSyncMutation(

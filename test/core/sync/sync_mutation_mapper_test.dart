@@ -81,6 +81,8 @@ void main() {
       'a payload that is not JSON': (_row(payloadJson: '{"id":'), GPSyncMutationMapperReason.malformedPayload),
       'a payload that is JSON but not an object': (_row(payloadJson: '["tx-1"]'), GPSyncMutationMapperReason.malformedPayload),
       'a payload that is JSON null': (_row(payloadJson: 'null'), GPSyncMutationMapperReason.malformedPayload),
+      'a payload with a fraction where an integer belongs': (_row(payloadJson: '{"amount_minor":1250.5}'), GPSyncMutationMapperReason.malformedPayload),
+      'a payload with a nested value': (_row(payloadJson: '{"tags":["food"]}'), GPSyncMutationMapperReason.malformedPayload),
     };
 
     for (final MapEntry(key: name, value: (row, reason)) in cases.entries) {

@@ -2,7 +2,7 @@
 enum GPSyncMutationStatus {
   pending('pending'),
 
-  /// Sent and not yet answered. One found at launch was orphaned by a kill and goes back to [pending] (W13 T4).
+  /// Sent and not yet answered. One found at launch was orphaned by a kill and goes back to [pending], its attempt still counted.
   processing('processing'),
 
   conflict('conflict'),

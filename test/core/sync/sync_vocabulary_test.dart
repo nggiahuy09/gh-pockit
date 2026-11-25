@@ -72,5 +72,10 @@ void main() {
         expect(first.followedBy(next), expected);
       });
     }
+
+    test('a create after an update or a delete is refused: the push would insert a row that exists', () {
+      expect(() => update.followedBy(create), throwsArgumentError);
+      expect(() => delete.followedBy(create), throwsArgumentError);
+    });
   });
 }

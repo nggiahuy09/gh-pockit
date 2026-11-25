@@ -117,14 +117,25 @@ text columns may hold, and decision E settles the open `baseVersion` question.
    The snapshot taken at enqueue (decision E) therefore carries the base the server checks, and a coalesced mutation keeps that same
    `version`.
 4. **The folding rule is a pure function,** `GPSyncOperation.followedBy`: a chain that starts with `create` stays `create`, and any other
-   takes the later operation. `GPSyncMutation.coalescedWith` applies it, keeps the id, the key, `created_at` and `next_attempt_at`, and
+   takes the later operation. A `create` after an `update` or a `delete` throws: that row was created already, and an insert pushed for
+   it would be refused on its primary key. `GPSyncMutation.coalescedWith` applies it, keeps the id, the key, `created_at` and `next_attempt_at`, and
    throws on a mutation that has been attempted. Such a mutation may already have reached the server under its key, so a new payload
    under that key would be answered with the old result.
 5. **`toLog()` holds only ids, type, operation, status, attempt count and the error code.** It never holds the payload or the key
    (golden rule 9).
+6. **An attempt is counted when the mutation is sent, not when it fails.** `sending()` sets `processing` and `attempt_count + 1` before
+   the request leaves, so T4 writes that before the push and `scheduleRetry` does not count again. Without it, a kill mid-push followed by
+   the launch reset (`processing` → `pending`) leaves `pending` with 0 attempts. That looks never sent, and coalescing would then put a
+   new payload under a key the server may already have answered.
+7. **A payload is one flat row of JSON scalars:** strings, integers, booleans and nulls. The constructor throws on anything else, naming
+   the column and its type, never the value. `jsonEncode` then cannot fail inside the write's transaction, `Map.unmodifiable` really
+   freezes it (nothing nested stays shared with the caller), and a stored payload with a fraction or a nested value reads as malformed.
+8. **Times are whole milliseconds in UTC,** truncated on construction, as the table stores them. A mutation built from the system clock
+   is then equal to itself after a write and a read.
 
 Validated by `sync_vocabulary_test.dart` (the stored values pinned literally, the round trip, unknown values, the seven folding pairs),
 `sync_mutation_test.dart` (queued state, UTC, an unmodifiable payload, coalescing and its refusal, the log, equality) and
 `sync_mutation_mapper_test.dart` (a round trip through a real table, JSON past 32 bits and with Vietnamese text and quotes, six
-unreadable rows). Two mutation checks were run. With the rule changed to "always the later operation", or with the attempted-mutation
+unreadable rows). After the code review the same day, items 4, 6, 7 and 8 were added, with 14 tests. Without the `+ 1` in `sending()`
+and the payload check, 8 tests fail. Two mutation checks were run on the first version. With the rule changed to "always the later operation", or with the attempted-mutation
 guard removed, 4 tests fail.

@@ -297,7 +297,7 @@ void main() {
       expect(_json(await now.select(now.settings).get()), written['settings']);
       expect(_json(await now.select(now.accounts).get()), written['accounts']);
       expect(_json(await now.select(now.transactions).get()), written['transactions']);
-      // The step creates the outbox and backfills nothing: a pending row from before v6 gets its mutation at W13 T5.
+      // The step creates the outbox and backfills nothing: a pending row from before v6 gets its mutation outside the migration (ADR-0044).
       expect(await now.select(now.syncMutations).get(), isEmpty);
       expect(await now.select(now.syncMetadata).get(), isEmpty);
       await now.close();
