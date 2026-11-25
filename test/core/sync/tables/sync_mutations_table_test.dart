@@ -39,6 +39,16 @@ void main() {
     expect(await db.select(db.syncMutationsTable).get(), hasLength(1));
   });
 
+  test('refuses a second unsent mutation for one entity, and allows one beside a mutation already sent', () async {
+    await db.into(db.syncMutationsTable).insert(_mutation());
+
+    await expectLater(db.into(db.syncMutationsTable).insert(_mutation(id: 'm-2', key: 'k-2')), throwsA(_constraint('UNIQUE')));
+
+    await (db.update(db.syncMutationsTable)..where((t) => t.id.equals('m-1'))).write(const SyncMutationsTableCompanion(status: Value('processing'), attemptCount: Value(1)));
+    await db.into(db.syncMutationsTable).insert(_mutation(id: 'm-2', key: 'k-2'));
+    expect(await db.select(db.syncMutationsTable).get(), hasLength(2));
+  });
+
   test('refuses a negative attempt count', () async {
     await expectLater(db.into(db.syncMutationsTable).insert(_mutation(attemptCount: -1)), throwsA(_constraint('CHECK')));
   });
@@ -63,13 +73,13 @@ void main() {
   });
 }
 
-SyncMutationsTableCompanion _mutation({String id = 'm-1', String entityId = 'tx-1', int attemptCount = 0}) => SyncMutationsTableCompanion.insert(
+SyncMutationsTableCompanion _mutation({String id = 'm-1', String entityId = 'tx-1', String key = 'k-1', int attemptCount = 0}) => SyncMutationsTableCompanion.insert(
   id: id,
   entityType: 'transaction',
   entityId: entityId,
   operation: 'upsert',
   payloadJson: '{"id":"$entityId"}',
-  idempotencyKey: 'k-1',
+  idempotencyKey: key,
   createdAt: _now,
   attemptCount: attemptCount,
   nextAttemptAt: _now,

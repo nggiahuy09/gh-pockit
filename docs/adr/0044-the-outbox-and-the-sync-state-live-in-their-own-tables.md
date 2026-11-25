@@ -11,6 +11,8 @@ amend or extend this one.
 
 Amended 2026-11-25 (W13 T3): the vocabulary the table leaves unchecked, and `baseVersion` settled. See _Amended — T3_ at the end.
 
+Amended 2026-11-25 (W13 T4): v6 gains a partial unique index, and the queue's contract is fixed. See _Amended — T4_.
+
 ## Context
 
 - Golden rule 3 puts the entity write and its mutation in one transaction, so the outbox lives in the same database (ADR-0001).
@@ -43,7 +45,7 @@ Amended 2026-11-25 (W13 T3): the vocabulary the table leaves unchecked, and `bas
 10. **Index `sync_mutations_status_next_attempt_at (status, next_attempt_at)`,** created now because the roadmap places it in T2.
     - Its shape is pinned before its query: `sync_mutations_table_test.dart` asserts that the ready range is one `SEARCH` on it.
     - T4's query must keep that plan.
-    - If T4 needs to order by `created_at, id`, it widens the index inside v6.
+    - If T4 needs to order by `created_at, id`, it widens the index inside v6. _(T4: not needed, see Amended — T4, item 7.)_
 11. **`sync_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,** as in the blueprint. It is separate from `settings` because the two
     have different lifetimes. No key is written yet: the cursor arrives with W15, and the device id with W14.
 12. **The v5 → v6 step creates both tables and the index, and backfills nothing.** Rows that are `pending` from before v6 get their
@@ -139,3 +141,42 @@ Validated by `sync_vocabulary_test.dart` (the stored values pinned literally, th
 unreadable rows). After the code review the same day, items 4, 6, 7 and 8 were added, with 14 tests. Without the `+ 1` in `sending()`
 and the payload check, 8 tests fail. Two mutation checks were run on the first version. With the rule changed to "always the later operation", or with the attempted-mutation
 guard removed, 4 tests fail.
+
+## Amended — T4 (2026-11-25)
+
+`GPSyncQueueRepository` (interface) and `GPDriftSyncQueueRepository` live in `core/sync/`. The queue is registered in DI as a singleton
+on the app database.
+
+1. **v6 gains `sync_mutations_unattempted_entity`:** `UNIQUE (entity_type, entity_id) WHERE status = 'pending' AND attempt_count = 0`.
+   v6 had not shipped, so the dump, the steps and the fixtures were regenerated.
+   - The index makes "at most one unsent mutation per entity" part of the schema. Enqueue folds a later write into that mutation, so a
+     second one can only come from a bug, and the insert then fails along with the entity write.
+   - It also serves the lookup that folding needs. That lookup writes the index's `WHERE` with literals
+     (`GPDriftSyncQueueRepository.unattemptedSql`), because SQLite applies a partial index only when it can prove the condition, and a
+     bound value does not prove it.
+2. **Every method throws, and none returns a `GPResult`.** `enqueue` runs inside the entity write's transaction as a savepoint. A failure
+   swallowed there would commit the entity without its mutation, which is what golden rule 3 forbids. A refused fold (a `create` after an
+   `update`) rolls the caller's write back too.
+3. **`markSending(id)` re-reads the row** and writes `sending()` in one transaction, then returns that copy. A write can fold into the
+   mutation between `getReadyMutations` and the send, and sending the earlier copy would have the server apply the old payload. The
+   following `complete` would then delete the new one.
+4. **`scheduleRetry`, `markConflict` and `markFailed` touch only a mutation in flight** (`processing`). An answer for anything else is
+   ignored. `scheduleRetry` does not count the attempt again.
+5. **`resetOrphans` puts `processing` back to `pending` and keeps the count**, so an orphan is never folded into (Amended — T3, item 6).
+   It logs the number only.
+6. **A row this build cannot read is marked `failed`** with `last_error_code = 'unreadable_row'`, and the id and the reason are logged.
+   That leaves it visible to Diagnostics, keeps it out of every push, and moves it out of the partial index so a new write can queue.
+7. **The ready order is `created_at, id`,** so a parent written before its child is pushed first. The status index serves the range,
+   and SQLite sorts the due rows afterwards (`USE TEMP B-TREE FOR ORDER BY`). That is a handful of rows, so decision 10's index stays as
+   it is, unwidened.
+8. **`countUnsyncedEntities` counts distinct entities**, whatever the state of their mutations: a failed or conflicted mutation is still
+   a change the server lacks. T5 builds the sign-out count on it.
+
+Open, for W14: a child can be due while its parent waits in backoff. The push would then send the transaction before its account, and
+the server's foreign key refuses it. The engine has to decide whether to stop at the first failure or hold children back.
+
+Validated by `drift_sync_queue_repository_test.dart` (25 tests: enqueue, folding, never folding into a sent or orphaned mutation, keeping
+entities apart, commit and rollback with the caller, a refused fold rolling the caller back, an unreadable row set aside, both query plans,
+the ready filter and order, `markSending` returning the folded payload, settling only in flight, retry timing, orphans, the count), the
+table test (a second unsent mutation refused, and allowed beside a sent one), the migration test (both indexes on the upgrade path) and
+`injector_test.dart`. With the in-flight guard removed, or with `scheduleRetry` counting again, 2 tests fail.

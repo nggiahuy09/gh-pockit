@@ -1009,6 +1009,20 @@
           }
         ]
       }
+    },
+    {
+      "id": 14,
+      "references": [
+        4
+      ],
+      "type": "index",
+      "data": {
+        "on": 4,
+        "name": "sync_mutations_unattempted_entity",
+        "sql": "CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = 'pending' AND attempt_count = 0",
+        "unique": true,
+        "columns": []
+      }
     }
   ],
   "fixed_sql": [
@@ -1135,6 +1149,15 @@
         {
           "dialect": "sqlite",
           "sql": "CREATE INDEX sync_mutations_status_next_attempt_at ON sync_mutations (status, next_attempt_at)"
+        }
+      ]
+    },
+    {
+      "name": "sync_mutations_unattempted_entity",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = 'pending' AND attempt_count = 0"
         }
       ]
     }

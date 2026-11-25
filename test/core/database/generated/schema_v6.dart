@@ -2859,6 +2859,10 @@ class DatabaseAtV6 extends GeneratedDatabase {
     'sync_mutations_status_next_attempt_at',
     'CREATE INDEX sync_mutations_status_next_attempt_at ON sync_mutations (status, next_attempt_at)',
   );
+  late final Index syncMutationsUnattemptedEntity = Index(
+    'sync_mutations_unattempted_entity',
+    'CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = \'pending\' AND attempt_count = 0',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2878,6 +2882,7 @@ class DatabaseAtV6 extends GeneratedDatabase {
     transactionsDestinationAccountIdOccurredAtId,
     transactionsCategoryIdOccurredAtId,
     syncMutationsStatusNextAttemptAt,
+    syncMutationsUnattemptedEntity,
   ];
   @override
   int get schemaVersion => 6;

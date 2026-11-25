@@ -73,6 +73,12 @@ extension GPSyncMutationMapper on GPSyncMutation {
     status: status.storageValue,
     lastErrorCode: Value(lastErrorCode),
   );
+
+  /// What a fold changes; the id, the key and the place in the queue stay.
+  SyncMutationsTableCompanion toFoldPatch() => SyncMutationsTableCompanion(operation: Value(operation.storageValue), payloadJson: Value(jsonEncode(payload)));
+
+  /// What a send changes: the payload stays as it was read.
+  SyncMutationsTableCompanion toStatePatch() => SyncMutationsTableCompanion(status: Value(status.storageValue), attemptCount: Value(attemptCount));
 }
 
 /// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).

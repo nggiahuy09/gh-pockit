@@ -4,6 +4,11 @@ import 'package:drift/drift.dart';
 @DataClassName('SyncMutationRow')
 // Ready to push is one range on this index: `status = 'pending' AND next_attempt_at <= :now`.
 @TableIndex(name: 'sync_mutations_status_next_attempt_at', columns: {#status, #nextAttemptAt})
+// At most one unsent mutation per entity: a later write folds into it (ADR-0044), so a second one is a bug, refused with the write. Partial,
+// so a lookup must repeat this WHERE with literals, not bound values, for SQLite to use it.
+@TableIndex.sql(
+  "CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = 'pending' AND attempt_count = 0",
+)
 // Not final: drift generates a subclass in another library.
 class SyncMutationsTable extends Table {
   TextColumn get id => text()();

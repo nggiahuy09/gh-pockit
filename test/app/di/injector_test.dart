@@ -12,6 +12,8 @@ import 'package:ghpockit/core/logging/app_logger.dart';
 import 'package:ghpockit/core/logging/developer_logger.dart';
 import 'package:ghpockit/core/security/flutter_secure_store.dart';
 import 'package:ghpockit/core/security/secure_store.dart';
+import 'package:ghpockit/core/sync/drift_sync_queue_repository.dart';
+import 'package:ghpockit/core/sync/sync_queue_repository.dart';
 import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/theme/drift_theme_preference_store.dart';
 import 'package:ghpockit/core/theme/theme_preference_store.dart';
@@ -52,6 +54,14 @@ void main() {
 
       expect(container.get<GPThemePreferenceStore>(), isA<GPDriftThemePreferenceStore>());
       expect(container.get<GPAppearance>(), same(container.get<GPAppearance>()));
+    });
+
+    test('binds the sync queue to Drift, on the one database the repositories write through', () async {
+      await _useMemoryDatabase(container);
+
+      expect(container.get<GPSyncQueueRepository>(), isA<GPDriftSyncQueueRepository>());
+      expect(container.get<GPSyncQueueRepository>(), same(container.get<GPSyncQueueRepository>()));
+      expect(container.isRegistered<GPDriftSyncQueueRepository>(), isFalse);
     });
 
     test('registers the core abstractions', () {

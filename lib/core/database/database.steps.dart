@@ -737,6 +737,7 @@ final class Schema6 extends i0.VersionedSchema {
     transactionsDestinationAccountIdOccurredAtId,
     transactionsCategoryIdOccurredAtId,
     syncMutationsStatusNextAttemptAt,
+    syncMutationsUnattemptedEntity,
   ];
   late final Shape0 settings = Shape0(
     source: i0.VersionedTable(
@@ -896,6 +897,10 @@ final class Schema6 extends i0.VersionedSchema {
   final i1.Index syncMutationsStatusNextAttemptAt = i1.Index(
     'sync_mutations_status_next_attempt_at',
     'CREATE INDEX sync_mutations_status_next_attempt_at ON sync_mutations (status, next_attempt_at)',
+  );
+  final i1.Index syncMutationsUnattemptedEntity = i1.Index(
+    'sync_mutations_unattempted_entity',
+    'CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = \'pending\' AND attempt_count = 0',
   );
 }
 
