@@ -719,11 +719,299 @@ final class Schema5 extends i0.VersionedSchema {
   );
 }
 
+final class Schema6 extends i0.VersionedSchema {
+  Schema6({required super.database}) : super(version: 6);
+  @override
+  late final List<i1.DatabaseSchemaEntity> entities = [
+    settings,
+    accounts,
+    categories,
+    transactions,
+    syncMutations,
+    syncMetadata,
+    accountsOwnerIdIsArchived,
+    categoriesOwnerIdType,
+    categoriesOwnerIdNameKey,
+    transactionsOwnerIdOccurredAtId,
+    transactionsAccountIdOccurredAtId,
+    transactionsDestinationAccountIdOccurredAtId,
+    transactionsCategoryIdOccurredAtId,
+    syncMutationsStatusNextAttemptAt,
+  ];
+  late final Shape0 settings = Shape0(
+    source: i0.VersionedTable(
+      entityName: 'settings',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY("key")'],
+      columns: [_column_0, _column_1, _column_2],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape1 accounts = Shape1(
+    source: i0.VersionedTable(
+      entityName: 'accounts',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_3,
+        _column_4,
+        _column_5,
+        _column_6,
+        _column_7,
+        _column_8,
+        _column_9,
+        _column_10,
+        _column_2,
+        _column_11,
+        _column_12,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape2 categories = Shape2(
+    source: i0.VersionedTable(
+      entityName: 'categories',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(id)',
+        'CHECK(name_key IS NOT NULL OR name IS NOT NULL)',
+      ],
+      columns: [
+        _column_3,
+        _column_4,
+        _column_13,
+        _column_14,
+        _column_6,
+        _column_15,
+        _column_16,
+        _column_17,
+        _column_10,
+        _column_2,
+        _column_11,
+        _column_12,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape3 transactions = Shape3(
+    source: i0.VersionedTable(
+      entityName: 'transactions',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: [
+        'PRIMARY KEY(id)',
+        'CHECK((type = \'transfer\')=(destination_account_id IS NOT NULL))',
+        'CHECK(destination_account_id <> account_id)',
+        'CHECK(type <> \'transfer\' OR category_id IS NULL)',
+      ],
+      columns: [
+        _column_3,
+        _column_4,
+        _column_6,
+        _column_18,
+        _column_19,
+        _column_20,
+        _column_21,
+        _column_7,
+        _column_22,
+        _column_23,
+        _column_10,
+        _column_2,
+        _column_11,
+        _column_12,
+        _column_24,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape4 syncMutations = Shape4(
+    source: i0.VersionedTable(
+      entityName: 'sync_mutations',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY(id)'],
+      columns: [
+        _column_3,
+        _column_25,
+        _column_26,
+        _column_27,
+        _column_28,
+        _column_29,
+        _column_10,
+        _column_30,
+        _column_31,
+        _column_32,
+        _column_33,
+      ],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  late final Shape5 syncMetadata = Shape5(
+    source: i0.VersionedTable(
+      entityName: 'sync_metadata',
+      withoutRowId: false,
+      isStrict: false,
+      tableConstraints: ['PRIMARY KEY("key")'],
+      columns: [_column_0, _column_1],
+      attachedDatabase: database,
+    ),
+    alias: null,
+  );
+  final i1.Index accountsOwnerIdIsArchived = i1.Index(
+    'accounts_owner_id_is_archived',
+    'CREATE INDEX accounts_owner_id_is_archived ON accounts (owner_id, is_archived)',
+  );
+  final i1.Index categoriesOwnerIdType = i1.Index(
+    'categories_owner_id_type',
+    'CREATE INDEX categories_owner_id_type ON categories (owner_id, type)',
+  );
+  final i1.Index categoriesOwnerIdNameKey = i1.Index(
+    'categories_owner_id_name_key',
+    'CREATE UNIQUE INDEX categories_owner_id_name_key ON categories (owner_id, name_key)',
+  );
+  final i1.Index transactionsOwnerIdOccurredAtId = i1.Index(
+    'transactions_owner_id_occurred_at_id',
+    'CREATE INDEX transactions_owner_id_occurred_at_id ON transactions (owner_id, occurred_at, id)',
+  );
+  final i1.Index transactionsAccountIdOccurredAtId = i1.Index(
+    'transactions_account_id_occurred_at_id',
+    'CREATE INDEX transactions_account_id_occurred_at_id ON transactions (account_id, occurred_at, id, type, amount_minor, deleted_at)',
+  );
+  final i1.Index transactionsDestinationAccountIdOccurredAtId = i1.Index(
+    'transactions_destination_account_id_occurred_at_id',
+    'CREATE INDEX transactions_destination_account_id_occurred_at_id ON transactions (destination_account_id, occurred_at, id, type, amount_minor, deleted_at)',
+  );
+  final i1.Index transactionsCategoryIdOccurredAtId = i1.Index(
+    'transactions_category_id_occurred_at_id',
+    'CREATE INDEX transactions_category_id_occurred_at_id ON transactions (category_id, occurred_at, id)',
+  );
+  final i1.Index syncMutationsStatusNextAttemptAt = i1.Index(
+    'sync_mutations_status_next_attempt_at',
+    'CREATE INDEX sync_mutations_status_next_attempt_at ON sync_mutations (status, next_attempt_at)',
+  );
+}
+
+class Shape4 extends i0.VersionedTable {
+  Shape4({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get id =>
+      columnsByName['id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get entityType =>
+      columnsByName['entity_type']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get entityId =>
+      columnsByName['entity_id']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get operation =>
+      columnsByName['operation']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get payloadJson =>
+      columnsByName['payload_json']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get idempotencyKey =>
+      columnsByName['idempotency_key']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<int> get createdAt =>
+      columnsByName['created_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get attemptCount =>
+      columnsByName['attempt_count']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<int> get nextAttemptAt =>
+      columnsByName['next_attempt_at']! as i1.GeneratedColumn<int>;
+  i1.GeneratedColumn<String> get status =>
+      columnsByName['status']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get lastErrorCode =>
+      columnsByName['last_error_code']! as i1.GeneratedColumn<String>;
+}
+
+i1.GeneratedColumn<String> _column_25(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'entity_type',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_26(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'entity_id',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_27(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'operation',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_28(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'payload_json',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_29(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'idempotency_key',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL UNIQUE',
+    );
+i1.GeneratedColumn<int> _column_30(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'attempt_count',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL CHECK (attempt_count >= 0)',
+    );
+i1.GeneratedColumn<int> _column_31(String aliasedName) =>
+    i1.GeneratedColumn<int>(
+      'next_attempt_at',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.int,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_32(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'status',
+      aliasedName,
+      false,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NOT NULL',
+    );
+i1.GeneratedColumn<String> _column_33(String aliasedName) =>
+    i1.GeneratedColumn<String>(
+      'last_error_code',
+      aliasedName,
+      true,
+      type: i1.DriftSqlType.string,
+      $customConstraints: 'NULL',
+    );
+
+class Shape5 extends i0.VersionedTable {
+  Shape5({required super.source, required super.alias}) : super.aliased();
+  i1.GeneratedColumn<String> get key =>
+      columnsByName['key']! as i1.GeneratedColumn<String>;
+  i1.GeneratedColumn<String> get value =>
+      columnsByName['value']! as i1.GeneratedColumn<String>;
+}
+
 i0.MigrationStepWithVersion migrationSteps({
   required Future<void> Function(i1.Migrator m, Schema2 schema) from1To2,
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) {
   return (currentVersion, database) async {
     switch (currentVersion) {
@@ -747,6 +1035,11 @@ i0.MigrationStepWithVersion migrationSteps({
         final migrator = i1.Migrator(database, schema);
         await from4To5(migrator, schema);
         return 5;
+      case 5:
+        final schema = Schema6(database: database);
+        final migrator = i1.Migrator(database, schema);
+        await from5To6(migrator, schema);
+        return 6;
       default:
         throw ArgumentError.value('Unknown migration from $currentVersion');
     }
@@ -758,11 +1051,13 @@ i1.OnUpgrade stepByStep({
   required Future<void> Function(i1.Migrator m, Schema3 schema) from2To3,
   required Future<void> Function(i1.Migrator m, Schema4 schema) from3To4,
   required Future<void> Function(i1.Migrator m, Schema5 schema) from4To5,
+  required Future<void> Function(i1.Migrator m, Schema6 schema) from5To6,
 }) => i0.VersionedSchema.stepByStepHelper(
   step: migrationSteps(
     from1To2: from1To2,
     from2To3: from2To3,
     from3To4: from3To4,
     from4To5: from4To5,
+    from5To6: from5To6,
   ),
 );

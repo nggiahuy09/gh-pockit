@@ -2502,6 +2502,887 @@ class TransactionsTableCompanion extends UpdateCompanion<TransactionRow> {
   }
 }
 
+class $SyncMutationsTableTable extends SyncMutationsTable with TableInfo<$SyncMutationsTableTable, SyncMutationRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncMutationsTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _operationMeta = const VerificationMeta(
+    'operation',
+  );
+  @override
+  late final GeneratedColumn<String> operation = GeneratedColumn<String>(
+    'operation',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
+    'payloadJson',
+  );
+  @override
+  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
+    'payload_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idempotencyKeyMeta = const VerificationMeta(
+    'idempotencyKey',
+  );
+  @override
+  late final GeneratedColumn<String> idempotencyKey = GeneratedColumn<String>(
+    'idempotency_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<int> createdAt = GeneratedColumn<int>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptCountMeta = const VerificationMeta(
+    'attemptCount',
+  );
+  @override
+  late final GeneratedColumn<int> attemptCount = GeneratedColumn<int>(
+    'attempt_count',
+    aliasedName,
+    false,
+    check: () => ComparableExpr(attemptCount).isBiggerOrEqualValue(0),
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nextAttemptAtMeta = const VerificationMeta(
+    'nextAttemptAt',
+  );
+  @override
+  late final GeneratedColumn<int> nextAttemptAt = GeneratedColumn<int>(
+    'next_attempt_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastErrorCodeMeta = const VerificationMeta(
+    'lastErrorCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorCode = GeneratedColumn<String>(
+    'last_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    entityType,
+    entityId,
+    operation,
+    payloadJson,
+    idempotencyKey,
+    createdAt,
+    attemptCount,
+    nextAttemptAt,
+    status,
+    lastErrorCode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_mutations';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncMutationRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('operation')) {
+      context.handle(
+        _operationMeta,
+        operation.isAcceptableOrUnknown(data['operation']!, _operationMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_operationMeta);
+    }
+    if (data.containsKey('payload_json')) {
+      context.handle(
+        _payloadJsonMeta,
+        payloadJson.isAcceptableOrUnknown(
+          data['payload_json']!,
+          _payloadJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadJsonMeta);
+    }
+    if (data.containsKey('idempotency_key')) {
+      context.handle(
+        _idempotencyKeyMeta,
+        idempotencyKey.isAcceptableOrUnknown(
+          data['idempotency_key']!,
+          _idempotencyKeyMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_idempotencyKeyMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('attempt_count')) {
+      context.handle(
+        _attemptCountMeta,
+        attemptCount.isAcceptableOrUnknown(
+          data['attempt_count']!,
+          _attemptCountMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_attemptCountMeta);
+    }
+    if (data.containsKey('next_attempt_at')) {
+      context.handle(
+        _nextAttemptAtMeta,
+        nextAttemptAt.isAcceptableOrUnknown(
+          data['next_attempt_at']!,
+          _nextAttemptAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nextAttemptAtMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('last_error_code')) {
+      context.handle(
+        _lastErrorCodeMeta,
+        lastErrorCode.isAcceptableOrUnknown(
+          data['last_error_code']!,
+          _lastErrorCodeMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SyncMutationRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncMutationRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      operation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}operation'],
+      )!,
+      payloadJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload_json'],
+      )!,
+      idempotencyKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}idempotency_key'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}created_at'],
+      )!,
+      attemptCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempt_count'],
+      )!,
+      nextAttemptAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}next_attempt_at'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      lastErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_code'],
+      ),
+    );
+  }
+
+  @override
+  $SyncMutationsTableTable createAlias(String alias) {
+    return $SyncMutationsTableTable(attachedDatabase, alias);
+  }
+}
+
+class SyncMutationRow extends DataClass implements Insertable<SyncMutationRow> {
+  final String id;
+
+  /// No vocabulary CHECK on this, [operation] or [status]: the mapper refuses an unknown value on read (ADR-0009).
+  final String entityType;
+
+  /// No foreign key: it points into whichever table [entityType] names.
+  final String entityId;
+  final String operation;
+  final String payloadJson;
+
+  /// Minted once at enqueue and kept across every retry; unique, or the server would treat two mutations as one.
+  final String idempotencyKey;
+  final int createdAt;
+  final int attemptCount;
+
+  /// Not null, unlike blueprint §20: enqueue sets it to [createdAt], so "ready" needs no `IS NULL` branch.
+  final int nextAttemptAt;
+  final String status;
+
+  /// A code only, never a server message: one can echo the payload back (golden rule 9).
+  final String? lastErrorCode;
+  const SyncMutationRow({
+    required this.id,
+    required this.entityType,
+    required this.entityId,
+    required this.operation,
+    required this.payloadJson,
+    required this.idempotencyKey,
+    required this.createdAt,
+    required this.attemptCount,
+    required this.nextAttemptAt,
+    required this.status,
+    this.lastErrorCode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['operation'] = Variable<String>(operation);
+    map['payload_json'] = Variable<String>(payloadJson);
+    map['idempotency_key'] = Variable<String>(idempotencyKey);
+    map['created_at'] = Variable<int>(createdAt);
+    map['attempt_count'] = Variable<int>(attemptCount);
+    map['next_attempt_at'] = Variable<int>(nextAttemptAt);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || lastErrorCode != null) {
+      map['last_error_code'] = Variable<String>(lastErrorCode);
+    }
+    return map;
+  }
+
+  SyncMutationsTableCompanion toCompanion(bool nullToAbsent) {
+    return SyncMutationsTableCompanion(
+      id: Value(id),
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      operation: Value(operation),
+      payloadJson: Value(payloadJson),
+      idempotencyKey: Value(idempotencyKey),
+      createdAt: Value(createdAt),
+      attemptCount: Value(attemptCount),
+      nextAttemptAt: Value(nextAttemptAt),
+      status: Value(status),
+      lastErrorCode: lastErrorCode == null && nullToAbsent ? const Value.absent() : Value(lastErrorCode),
+    );
+  }
+
+  factory SyncMutationRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncMutationRow(
+      id: serializer.fromJson<String>(json['id']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      operation: serializer.fromJson<String>(json['operation']),
+      payloadJson: serializer.fromJson<String>(json['payloadJson']),
+      idempotencyKey: serializer.fromJson<String>(json['idempotencyKey']),
+      createdAt: serializer.fromJson<int>(json['createdAt']),
+      attemptCount: serializer.fromJson<int>(json['attemptCount']),
+      nextAttemptAt: serializer.fromJson<int>(json['nextAttemptAt']),
+      status: serializer.fromJson<String>(json['status']),
+      lastErrorCode: serializer.fromJson<String?>(json['lastErrorCode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'operation': serializer.toJson<String>(operation),
+      'payloadJson': serializer.toJson<String>(payloadJson),
+      'idempotencyKey': serializer.toJson<String>(idempotencyKey),
+      'createdAt': serializer.toJson<int>(createdAt),
+      'attemptCount': serializer.toJson<int>(attemptCount),
+      'nextAttemptAt': serializer.toJson<int>(nextAttemptAt),
+      'status': serializer.toJson<String>(status),
+      'lastErrorCode': serializer.toJson<String?>(lastErrorCode),
+    };
+  }
+
+  SyncMutationRow copyWith({
+    String? id,
+    String? entityType,
+    String? entityId,
+    String? operation,
+    String? payloadJson,
+    String? idempotencyKey,
+    int? createdAt,
+    int? attemptCount,
+    int? nextAttemptAt,
+    String? status,
+    Value<String?> lastErrorCode = const Value.absent(),
+  }) => SyncMutationRow(
+    id: id ?? this.id,
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    operation: operation ?? this.operation,
+    payloadJson: payloadJson ?? this.payloadJson,
+    idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+    createdAt: createdAt ?? this.createdAt,
+    attemptCount: attemptCount ?? this.attemptCount,
+    nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+    status: status ?? this.status,
+    lastErrorCode: lastErrorCode.present ? lastErrorCode.value : this.lastErrorCode,
+  );
+  SyncMutationRow copyWithCompanion(SyncMutationsTableCompanion data) {
+    return SyncMutationRow(
+      id: data.id.present ? data.id.value : this.id,
+      entityType: data.entityType.present ? data.entityType.value : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      operation: data.operation.present ? data.operation.value : this.operation,
+      payloadJson: data.payloadJson.present ? data.payloadJson.value : this.payloadJson,
+      idempotencyKey: data.idempotencyKey.present ? data.idempotencyKey.value : this.idempotencyKey,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      attemptCount: data.attemptCount.present ? data.attemptCount.value : this.attemptCount,
+      nextAttemptAt: data.nextAttemptAt.present ? data.nextAttemptAt.value : this.nextAttemptAt,
+      status: data.status.present ? data.status.value : this.status,
+      lastErrorCode: data.lastErrorCode.present ? data.lastErrorCode.value : this.lastErrorCode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMutationRow(')
+          ..write('id: $id, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('status: $status, ')
+          ..write('lastErrorCode: $lastErrorCode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    entityType,
+    entityId,
+    operation,
+    payloadJson,
+    idempotencyKey,
+    createdAt,
+    attemptCount,
+    nextAttemptAt,
+    status,
+    lastErrorCode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncMutationRow &&
+          other.id == this.id &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.operation == this.operation &&
+          other.payloadJson == this.payloadJson &&
+          other.idempotencyKey == this.idempotencyKey &&
+          other.createdAt == this.createdAt &&
+          other.attemptCount == this.attemptCount &&
+          other.nextAttemptAt == this.nextAttemptAt &&
+          other.status == this.status &&
+          other.lastErrorCode == this.lastErrorCode);
+}
+
+class SyncMutationsTableCompanion extends UpdateCompanion<SyncMutationRow> {
+  final Value<String> id;
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> operation;
+  final Value<String> payloadJson;
+  final Value<String> idempotencyKey;
+  final Value<int> createdAt;
+  final Value<int> attemptCount;
+  final Value<int> nextAttemptAt;
+  final Value<String> status;
+  final Value<String?> lastErrorCode;
+  final Value<int> rowid;
+  const SyncMutationsTableCompanion({
+    this.id = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.operation = const Value.absent(),
+    this.payloadJson = const Value.absent(),
+    this.idempotencyKey = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.attemptCount = const Value.absent(),
+    this.nextAttemptAt = const Value.absent(),
+    this.status = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncMutationsTableCompanion.insert({
+    required String id,
+    required String entityType,
+    required String entityId,
+    required String operation,
+    required String payloadJson,
+    required String idempotencyKey,
+    required int createdAt,
+    required int attemptCount,
+    required int nextAttemptAt,
+    required String status,
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       entityType = Value(entityType),
+       entityId = Value(entityId),
+       operation = Value(operation),
+       payloadJson = Value(payloadJson),
+       idempotencyKey = Value(idempotencyKey),
+       createdAt = Value(createdAt),
+       attemptCount = Value(attemptCount),
+       nextAttemptAt = Value(nextAttemptAt),
+       status = Value(status);
+  static Insertable<SyncMutationRow> custom({
+    Expression<String>? id,
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? operation,
+    Expression<String>? payloadJson,
+    Expression<String>? idempotencyKey,
+    Expression<int>? createdAt,
+    Expression<int>? attemptCount,
+    Expression<int>? nextAttemptAt,
+    Expression<String>? status,
+    Expression<String>? lastErrorCode,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (operation != null) 'operation': operation,
+      if (payloadJson != null) 'payload_json': payloadJson,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (createdAt != null) 'created_at': createdAt,
+      if (attemptCount != null) 'attempt_count': attemptCount,
+      if (nextAttemptAt != null) 'next_attempt_at': nextAttemptAt,
+      if (status != null) 'status': status,
+      if (lastErrorCode != null) 'last_error_code': lastErrorCode,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncMutationsTableCompanion copyWith({
+    Value<String>? id,
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? operation,
+    Value<String>? payloadJson,
+    Value<String>? idempotencyKey,
+    Value<int>? createdAt,
+    Value<int>? attemptCount,
+    Value<int>? nextAttemptAt,
+    Value<String>? status,
+    Value<String?>? lastErrorCode,
+    Value<int>? rowid,
+  }) {
+    return SyncMutationsTableCompanion(
+      id: id ?? this.id,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      operation: operation ?? this.operation,
+      payloadJson: payloadJson ?? this.payloadJson,
+      idempotencyKey: idempotencyKey ?? this.idempotencyKey,
+      createdAt: createdAt ?? this.createdAt,
+      attemptCount: attemptCount ?? this.attemptCount,
+      nextAttemptAt: nextAttemptAt ?? this.nextAttemptAt,
+      status: status ?? this.status,
+      lastErrorCode: lastErrorCode ?? this.lastErrorCode,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (operation.present) {
+      map['operation'] = Variable<String>(operation.value);
+    }
+    if (payloadJson.present) {
+      map['payload_json'] = Variable<String>(payloadJson.value);
+    }
+    if (idempotencyKey.present) {
+      map['idempotency_key'] = Variable<String>(idempotencyKey.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(createdAt.value);
+    }
+    if (attemptCount.present) {
+      map['attempt_count'] = Variable<int>(attemptCount.value);
+    }
+    if (nextAttemptAt.present) {
+      map['next_attempt_at'] = Variable<int>(nextAttemptAt.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (lastErrorCode.present) {
+      map['last_error_code'] = Variable<String>(lastErrorCode.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMutationsTableCompanion(')
+          ..write('id: $id, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('operation: $operation, ')
+          ..write('payloadJson: $payloadJson, ')
+          ..write('idempotencyKey: $idempotencyKey, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('attemptCount: $attemptCount, ')
+          ..write('nextAttemptAt: $nextAttemptAt, ')
+          ..write('status: $status, ')
+          ..write('lastErrorCode: $lastErrorCode, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SyncMetadataTableTable extends SyncMetadataTable with TableInfo<$SyncMetadataTableTable, SyncMetadataRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncMetadataTableTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_metadata';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncMetadataRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  SyncMetadataRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncMetadataRow(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncMetadataTableTable createAlias(String alias) {
+    return $SyncMetadataTableTable(attachedDatabase, alias);
+  }
+}
+
+class SyncMetadataRow extends DataClass implements Insertable<SyncMetadataRow> {
+  final String key;
+  final String value;
+  const SyncMetadataRow({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    return map;
+  }
+
+  SyncMetadataTableCompanion toCompanion(bool nullToAbsent) {
+    return SyncMetadataTableCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory SyncMetadataRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncMetadataRow(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  SyncMetadataRow copyWith({String? key, String? value}) => SyncMetadataRow(key: key ?? this.key, value: value ?? this.value);
+  SyncMetadataRow copyWithCompanion(SyncMetadataTableCompanion data) {
+    return SyncMetadataRow(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMetadataRow(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) => identical(this, other) || (other is SyncMetadataRow && other.key == this.key && other.value == this.value);
+}
+
+class SyncMetadataTableCompanion extends UpdateCompanion<SyncMetadataRow> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const SyncMetadataTableCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SyncMetadataTableCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<SyncMetadataRow> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SyncMetadataTableCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
+  }) {
+    return SyncMetadataTableCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncMetadataTableCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$GPAppDatabase extends GeneratedDatabase {
   _$GPAppDatabase(QueryExecutor e) : super(e);
   $GPAppDatabaseManager get managers => $GPAppDatabaseManager(this);
@@ -2511,6 +3392,8 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
     this,
   );
   late final $TransactionsTableTable transactionsTable = $TransactionsTableTable(this);
+  late final $SyncMutationsTableTable syncMutationsTable = $SyncMutationsTableTable(this);
+  late final $SyncMetadataTableTable syncMetadataTable = $SyncMetadataTableTable(this);
   late final Index accountsOwnerIdIsArchived = Index(
     'accounts_owner_id_is_archived',
     'CREATE INDEX accounts_owner_id_is_archived ON accounts (owner_id, is_archived)',
@@ -2539,6 +3422,10 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
     'transactions_category_id_occurred_at_id',
     'CREATE INDEX transactions_category_id_occurred_at_id ON transactions (category_id, occurred_at, id)',
   );
+  late final Index syncMutationsStatusNextAttemptAt = Index(
+    'sync_mutations_status_next_attempt_at',
+    'CREATE INDEX sync_mutations_status_next_attempt_at ON sync_mutations (status, next_attempt_at)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables => allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
@@ -2547,6 +3434,8 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
     accountsTable,
     categoriesTable,
     transactionsTable,
+    syncMutationsTable,
+    syncMetadataTable,
     accountsOwnerIdIsArchived,
     categoriesOwnerIdType,
     categoriesOwnerIdNameKey,
@@ -2554,6 +3443,7 @@ abstract class _$GPAppDatabase extends GeneratedDatabase {
     transactionsAccountIdOccurredAtId,
     transactionsDestinationAccountIdOccurredAtId,
     transactionsCategoryIdOccurredAtId,
+    syncMutationsStatusNextAttemptAt,
   ];
 }
 
@@ -4292,6 +5182,450 @@ typedef $$TransactionsTableTableProcessedTableManager =
         bool categoryId,
       })
     >;
+typedef $$SyncMutationsTableTableCreateCompanionBuilder =
+    SyncMutationsTableCompanion Function({
+      required String id,
+      required String entityType,
+      required String entityId,
+      required String operation,
+      required String payloadJson,
+      required String idempotencyKey,
+      required int createdAt,
+      required int attemptCount,
+      required int nextAttemptAt,
+      required String status,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+typedef $$SyncMutationsTableTableUpdateCompanionBuilder =
+    SyncMutationsTableCompanion Function({
+      Value<String> id,
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> operation,
+      Value<String> payloadJson,
+      Value<String> idempotencyKey,
+      Value<int> createdAt,
+      Value<int> attemptCount,
+      Value<int> nextAttemptAt,
+      Value<String> status,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+
+class $$SyncMutationsTableTableFilterComposer extends Composer<_$GPAppDatabase, $SyncMutationsTableTable> {
+  $$SyncMutationsTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncMutationsTableTableOrderingComposer extends Composer<_$GPAppDatabase, $SyncMutationsTableTable> {
+  $$SyncMutationsTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get operation => $composableBuilder(
+    column: $table.operation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncMutationsTableTableAnnotationComposer extends Composer<_$GPAppDatabase, $SyncMutationsTableTable> {
+  $$SyncMutationsTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id => $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId => $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get operation => $composableBuilder(column: $table.operation, builder: (column) => column);
+
+  GeneratedColumn<String> get payloadJson => $composableBuilder(
+    column: $table.payloadJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get idempotencyKey => $composableBuilder(
+    column: $table.idempotencyKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get createdAt => $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get attemptCount => $composableBuilder(
+    column: $table.attemptCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nextAttemptAt => $composableBuilder(
+    column: $table.nextAttemptAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status => $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncMutationsTableTableTableManager
+    extends
+        RootTableManager<
+          _$GPAppDatabase,
+          $SyncMutationsTableTable,
+          SyncMutationRow,
+          $$SyncMutationsTableTableFilterComposer,
+          $$SyncMutationsTableTableOrderingComposer,
+          $$SyncMutationsTableTableAnnotationComposer,
+          $$SyncMutationsTableTableCreateCompanionBuilder,
+          $$SyncMutationsTableTableUpdateCompanionBuilder,
+          (SyncMutationRow, BaseReferences<_$GPAppDatabase, $SyncMutationsTableTable, SyncMutationRow>),
+          SyncMutationRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncMutationsTableTableTableManager(
+    _$GPAppDatabase db,
+    $SyncMutationsTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$SyncMutationsTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$SyncMutationsTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$SyncMutationsTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> operation = const Value.absent(),
+                Value<String> payloadJson = const Value.absent(),
+                Value<String> idempotencyKey = const Value.absent(),
+                Value<int> createdAt = const Value.absent(),
+                Value<int> attemptCount = const Value.absent(),
+                Value<int> nextAttemptAt = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMutationsTableCompanion(
+                id: id,
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                payloadJson: payloadJson,
+                idempotencyKey: idempotencyKey,
+                createdAt: createdAt,
+                attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
+                status: status,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String entityType,
+                required String entityId,
+                required String operation,
+                required String payloadJson,
+                required String idempotencyKey,
+                required int createdAt,
+                required int attemptCount,
+                required int nextAttemptAt,
+                required String status,
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMutationsTableCompanion.insert(
+                id: id,
+                entityType: entityType,
+                entityId: entityId,
+                operation: operation,
+                payloadJson: payloadJson,
+                idempotencyKey: idempotencyKey,
+                createdAt: createdAt,
+                attemptCount: attemptCount,
+                nextAttemptAt: nextAttemptAt,
+                status: status,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncMutationsTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GPAppDatabase,
+      $SyncMutationsTableTable,
+      SyncMutationRow,
+      $$SyncMutationsTableTableFilterComposer,
+      $$SyncMutationsTableTableOrderingComposer,
+      $$SyncMutationsTableTableAnnotationComposer,
+      $$SyncMutationsTableTableCreateCompanionBuilder,
+      $$SyncMutationsTableTableUpdateCompanionBuilder,
+      (SyncMutationRow, BaseReferences<_$GPAppDatabase, $SyncMutationsTableTable, SyncMutationRow>),
+      SyncMutationRow,
+      PrefetchHooks Function()
+    >;
+typedef $$SyncMetadataTableTableCreateCompanionBuilder =
+    SyncMetadataTableCompanion Function({
+      required String key,
+      required String value,
+      Value<int> rowid,
+    });
+typedef $$SyncMetadataTableTableUpdateCompanionBuilder =
+    SyncMetadataTableCompanion Function({
+      Value<String> key,
+      Value<String> value,
+      Value<int> rowid,
+    });
+
+class $$SyncMetadataTableTableFilterComposer extends Composer<_$GPAppDatabase, $SyncMetadataTableTable> {
+  $$SyncMetadataTableTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncMetadataTableTableOrderingComposer extends Composer<_$GPAppDatabase, $SyncMetadataTableTable> {
+  $$SyncMetadataTableTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncMetadataTableTableAnnotationComposer extends Composer<_$GPAppDatabase, $SyncMetadataTableTable> {
+  $$SyncMetadataTableTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key => $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value => $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$SyncMetadataTableTableTableManager
+    extends
+        RootTableManager<
+          _$GPAppDatabase,
+          $SyncMetadataTableTable,
+          SyncMetadataRow,
+          $$SyncMetadataTableTableFilterComposer,
+          $$SyncMetadataTableTableOrderingComposer,
+          $$SyncMetadataTableTableAnnotationComposer,
+          $$SyncMetadataTableTableCreateCompanionBuilder,
+          $$SyncMetadataTableTableUpdateCompanionBuilder,
+          (SyncMetadataRow, BaseReferences<_$GPAppDatabase, $SyncMetadataTableTable, SyncMetadataRow>),
+          SyncMetadataRow,
+          PrefetchHooks Function()
+        > {
+  $$SyncMetadataTableTableTableManager(
+    _$GPAppDatabase db,
+    $SyncMetadataTableTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () => $$SyncMetadataTableTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () => $$SyncMetadataTableTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () => $$SyncMetadataTableTableAnnotationComposer(
+            $db: db,
+            $table: table,
+          ),
+          updateCompanionCallback:
+              ({
+                Value<String> key = const Value.absent(),
+                Value<String> value = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetadataTableCompanion(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String key,
+                required String value,
+                Value<int> rowid = const Value.absent(),
+              }) => SyncMetadataTableCompanion.insert(
+                key: key,
+                value: value,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0.map((e) => (e.readTable(table), BaseReferences(db, table, e))).toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncMetadataTableTableProcessedTableManager =
+    ProcessedTableManager<
+      _$GPAppDatabase,
+      $SyncMetadataTableTable,
+      SyncMetadataRow,
+      $$SyncMetadataTableTableFilterComposer,
+      $$SyncMetadataTableTableOrderingComposer,
+      $$SyncMetadataTableTableAnnotationComposer,
+      $$SyncMetadataTableTableCreateCompanionBuilder,
+      $$SyncMetadataTableTableUpdateCompanionBuilder,
+      (SyncMetadataRow, BaseReferences<_$GPAppDatabase, $SyncMetadataTableTable, SyncMetadataRow>),
+      SyncMetadataRow,
+      PrefetchHooks Function()
+    >;
 
 class $GPAppDatabaseManager {
   final _$GPAppDatabase _db;
@@ -4300,4 +5634,6 @@ class $GPAppDatabaseManager {
   $$AccountsTableTableTableManager get accountsTable => $$AccountsTableTableTableManager(_db, _db.accountsTable);
   $$CategoriesTableTableTableManager get categoriesTable => $$CategoriesTableTableTableManager(_db, _db.categoriesTable);
   $$TransactionsTableTableTableManager get transactionsTable => $$TransactionsTableTableTableManager(_db, _db.transactionsTable);
+  $$SyncMutationsTableTableTableManager get syncMutationsTable => $$SyncMutationsTableTableTableManager(_db, _db.syncMutationsTable);
+  $$SyncMetadataTableTableTableManager get syncMetadataTable => $$SyncMetadataTableTableTableManager(_db, _db.syncMetadataTable);
 }
