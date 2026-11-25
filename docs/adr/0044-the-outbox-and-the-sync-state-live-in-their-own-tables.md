@@ -9,6 +9,8 @@ amend or extend this one.
 **v6 stays open until the W13 PR.** Nothing at v6 has shipped, so T3–T5 may still change these tables inside v6, re-dumping
 `drift_schema_v6.json` and regenerating the steps and fixtures. Once the PR merges, v6 is frozen like every earlier version (CLAUDE.md §6).
 
+Amended 2026-11-25 (W13 T3): the vocabulary the table leaves unchecked, and `baseVersion` settled. See _Amended — T3_ at the end.
+
 ## Context
 
 - Golden rule 3 puts the entity write and its mutation in one transaction, so the outbox lives in the same database (ADR-0001).
@@ -62,8 +64,7 @@ Negative:
   usually a handful of rows, so the write cost is small.
 - **`payload_json` holds amounts and notes in plain text,** just as the entity tables do. Diagnostics must never show it (W17 T3).
 - **Open, for later tasks:**
-  - Is `baseVersion` a column, or part of the payload? The local `version` moves on every local edit (ADR-0036 has the server stamping
-    its own). That is T3 or W14.
+  - ~~Is `baseVersion` a column, or part of the payload?~~ Part of the payload: settled at T3, see _Amended — T3_.
   - What does a sign-out clear in `sync_metadata`? The cursor, surely; the device id, perhaps not. Decided with the first key that
     lands there (W14 / W15). Until then, `wipeOwnerRows` (ADR-0042) does not touch the table, which stays empty.
 
@@ -95,3 +96,35 @@ cannot be added later without a rebuild.
 **`id` doubling as the idempotency key.** That would be one column and one index fewer. Rejected for now: T3 lists `idempotencyKey`
 separately, and system-design §6.2 sends both. Coalescing (W13) may replace a pending mutation's payload while keeping its key, and that
 reads better with a key that is not the row's identity. If T3 finds no use for two values, dropping the column inside v6 is cheap.
+
+## Amended — T3 (2026-11-25)
+
+The W13 plan was locked on 2026-11-25 (decisions A–E in ROADMAP, _Kế hoạch W13_). The Flex ADR will record A–D. T3 settles what the table's
+text columns may hold, and decision E settles the open `baseVersion` question.
+
+1. **The vocabulary.** It lives in `core/sync/` (`GP` prefix, §3), with every stored value written out rather than derived from the Dart
+   name:
+   - `GPSyncEntityType`: `account`, `category` and `transaction`;
+   - `GPSyncOperation`: `create`, `update` and `delete`, with no `upsert`. The server treats an insert and an update differently: the
+     columns a patch leaves out are refused once written (ADR-0036). A soft delete is `delete`, and a restore is `update` (ADR-0017);
+   - `GPSyncMutationStatus`: `pending`, `processing`, `conflict` and `failed`. There is no `completed`, because an acknowledged mutation is
+     deleted (golden rule 6).
+2. **An unknown value is refused on read, never guessed.** `GPSyncMutationRowMapper.toDomain` returns `GPUnmappableSyncMutationRow` with a
+   reason: unknown entity type, unknown operation, unknown status, or a payload that is not a JSON object. The reason names the check,
+   never the value, because it goes to the log. What T4 does with such a row (skip it, or mark it `failed`) is T4's call.
+3. **`baseVersion` is the payload's `version`, not a column.** The DAOs never write `version`, which is the server's (ADR-0036,
+   `account_dao.dart` and its siblings), so a row's `version` stays the version the server last gave it until a push is acknowledged.
+   The snapshot taken at enqueue (decision E) therefore carries the base the server checks, and a coalesced mutation keeps that same
+   `version`.
+4. **The folding rule is a pure function,** `GPSyncOperation.followedBy`: a chain that starts with `create` stays `create`, and any other
+   takes the later operation. `GPSyncMutation.coalescedWith` applies it, keeps the id, the key, `created_at` and `next_attempt_at`, and
+   throws on a mutation that has been attempted. Such a mutation may already have reached the server under its key, so a new payload
+   under that key would be answered with the old result.
+5. **`toLog()` holds only ids, type, operation, status, attempt count and the error code.** It never holds the payload or the key
+   (golden rule 9).
+
+Validated by `sync_vocabulary_test.dart` (the stored values pinned literally, the round trip, unknown values, the seven folding pairs),
+`sync_mutation_test.dart` (queued state, UTC, an unmodifiable payload, coalescing and its refusal, the log, equality) and
+`sync_mutation_mapper_test.dart` (a round trip through a real table, JSON past 32 bits and with Vietnamese text and quotes, six
+unreadable rows). Two mutation checks were run. With the rule changed to "always the later operation", or with the attempted-mutation
+guard removed, 4 tests fail.
