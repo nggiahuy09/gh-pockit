@@ -15,6 +15,9 @@ Amended 2026-11-25 (W13 T4): v6 gains a partial unique index, and the queue's co
 
 Amended 2026-11-27 (W13 T5): every write path queues its mutation in its own transaction. See _Amended — T5_.
 
+Amended 2026-11-27 (W13 T6): the invariant is tested, and each entity's mutations leave the queue in order; v6 gains a third index. See
+_Amended — T6_.
+
 ## Context
 
 - Golden rule 3 puts the entity write and its mutation in one transaction, so the outbox lives in the same database (ADR-0001).
@@ -242,3 +245,58 @@ This carries out decisions A, B, C and E of the W13 plan (locked on 2026-11-25).
   - the wipe emptying the outbox.
 - Two mutation checks. Without the transaction around a category delete, its rollback test fails. Without the `'local'` guard, the
   `'local'` test fails.
+
+## Amended — T6 (2026-11-27)
+
+The invariant is tested, without a code change:
+
+> An entity that exists here and needs sync has a mutation, and the newest one carries the row as it is now.
+
+**1. `outbox_invariant_test.dart`: a random walk, checked at every step.**
+- Three seeded walks of 300 steps each mix every write path and what a push does to the queue: send, acknowledge, retry, fail, and a
+  relaunch that resets orphans.
+- After every step, the test checks that:
+  - every entity written since its last acknowledgement has a mutation, and the newest one decodes to the row's `toSyncPayload()`;
+  - an entity with nothing outstanding has no mutation;
+  - no entity has two unsent mutations;
+  - no mutation points at a missing row.
+- The walk asserts it reached all 15 actions.
+
+**2. `outbox_crash_test.dart`: a crash between the mutation and the commit keeps neither.**
+- The setup:
+  - a queue double inserts for real, then throws, which is the last thing inside each write's transaction;
+  - on all 12 write paths, the seeder and the claim, the six tables are compared row for row, before and after.
+- What it shows:
+  - an `Error` rolls back the same way;
+  - a control write with no crash commits both.
+- Removing the transaction around account archive, unarchive and delete fails exactly those three tests.
+
+**Found, and decided the same day (you chose the queue):** the invariant holds only if an entity's mutations are sent in order. A queue
+that hands out any ready mutation can send a newer one while an older one of the same entity waits in backoff. The newer one is then
+acknowledged and deleted, and the stale one is left behind:
+- either it lands later and overwrites the newer change,
+- or, if the server already applied it, the newer one comes back as a conflict.
+
+With the rule taken out of the walk's push, the walk failed at step 266.
+
+**The rule now lives in the queue:**
+
+- **`getReadyMutations`** returns only each entity's oldest mutation still in the queue (`NOT EXISTS` an older one). A conflicted or
+  failed mutation therefore holds its entity's later ones until it is resolved or dropped. That includes a row marked `unreadable_row`;
+  Diagnostics (W17) is where such a row is dealt with.
+- **`markSending`** refuses a mutation with an older one of its entity still queued, so a caller that skips the ready list cannot break
+  the order either.
+- **The order is the rowid's, the queue order.**
+  - Not `created_at`: a clock set back would put a later write first.
+  - Not the v7 id: its counter restarts with the process, and a clock set back across a restart reorders it.
+  - SQLite gives a new row a rowid above every existing one.
+  - The catch: `VACUUM` may renumber the rowids of a table without an `INTEGER PRIMARY KEY`. The app never runs one, and a migration step
+    cannot (ADR-0029). If one is ever added, this table needs a sequence column first.
+- **v6 gains `sync_mutations_entity (entity_type, entity_id)`.** SQLite ends every index with the rowid, so the "older one" lookup is a
+  covering range on it (`entity_type=? AND entity_id=? AND rowid<?`, asserted on both queries). It is a third index on every enqueue.
+- **The walk's push now takes whatever the queue hands out,** with no filter of its own, and holds the invariant on all three seeds. With
+  the `NOT EXISTS` and the `markSending` guard removed, the walk fails at step 266 again, along with five ordering tests: held in backoff
+  then sent in order, a failed one holding, `markSending` refusing, a clock set back, and the plan.
+
+Still open, for W14: a child due while its parent waits (Amended — T4). Each entity is in order now; across entities the order is still
+only `created_at, id`.
