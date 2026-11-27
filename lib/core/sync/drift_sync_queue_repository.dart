@@ -27,21 +27,26 @@ final class GPDriftSyncQueueRepository implements GPSyncQueueRepository {
   static const unattemptedSql = "SELECT * FROM sync_mutations WHERE entity_type = ?1 AND entity_id = ?2 AND status = 'pending' AND attempt_count = 0";
 
   /// Only the oldest mutation left for each entity: a later one sent while an earlier one waits could be applied first, and the earlier
-  /// then lands on top of it (ADR-0044). By rowid, the queue order, which a clock set back cannot reorder. `created_at, id` across entities
-  /// keeps the order the writes happened in.
-  static const readySql = '''
+  /// then lands on top of it (ADR-0044). By rowid, the queue order, which a clock set back cannot reorder. Due first, then queue order: the
+  /// status index already ends with the rowid, so this order needs no sort and the LIMIT stops early, even with a claimed 50k due at once.
+  static const readySql =
+      '''
 SELECT * FROM sync_mutations m
 WHERE m.status = 'pending' AND m.next_attempt_at <= ?1
-  AND NOT EXISTS (SELECT 1 FROM sync_mutations e WHERE e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid)
-ORDER BY m.created_at, m.id
+  AND NOT EXISTS (SELECT 1 FROM sync_mutations e WHERE e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid $_holdsEntity)
+ORDER BY m.next_attempt_at, m.rowid
 LIMIT ?2''';
 
   /// Whether an older mutation of the same entity is still in the queue, in any state.
-  static const olderOfEntitySql = '''
+  static const olderOfEntitySql =
+      '''
 SELECT EXISTS (
-  SELECT 1 FROM sync_mutations m JOIN sync_mutations e ON e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid
+  SELECT 1 FROM sync_mutations m JOIN sync_mutations e ON e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid $_holdsEntity
   WHERE m.id = ?1
 ) AS waiting''';
+
+  /// An unreadable row can never be sent, so it does not hold its entity's later mutations; it stays, failed, for Diagnostics.
+  static const _holdsEntity = "AND NOT (e.status = 'failed' AND e.last_error_code = '$unreadableRowCode')";
 
   static const countUnsyncedEntitiesSql = 'SELECT COUNT(*) AS entities FROM (SELECT DISTINCT entity_type, entity_id FROM sync_mutations)';
 
@@ -83,6 +88,37 @@ SELECT EXISTS (
       );
       await _database.into(_table).insert(mutation.toInsert());
       return mutation;
+    });
+  }
+
+  @override
+  Future<int> enqueueAll(List<GPSyncEnqueue> writes) {
+    return _database.transaction(() async {
+      // One read of which entities already hold an unsent mutation; those fold one by one, the rest go in one batch.
+      final unsent = {
+        for (final row in await _database.customSelect("SELECT entity_type, entity_id FROM sync_mutations WHERE status = 'pending' AND attempt_count = 0").get())
+          (row.read<String>('entity_type'), row.read<String>('entity_id')),
+      };
+      final fresh = <GPSyncMutation>[];
+      for (final write in writes) {
+        if (unsent.contains((write.entityType.storageValue, write.entityId))) {
+          await enqueue(entityType: write.entityType, entityId: write.entityId, operation: write.operation, payload: write.payload);
+          continue;
+        }
+        fresh.add(
+          GPSyncMutation.enqueued(
+            id: _uuidGenerator.v7(),
+            entityType: write.entityType,
+            entityId: write.entityId,
+            operation: write.operation,
+            payload: write.payload,
+            idempotencyKey: _uuidGenerator.v4(),
+            createdAt: _clock.nowUtc(),
+          ),
+        );
+      }
+      await _database.batch((batch) => batch.insertAll(_table, [for (final mutation in fresh) mutation.toInsert()]));
+      return writes.length;
     });
   }
 

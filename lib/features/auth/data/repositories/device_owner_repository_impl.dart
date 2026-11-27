@@ -85,12 +85,16 @@ final class DeviceOwnerRepositoryImpl implements DeviceOwnerRepository {
     // Unclaimed rows belong to nobody's account: never wipe them.
     if (ownerId == localOwnerId) return const GPOk(null);
 
-    final int deleted;
+    final int? deleted;
     try {
       deleted = await _dao.wipeOwnerRows(ownerId);
     } on Exception catch (error, stackTrace) {
       _logger.error('device release failed', fields: {'user_id': ownerId}, error: error, stackTrace: stackTrace);
       return const GPErr(GPDatabaseFailure());
+    }
+    if (deleted == null) {
+      _logger.warn('device release refused, a change was queued after the count', fields: {'user_id': ownerId});
+      return const GPErr(GPValidationFailure(GPValidationCode.signOutUnsyncedChanges));
     }
 
     _ownerContext.adopt(localOwnerId);

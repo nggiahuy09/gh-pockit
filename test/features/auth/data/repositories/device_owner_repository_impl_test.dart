@@ -77,6 +77,17 @@ void main() {
   // In the order queued: the fake v7 ids do not sort past nine as real ones do, and the fake clock never moves on its own.
   Future<List<Map<String, Object?>>> mutations() async => (await db.customSelect('SELECT * FROM sync_mutations ORDER BY rowid').get()).map((row) => row.data).toList();
 
+  /// What a push does to the whole outbox: every mutation sent and acknowledged.
+  Future<void> acknowledgeAll() async {
+    final queue = syncQueueOn(db, clock);
+    for (var ready = await queue.getReadyMutations(limit: 500); ready.isNotEmpty; ready = await queue.getReadyMutations(limit: 500)) {
+      for (final mutation in ready) {
+        await queue.markSending(mutation.id);
+        await queue.complete(mutation.id);
+      }
+    }
+  }
+
   Future<String?> metadata(String key) async =>
       (await db.customSelect('SELECT value FROM sync_metadata WHERE key = ?', variables: [Variable.withString(key)]).getSingleOrNull())?.read<String>('value');
 
@@ -457,6 +468,7 @@ void main() {
     test("deletes the owner's rows, keeps settings, gives the device back to 'local' and reseeds", () async {
       await useOffline();
       okValue(await deviceOwner.claimLocalData(_user));
+      await acknowledgeAll();
       await db.into(db.settingsTable).insert(SettingsTableCompanion.insert(key: 'locale.selected', value: 'vi', updatedAt: 0));
       final seen = <List<String>>[];
       final subscription = accounts.watchAccounts().listen((list) => seen.add(list.map((account) => account.id).toList()));
@@ -480,6 +492,25 @@ void main() {
       expect(await db.customSelect('PRAGMA foreign_key_check').get(), isEmpty);
     });
 
+    test('a change queued after the count stops the wipe: nothing is deleted, and the user stays signed in to this device', () async {
+      final offline = await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      await acknowledgeAll();
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 0);
+      // A save that lands between the sign-out's count and its wipe.
+      okValue(await accounts.archiveAccount(offline.bank.id));
+      final before = {
+        for (final table in ['accounts', 'transactions', 'sync_mutations']) table: await rows(table),
+      };
+
+      expect(await deviceOwner.releaseDevice(), const GPErr<void>(GPValidationFailure(GPValidationCode.signOutUnsyncedChanges)));
+
+      for (final table in before.keys) {
+        expect(await rows(table), before[table], reason: table);
+      }
+      expect(owner.current, _user);
+    });
+
     test("an unclaimed device keeps its 'local' rows: they belong to no account", () async {
       await useOffline();
       final before = (await rows('accounts')).length;
@@ -492,6 +523,7 @@ void main() {
     test('a wipe that fails rolls back and keeps the owner', () async {
       await useOffline();
       okValue(await deviceOwner.claimLocalData(_user));
+      await acknowledgeAll();
       await db.customStatement("CREATE TRIGGER refuse_wipe BEFORE DELETE ON accounts BEGIN SELECT RAISE(ABORT, 'refused'); END");
 
       expect(await deviceOwner.releaseDevice(), const GPErr<void>(GPDatabaseFailure()));

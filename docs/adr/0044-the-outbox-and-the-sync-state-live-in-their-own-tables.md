@@ -300,3 +300,23 @@ With the rule taken out of the walk's push, the walk failed at step 266.
 
 Still open, for W14: a child due while its parent waits (Amended — T4). Each entity is in order now; across entities the order is still
 only `created_at, id`.
+
+**After the code review (2026-11-27).** The 50k figures are host tier, in memory (ADR-0026), measured with a throwaway probe.
+
+- **The ready order is now `next_attempt_at, rowid`: the due ones first, then queue order.**
+  - The status index already ends with the rowid, so the order needs no sort and the `LIMIT` stops early.
+  - With 50k due after a claim, a call went from 31 ms to 0.2 ms.
+  - A retry falls in behind the fresh writes that are due before it. Each entity still keeps its own order.
+- **An unreadable row no longer holds its entity.** The rule skips `failed` + `unreadable_row`, because such a row can never be sent.
+  The row stays for Diagnostics, and the write that set it aside is ready to send.
+- **`enqueueAll`** is for the claim and the backfill. It reads once which entities hold an unsent mutation and folds into those one by
+  one; the rest go in one batch, all in one transaction.
+- **`GPUuidGeneratorImpl.v7`** now takes four random bytes per `Random.secure` call instead of one.
+- **The claim at 50k:** 16.7 s before, 4.9 s now.
+  - Of what is left, 2.6 s is the 50k v4 idempotency keys (`package:uuid`'s own secure RNG) and 1.2 s the v7 ids.
+  - Making them cheaper means choosing how a key is drawn (a seeded fast PRNG, or a key derived from the id). That choice is still open.
+- **Fixed alongside:**
+  - `CategoryDao.insertMissing` reads back the ids it really wrote, so a seed skipped on `(owner_id, name_key)` is not reported, and the
+    seeder skips a row it cannot find;
+  - the sign-out wipe re-checks the outbox in its own transaction (ADR-0042, _Amended_);
+  - the test helper `syncQueueOn` refuses a second, different clock.

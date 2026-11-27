@@ -46,7 +46,8 @@ final class CategorySeeder {
       if (ownerId != localOwnerId) {
         for (final id in inserted) {
           final row = await _dao.findById(id);
-          await _syncQueue.enqueue(entityType: GPSyncEntityType.category, entityId: id, operation: GPSyncOperation.create, payload: row!.toSyncPayload());
+          if (row == null) continue;
+          await _syncQueue.enqueue(entityType: GPSyncEntityType.category, entityId: id, operation: GPSyncOperation.create, payload: row.toSyncPayload());
         }
       }
       return inserted.length;

@@ -31,6 +31,9 @@ final class GPUuidGeneratorImpl extends GPUuidGenerator {
   static const namespace = '6f3c1e6a-2f5f-4f4e-9f2a-0e2c9a8b7d41';
   static const _maxCounter = 0xFFF;
 
+  /// `nextInt`'s largest bound, 2^32: four random bytes per draw.
+  static const _word = 0x100000000;
+
   var _lastMillis = 0;
   var _counter = 0;
 
@@ -63,10 +66,19 @@ final class GPUuidGeneratorImpl extends GPUuidGenerator {
     // Bytes 0–1 become `rand_a`; the version overwrites byte 0's high nibble, leaving 4 + 8 = 12 counter bits.
     randomBytes[0] = (_counter >> 8) & 0x0F;
     randomBytes[1] = _counter & 0xFF;
-    for (var i = 2; i < randomBytes.length; i++) {
-      randomBytes[i] = _random.nextInt(256);
-    }
+    _fillRandom(randomBytes, from: 2);
 
     return _uuid.v7(config: V7Options(_lastMillis, randomBytes));
+  }
+
+  /// Four bytes per draw, not one: each `Random.secure` call is costly, and a claim mints an id for every row (ADR-0044).
+  Uint8List _fillRandom(Uint8List bytes, {required int from}) {
+    for (var i = from; i < bytes.length; i += 4) {
+      final word = _random.nextInt(_word);
+      for (var b = 0; b < 4 && i + b < bytes.length; b++) {
+        bytes[i + b] = (word >> (8 * b)) & 0xFF;
+      }
+    }
+    return bytes;
   }
 }

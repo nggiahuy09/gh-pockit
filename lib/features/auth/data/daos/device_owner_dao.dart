@@ -65,37 +65,29 @@ final class DeviceOwnerDao {
   /// Parents first, each in creation order, so the push meets the server's foreign keys in order. Tombstones too: the delete has to reach
   /// the server. A transaction the server already has is `synced` and stays out.
   Future<int> _enqueueOwnerRows(String ownerId, GPSyncQueueRepository syncQueue) async {
-    Future<void> enqueue(GPSyncEntityType type, String id, Map<String, Object?> payload) =>
-        syncQueue.enqueue(entityType: type, entityId: id, operation: GPSyncOperation.create, payload: payload);
+    GPSyncEnqueue create(GPSyncEntityType type, String id, Map<String, Object?> payload) => (entityType: type, entityId: id, operation: GPSyncOperation.create, payload: payload);
 
     final accounts =
         await (_db.select(_db.accountsTable)
               ..where((t) => t.ownerId.equals(ownerId))
               ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.id)]))
             .get();
-    for (final row in accounts) {
-      await enqueue(GPSyncEntityType.account, row.id, row.toSyncPayload());
-    }
-
     final categories =
         await (_db.select(_db.categoriesTable)
               ..where((t) => t.ownerId.equals(ownerId))
               ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.id)]))
             .get();
-    for (final row in categories) {
-      await enqueue(GPSyncEntityType.category, row.id, row.toSyncPayload());
-    }
-
     final transactions =
         await (_db.select(_db.transactionsTable)
               ..where((t) => t.ownerId.equals(ownerId) & t.syncStatus.equals(TransactionDao.pendingSyncStatus))
               ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.id)]))
             .get();
-    for (final row in transactions) {
-      await enqueue(GPSyncEntityType.transaction, row.id, row.toSyncPayload());
-    }
 
-    return accounts.length + categories.length + transactions.length;
+    return syncQueue.enqueueAll([
+      for (final row in accounts) create(GPSyncEntityType.account, row.id, row.toSyncPayload()),
+      for (final row in categories) create(GPSyncEntityType.category, row.id, row.toSyncPayload()),
+      for (final row in transactions) create(GPSyncEntityType.transaction, row.id, row.toSyncPayload()),
+    ]);
   }
 
   Future<void> _markOutboxFilled() => _db.into(_db.syncMetadataTable).insertOnConflictUpdate(SyncMetadataTableCompanion.insert(key: outboxFilledKey, value: '1'));
@@ -147,8 +139,10 @@ final class DeviceOwnerDao {
   }
 
   /// Hard delete, children first for the foreign keys: the device's copy goes, the server's stays (ADR-0042). `settings` keeps everything but
-  /// the owner. The outbox goes too: it is this owner's, and a sign-out only runs once it holds nothing but untouched seeds.
-  Future<int> wipeOwnerRows(String ownerId) => _db.transaction(() async {
+  /// the owner. The outbox goes too: it is this owner's. Null, with nothing deleted, when it holds more than untouched seeds: a write that
+  /// landed after the caller's count would go with it, and the server does not have it.
+  Future<int?> wipeOwnerRows(String ownerId) => _db.transaction(() async {
+    if (await countUnsynced() > 0) return null;
     await _db.delete(_db.syncMutationsTable).go();
     var deleted = 0;
     for (final table in const ['transactions', 'categories', 'accounts']) {

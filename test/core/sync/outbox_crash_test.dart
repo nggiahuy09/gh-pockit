@@ -199,6 +199,21 @@ final class _CrashingQueue implements GPSyncQueueRepository {
   }
 
   @override
+  Future<int> enqueueAll(List<GPSyncEnqueue> writes) async {
+    final queued = await _inner.enqueueAll(writes);
+    switch (crashWith) {
+      case final Exception exception:
+        crashes++;
+        throw exception;
+      case final Error error:
+        crashes++;
+        throw error;
+      default:
+        return queued;
+    }
+  }
+
+  @override
   Future<List<GPSyncMutation>> getReadyMutations({int limit = GPDriftSyncQueueRepository.defaultReadyLimit}) => _inner.getReadyMutations(limit: limit);
 
   @override

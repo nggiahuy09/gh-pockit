@@ -114,3 +114,6 @@ The outbox exists now (ADR-0044), so decision 1's stand-in is replaced.
   still there, so a device with data still cannot sign out.
 - **The wipe** deletes `sync_mutations` in the same transaction as the rows. The outbox belongs to the one owner (ADR-0040), and by then
   it holds nothing but untouched seeds. `sync_metadata` is left alone; what a sign-out clears there is decided with its first key.
+- **The wipe re-checks (code review, 2026-11-27).** `wipeOwnerRows` counts the outbox again inside its own transaction, and deletes nothing
+  when anything beyond untouched seeds is queued. A write that lands between the sign-out's count and its wipe would otherwise go with
+  it. `releaseDevice` then returns `signOutUnsyncedChanges`, the same failure the count gives.

@@ -37,21 +37,24 @@ base class CategoryDao extends DatabaseAccessor<GPAppDatabase> with _$CategoryDa
     // One transaction around the lookup and the batch, so no other write lands in between.
     return transaction(() async {
       final ids = [for (final row in rows) row.id.value];
-      final existing =
-          await (selectOnly(categoriesTable)
-                ..addColumns([categoriesTable.id])
-                ..where(categoriesTable.id.isIn(ids)))
-              .map((row) => row.read(categoriesTable.id)!)
-              .get();
+      final before = (await _existingIds(ids)).toSet();
       await batch((b) => b.insertAll(categoriesTable, rows, mode: InsertMode.insertOrIgnore));
 
-      final before = existing.toSet();
+      // Read back, not inferred: `OR IGNORE` also skips a row that collides on `(owner_id, name_key)` under another id.
+      final after = (await _existingIds(ids)).toSet();
       return [
         for (final id in ids)
-          if (!before.contains(id)) id,
+          if (after.contains(id) && !before.contains(id)) id,
       ];
     });
   }
+
+  Future<List<String>> _existingIds(List<String> ids) =>
+      (selectOnly(categoriesTable)
+            ..addColumns([categoriesTable.id])
+            ..where(categoriesTable.id.isIn(ids)))
+          .map((row) => row.read(categoriesTable.id)!)
+          .get();
 
   /// Never writes `version`, which is the server's.
   Future<int> updateCategory(String id, {required CategoriesTableCompanion patch, required int baseVersion, required int now}) {

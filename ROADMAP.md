@@ -1752,7 +1752,20 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
   - **v6 thêm `sync_mutations_entity (entity_type, entity_id)`**: SQLite thêm rowid vào cuối mọi index, nên tìm "mutation cũ hơn" là một
     range covering. Push của walk giờ lấy thẳng từ hàng đợi, không tự lọc. Bỏ `NOT EXISTS` + guard → walk đỏ lại ở bước 266, kèm 5 test thứ tự.
   - +5 test; 1358 xanh + 1 skip.
-- **Còn mở cho W14:** con đến hạn khi cha còn chờ (T4) — trong từng entity đã có thứ tự, giữa các entity vẫn chỉ `created_at, id`.
+- [x] **Sau code review (27/11), đo ở 50k** (host, trong bộ nhớ):
+  - **Thứ tự sẵn sàng** đổi thành `next_attempt_at, rowid` — index trạng thái đã có sẵn thứ tự đó, không cần sắp, LIMIT dừng sớm: 31 → 0,2 ms
+    mỗi lần gọi khi 50k cùng đến hạn sau claim.
+  - **Dòng `unreadable_row`** không còn giữ entity của nó.
+  - **`enqueueAll`** cho claim / backfill: một batch cho entity chưa có mutation chưa gửi, entity có rồi thì gộp từng cái.
+  - **`v7`** lấy 4 byte ngẫu nhiên mỗi lần gọi `Random.secure`.
+  - **Claim 50k: 16,7 → 4,9 s.** Phần còn lại là 2,6 s key v4 + 1,2 s id v7 — muốn nhanh hơn phải chọn cách sinh key: PRNG nhanh có seed, hoặc
+    key suy ra từ id. **Chưa chốt.**
+  - Sửa kèm:
+    - `insertMissing` đọc lại id thật sự đã ghi, seeder bỏ qua dòng không tìm thấy;
+    - wipe khi đăng xuất đếm lại outbox trong transaction của nó (ADR-0042);
+    - `syncQueueOn` từ chối đồng hồ thứ hai.
+  - 1362 xanh + 1 skip.
+- **Còn mở cho W14:** con đến hạn khi cha còn chờ (T4) — trong từng entity đã có thứ tự, giữa các entity giờ là `next_attempt_at, rowid`.
 
 ## W14 · 07–13/12 🔴 Push
 
@@ -1764,6 +1777,12 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 | T5   | Phân loại lỗi: retryable vs non-retryable, map sang `Failure`                                                                                                      |
 | T6   | Test push với fake remote: success / network error / 4xx                                                                                                           |
 | Flex | Manual test: tắt mạng → tạo 3 transaction → bật mạng → bấm sync → check bảng Supabase                                                                              |
+
+> **Mang sang từ W13 T6 (27/11, bạn chốt để W14):**
+> - Claim / backfill 50k còn 4,9 s (host), chủ yếu do sinh uuid: 2,6 s key v4 + 1,2 s id v7. Cần chốt cách sinh idempotency key rẻ hơn
+>   (PRNG nhanh có seed từ nguồn an toàn, hay key suy ra từ id) rồi đo lại trên máy thật.
+> - Con đến hạn khi cha còn chờ backoff: trong từng entity đã có thứ tự, giữa các entity chưa.
+> - Gọi `resetOrphans` lúc mở app, trước lần push đầu.
 
 ## W15 · 14–20/12 🔴 Pull
 

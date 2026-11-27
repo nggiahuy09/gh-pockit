@@ -130,7 +130,7 @@ void main() {
       expect((await rows()).single.operation, 'update');
     });
 
-    test('sets aside an unsent row it cannot read, marked failed, and queues the write afresh', () async {
+    test('sets aside an unsent row it cannot read, marked failed, and queues the write afresh, ready to send', () async {
       await db.into(db.syncMutationsTable).insert(_raw('bad', operation: 'upsert'));
 
       final queued = await write('tx-1', GPSyncOperation.update);
@@ -140,6 +140,8 @@ void main() {
       expect(byId['bad']!.lastErrorCode, GPDriftSyncQueueRepository.unreadableRowCode);
       expect(byId[queued.id]!.status, 'pending');
       expect(logger.last.fields, {'mutation_id': 'bad', 'reason': 'unknownOperation'});
+      // The failed row can never be sent, so it does not hold the new one back.
+      expect((await queue.getReadyMutations()).map((m) => m.id), [queued.id]);
     });
 
     test('finds the unsent mutation through the partial index, never a scan', () async {
@@ -148,6 +150,37 @@ void main() {
           .get();
 
       expect(plan.map((row) => row.read<String>('detail')), ['SEARCH sync_mutations USING INDEX sync_mutations_unattempted_entity (entity_type=? AND entity_id=?)']);
+    });
+  });
+
+  group('enqueueAll', () {
+    test('queues many in their order, folding into an entity that already holds an unsent mutation', () async {
+      final unsent = await write('tx-1', GPSyncOperation.create, {'id': 'tx-1', 'note': 'old'});
+
+      final count = await queue.enqueueAll([
+        (entityType: GPSyncEntityType.account, entityId: 'acc-1', operation: GPSyncOperation.create, payload: const {'id': 'acc-1'}),
+        (entityType: GPSyncEntityType.transaction, entityId: 'tx-1', operation: GPSyncOperation.update, payload: const {'id': 'tx-1', 'note': 'new'}),
+        (entityType: GPSyncEntityType.transaction, entityId: 'tx-2', operation: GPSyncOperation.create, payload: const {'id': 'tx-2'}),
+      ]);
+
+      expect(count, 3);
+      final all = await rows();
+      expect(all.map((row) => row.entityId), ['tx-1', 'acc-1', 'tx-2']);
+      expect([all.first.id, all.first.operation, all.first.payloadJson], [unsent.id, 'create', '{"id":"tx-1","note":"new"}']);
+      expect(all.map((row) => row.idempotencyKey).toSet(), hasLength(3));
+    });
+
+    test('rolls back whole when one insert fails', () async {
+      await db.customStatement("CREATE TRIGGER refuse_two BEFORE INSERT ON sync_mutations WHEN NEW.entity_id = 'tx-2' BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      await expectLater(
+        queue.enqueueAll([
+          (entityType: GPSyncEntityType.transaction, entityId: 'tx-1', operation: GPSyncOperation.create, payload: const {'id': 'tx-1'}),
+          (entityType: GPSyncEntityType.transaction, entityId: 'tx-2', operation: GPSyncOperation.create, payload: const {'id': 'tx-2'}),
+        ]),
+        throwsA(isA<Exception>()),
+      );
+      expect(await rows(), isEmpty);
     });
   });
 
@@ -181,8 +214,8 @@ void main() {
 
     test('marks a row it cannot read failed, logs why, and returns the rest', () async {
       await db.into(db.syncMutationsTable).insert(_raw('bad', payloadJson: '{"id":'));
-      // Another entity: the unreadable row, failed now, still holds its own entity's later ones.
-      final good = await write('tx-2', GPSyncOperation.create);
+      // The same entity: an unreadable row does not hold the later ones.
+      final good = await write('tx-1', GPSyncOperation.create);
 
       expect((await queue.getReadyMutations()).map((m) => m.id), [good.id]);
       expect((await rows()).firstWhere((row) => row.id == 'bad').status, 'failed');
@@ -195,12 +228,11 @@ void main() {
           .customSelect('EXPLAIN QUERY PLAN ${GPDriftSyncQueueRepository.readySql}', variables: [Variable.withInt(_start.millisecondsSinceEpoch), Variable.withInt(50)])
           .get();
 
-      // The sort runs over the due rows only, a handful: nothing orders them by `created_at` within the range.
+      // No sort: the status index is already in `next_attempt_at, rowid` order, so the LIMIT stops early even with 50k due after a claim.
       expect(plan.map((row) => row.read<String>('detail')), [
         'SEARCH m USING INDEX sync_mutations_status_next_attempt_at (status=? AND next_attempt_at<?)',
         'CORRELATED SCALAR SUBQUERY 1',
-        'SEARCH e USING COVERING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)',
-        'USE TEMP B-TREE FOR ORDER BY',
+        'SEARCH e USING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)',
       ]);
     });
 
@@ -220,7 +252,8 @@ void main() {
         expect((await queue.getReadyMutations()).map((m) => m.id), [other.id], reason: 'another entity is not held');
 
         clock.advance(const Duration(minutes: 1));
-        expect((await queue.getReadyMutations()).map((m) => m.id), [first.id, other.id]);
+        // Due first: `other` was due at once, the retry only now.
+        expect((await queue.getReadyMutations()).map((m) => m.id), [other.id, first.id]);
 
         await queue.markSending(first.id);
         await queue.complete(first.id);
@@ -263,7 +296,7 @@ void main() {
       test('finds an older mutation of the entity through the entity index', () async {
         final plan = await db.customSelect('EXPLAIN QUERY PLAN ${GPDriftSyncQueueRepository.olderOfEntitySql}', variables: [Variable.withString('m-1')]).get();
 
-        expect(plan.map((row) => row.read<String>('detail')), contains('SEARCH e USING COVERING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)'));
+        expect(plan.map((row) => row.read<String>('detail')), contains('SEARCH e USING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)'));
       });
     });
   });

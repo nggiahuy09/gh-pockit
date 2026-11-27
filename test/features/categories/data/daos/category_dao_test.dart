@@ -136,6 +136,13 @@ void main() {
       expect(await dao.insertMissing([_row(), _row(id: 'c2', nameKey: 'category.bills')]), ['c2']);
     });
 
+    test('does not report a row the key collision skipped: the same owner and name key under another id', () async {
+      await dao.insertCategory(_row(id: 'c-old'));
+
+      expect(await dao.insertMissing([_row()]), isEmpty);
+      expect((await db.select(db.categoriesTable).get()).map((row) => row.id), ['c-old']);
+    });
+
     test('writes nothing and returns nothing for an empty list', () async {
       expect(await dao.insertMissing([]), isEmpty);
     });
