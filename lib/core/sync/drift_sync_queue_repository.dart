@@ -26,8 +26,22 @@ final class GPDriftSyncQueueRepository implements GPSyncQueueRepository {
   /// Repeats the partial index's WHERE with literals, or SQLite cannot prove it applies and scans instead.
   static const unattemptedSql = "SELECT * FROM sync_mutations WHERE entity_type = ?1 AND entity_id = ?2 AND status = 'pending' AND attempt_count = 0";
 
-  /// `created_at, id` keeps the order the writes happened in, so a parent created before its child is pushed before it.
-  static const readySql = "SELECT * FROM sync_mutations WHERE status = 'pending' AND next_attempt_at <= ?1 ORDER BY created_at, id LIMIT ?2";
+  /// Only the oldest mutation left for each entity: a later one sent while an earlier one waits could be applied first, and the earlier
+  /// then lands on top of it (ADR-0044). By rowid, the queue order, which a clock set back cannot reorder. `created_at, id` across entities
+  /// keeps the order the writes happened in.
+  static const readySql = '''
+SELECT * FROM sync_mutations m
+WHERE m.status = 'pending' AND m.next_attempt_at <= ?1
+  AND NOT EXISTS (SELECT 1 FROM sync_mutations e WHERE e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid)
+ORDER BY m.created_at, m.id
+LIMIT ?2''';
+
+  /// Whether an older mutation of the same entity is still in the queue, in any state.
+  static const olderOfEntitySql = '''
+SELECT EXISTS (
+  SELECT 1 FROM sync_mutations m JOIN sync_mutations e ON e.entity_type = m.entity_type AND e.entity_id = m.entity_id AND e.rowid < m.rowid
+  WHERE m.id = ?1
+) AS waiting''';
 
   static const countUnsyncedEntitiesSql = 'SELECT COUNT(*) AS entities FROM (SELECT DISTINCT entity_type, entity_id FROM sync_mutations)';
 
@@ -103,6 +117,9 @@ final class GPDriftSyncQueueRepository implements GPSyncQueueRepository {
           return null;
         case GPMappedSyncMutation(:final mutation):
           if (mutation.status != GPSyncMutationStatus.pending) return null;
+          // A caller that skipped `getReadyMutations` still cannot send out of the entity's order.
+          final waiting = await _database.customSelect(olderOfEntitySql, variables: [Variable.withString(id)], readsFrom: {_table}).getSingle();
+          if (waiting.read<bool>('waiting')) return null;
           final sent = mutation.sending();
           await (_database.update(_table)..where((t) => t.id.equals(id))).write(sent.toStatePatch());
           return sent;

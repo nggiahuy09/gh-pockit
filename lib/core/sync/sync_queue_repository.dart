@@ -9,11 +9,13 @@ abstract interface class GPSyncQueueRepository {
   /// `transaction()` as the entity write. [payload] is the row as written, with the server's column names.
   Future<GPSyncMutation> enqueue({required GPSyncEntityType entityType, required String entityId, required GPSyncOperation operation, required Map<String, Object?> payload});
 
-  /// Pending and due, oldest first. A row this build cannot read is marked failed and left out.
+  /// Pending and due, oldest first, and only each entity's oldest mutation left: a conflicted or failed one holds the entity's later ones
+  /// until it is resolved. A row this build cannot read is marked failed and left out.
   Future<List<GPSyncMutation>> getReadyMutations({int limit});
 
   /// Counts the attempt and marks it in flight, before the request leaves. Send exactly what this returns: a write that folded into the
-  /// mutation after [getReadyMutations] read it is in here, not in the earlier copy. Null when it is no longer pending.
+  /// mutation after [getReadyMutations] read it is in here, not in the earlier copy. Null when it is no longer pending, or an older
+  /// mutation of the same entity is still queued.
   Future<GPSyncMutation?> markSending(String id);
 
   /// The server applied it: the mutation is deleted (golden rule 6).

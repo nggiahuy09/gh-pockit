@@ -9,6 +9,8 @@ import 'package:drift/drift.dart';
 @TableIndex.sql(
   "CREATE UNIQUE INDEX sync_mutations_unattempted_entity ON sync_mutations (entity_type, entity_id) WHERE status = 'pending' AND attempt_count = 0",
 )
+// An entity's mutations in queue order (SQLite ends every index with the rowid), so a later one waits for an earlier (ADR-0044).
+@TableIndex(name: 'sync_mutations_entity', columns: {#entityType, #entityId})
 // Not final: drift generates a subclass in another library.
 class SyncMutationsTable extends Table {
   TextColumn get id => text()();

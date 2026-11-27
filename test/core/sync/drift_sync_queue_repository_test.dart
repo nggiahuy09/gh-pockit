@@ -181,7 +181,8 @@ void main() {
 
     test('marks a row it cannot read failed, logs why, and returns the rest', () async {
       await db.into(db.syncMutationsTable).insert(_raw('bad', payloadJson: '{"id":'));
-      final good = await write('tx-1', GPSyncOperation.create);
+      // Another entity: the unreadable row, failed now, still holds its own entity's later ones.
+      final good = await write('tx-2', GPSyncOperation.create);
 
       expect((await queue.getReadyMutations()).map((m) => m.id), [good.id]);
       expect((await rows()).firstWhere((row) => row.id == 'bad').status, 'failed');
@@ -189,16 +190,81 @@ void main() {
       expect(logger.last.fields, {'mutation_id': 'bad', 'reason': 'malformedPayload'});
     });
 
-    test('reads the due range off the status index', () async {
+    test("reads the due range off the status index, and each entity's older mutations off the entity index", () async {
       final plan = await db
           .customSelect('EXPLAIN QUERY PLAN ${GPDriftSyncQueueRepository.readySql}', variables: [Variable.withInt(_start.millisecondsSinceEpoch), Variable.withInt(50)])
           .get();
 
       // The sort runs over the due rows only, a handful: nothing orders them by `created_at` within the range.
       expect(plan.map((row) => row.read<String>('detail')), [
-        'SEARCH sync_mutations USING INDEX sync_mutations_status_next_attempt_at (status=? AND next_attempt_at<?)',
+        'SEARCH m USING INDEX sync_mutations_status_next_attempt_at (status=? AND next_attempt_at<?)',
+        'CORRELATED SCALAR SUBQUERY 1',
+        'SEARCH e USING COVERING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)',
         'USE TEMP B-TREE FOR ORDER BY',
       ]);
+    });
+
+    group('one entity, in order (ADR-0044)', () {
+      Future<(GPSyncMutation, GPSyncMutation)> sentThenWrittenAgain() async {
+        final first = await write('tx-1', GPSyncOperation.create, {'id': 'tx-1', 'note': 'old'});
+        await queue.markSending(first.id);
+        await queue.scheduleRetry(first.id, nextAttemptAt: _start.add(const Duration(minutes: 1)), errorCode: 'network');
+        final second = await write('tx-1', GPSyncOperation.update, {'id': 'tx-1', 'note': 'new'});
+        return (first, second);
+      }
+
+      test('holds a later mutation while an earlier one of its entity waits in backoff, then sends them in order', () async {
+        final (first, second) = await sentThenWrittenAgain();
+        final other = await write('tx-2', GPSyncOperation.create);
+
+        expect((await queue.getReadyMutations()).map((m) => m.id), [other.id], reason: 'another entity is not held');
+
+        clock.advance(const Duration(minutes: 1));
+        expect((await queue.getReadyMutations()).map((m) => m.id), [first.id, other.id]);
+
+        await queue.markSending(first.id);
+        await queue.complete(first.id);
+        // Written in the same millisecond as `other`, and minted before it.
+        expect((await queue.getReadyMutations()).map((m) => m.id), [second.id, other.id]);
+      });
+
+      test('a failed or conflicted earlier mutation holds the later ones until it is resolved', () async {
+        final first = await write('tx-1', GPSyncOperation.create);
+        await queue.markSending(first.id);
+        await queue.markFailed(first.id, errorCode: 'validation');
+        final second = await write('tx-1', GPSyncOperation.update);
+
+        expect(await queue.getReadyMutations(), isEmpty);
+        expect(await queue.markSending(second.id), isNull);
+
+        await queue.complete(first.id);
+        expect((await queue.getReadyMutations()).single.id, second.id);
+      });
+
+      test('markSending refuses a later mutation while an earlier one is queued, even one not yet due', () async {
+        final (_, second) = await sentThenWrittenAgain();
+
+        expect(await queue.markSending(second.id), isNull);
+        expect((await rows()).map((row) => (row.status, row.attemptCount)), [('pending', 1), ('pending', 0)]);
+      });
+
+      test("a clock set back cannot put the later write ahead: the order is the queue's, not the clock's", () async {
+        final first = await write('tx-1', GPSyncOperation.create);
+        await queue.markSending(first.id);
+        await queue.scheduleRetry(first.id, nextAttemptAt: _start, errorCode: 'network');
+        clock.rewindForTest(const Duration(hours: 1));
+        final second = await write('tx-1', GPSyncOperation.update);
+        clock.advance(const Duration(hours: 1));
+
+        expect((await queue.getReadyMutations()).map((m) => m.id), [first.id]);
+        expect(await queue.markSending(second.id), isNull);
+      });
+
+      test('finds an older mutation of the entity through the entity index', () async {
+        final plan = await db.customSelect('EXPLAIN QUERY PLAN ${GPDriftSyncQueueRepository.olderOfEntitySql}', variables: [Variable.withString('m-1')]).get();
+
+        expect(plan.map((row) => row.read<String>('detail')), contains('SEARCH e USING COVERING INDEX sync_mutations_entity (entity_type=? AND entity_id=? AND rowid<?)'));
+      });
     });
   });
 

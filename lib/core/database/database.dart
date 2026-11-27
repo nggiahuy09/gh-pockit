@@ -95,6 +95,7 @@ final Future<int> Function(int from, GeneratedDatabase database) _upgradeFrom = 
     await m.createTable(schema.syncMutations);
     await m.createIndex(schema.syncMutationsStatusNextAttemptAt);
     await m.createIndex(schema.syncMutationsUnattemptedEntity);
+    await m.createIndex(schema.syncMutationsEntity);
     await m.createTable(schema.syncMetadata);
   },
 );

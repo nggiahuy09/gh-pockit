@@ -303,7 +303,7 @@ void main() {
       await now.close();
     });
 
-    test('creates both outbox indexes on the upgrade path', () async {
+    test('creates the three outbox indexes on the upgrade path', () async {
       final connection = await _verifier.startAt(5);
       final db = GPAppDatabase.forTesting(connection);
 
@@ -311,7 +311,10 @@ void main() {
 
       // SQLite's own autoindexes (the TEXT key, the UNIQUE key) come with the table; the named one is the step's to create.
       final indexes = await db.customSelect("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'sync_mutations' AND name NOT LIKE 'sqlite_%'").get();
-      expect(indexes.map((row) => row.read<String>('name')), unorderedEquals(<String>['sync_mutations_status_next_attempt_at', 'sync_mutations_unattempted_entity']));
+      expect(
+        indexes.map((row) => row.read<String>('name')),
+        unorderedEquals(<String>['sync_mutations_status_next_attempt_at', 'sync_mutations_unattempted_entity', 'sync_mutations_entity']),
+      );
 
       await db.close();
     });
