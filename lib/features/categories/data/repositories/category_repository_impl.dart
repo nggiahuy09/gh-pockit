@@ -2,10 +2,14 @@ import 'dart:async';
 
 import '../../../../core/database/database.dart';
 import '../../../../core/database/owner_context.dart';
+import '../../../../core/database/owner_id.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
+import '../../../../core/sync/sync_entity_type.dart';
+import '../../../../core/sync/sync_operation.dart';
+import '../../../../core/sync/sync_queue_repository.dart';
 import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../domain/entities/category_entity.dart';
@@ -21,17 +25,20 @@ final class CategoryRepositoryImpl implements CategoryRepository {
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
     required GPOwnerContext ownerContext,
+    required GPSyncQueueRepository syncQueue,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerContext = ownerContext;
+       _ownerContext = ownerContext,
+       _syncQueue = syncQueue;
 
   final GPClock _clock;
   final CategoryDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
   final GPOwnerContext _ownerContext;
+  final GPSyncQueueRepository _syncQueue;
 
   /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
   String get _ownerId => _ownerContext.current;
@@ -100,8 +107,11 @@ final class CategoryRepositoryImpl implements CategoryRepository {
         return created;
       case GPOk(:final value):
         try {
-          await _dao.insertCategory(value.toInsert(_ownerId));
-          return GPOk(value);
+          return await _dao.transaction(() async {
+            await _dao.insertCategory(value.toInsert(_ownerId));
+            await _enqueue(value.id, GPSyncOperation.create);
+            return GPOk(value);
+          });
         } on Exception catch (error, stackTrace) {
           return _databaseFailure(error: error, stackTrace: stackTrace, id: value.id, message: 'category insert failed');
         }
@@ -116,7 +126,10 @@ final class CategoryRepositoryImpl implements CategoryRepository {
     try {
       return await _dao.transaction(() async {
         final written = await _dao.updateCategory(stamped.id, patch: stamped.toPatch(), baseVersion: category.version, now: now.millisecondsSinceEpoch);
-        if (written == 1) return GPOk(stamped);
+        if (written == 1) {
+          await _enqueue(stamped.id, GPSyncOperation.update);
+          return GPOk(stamped);
+        }
 
         // Zero rows: missing, deleted or stale. Asked inside the transaction so a concurrent delete cannot pass for a conflict.
         final current = await _dao.findById(stamped.id);
@@ -132,14 +145,25 @@ final class CategoryRepositoryImpl implements CategoryRepository {
   @override
   Future<GPResult<void>> deleteCategory(String id) async {
     try {
-      // Not version-guarded: a delete has nothing to merge, so a rename that landed first must not block it.
-      final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
-      if (written == 0) return const GPErr(GPNotFoundFailure());
+      return await _dao.transaction(() async {
+        // Not version-guarded: a delete has nothing to merge, so a rename that landed first must not block it.
+        final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
+        if (written == 0) return const GPErr(GPNotFoundFailure());
 
-      return const GPOk(null);
+        await _enqueue(id, GPSyncOperation.delete);
+        return const GPOk(null);
+      });
     } on Exception catch (error, stackTrace) {
       return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: 'category delete failed');
     }
+  }
+
+  /// Inside the write's transaction (golden rule 3), from the row as written. A `'local'` row has no account to push to; the claim queues it.
+  Future<void> _enqueue(String id, GPSyncOperation operation) async {
+    final row = await _dao.findById(id);
+    if (row == null || row.ownerId == localOwnerId) return;
+
+    await _syncQueue.enqueue(entityType: GPSyncEntityType.category, entityId: id, operation: operation, payload: row.toSyncPayload());
   }
 
   void _logRejectedRow(CategoryMapperReason reason, String id) =>

@@ -6,6 +6,8 @@ import '../../features/accounts/data/tables/accounts_table.dart';
 import '../../features/categories/data/tables/categories_table.dart';
 import '../../features/transactions/data/tables/transactions_table.dart';
 import '../logging/app_logger.dart';
+import '../sync/tables/sync_metadata_table.dart';
+import '../sync/tables/sync_mutations_table.dart';
 import 'database.steps.dart';
 import 'database_too_new_exception.dart';
 import 'tables/settings_table.dart';
@@ -13,7 +15,7 @@ import 'tables/settings_table.dart';
 part 'database.g.dart';
 
 /// The only persistent store, so golden rule 3 is one transaction; auth tokens alone go to secure storage (ADR-0001).
-@DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable])
+@DriftDatabase(tables: [SettingsTable, AccountsTable, CategoriesTable, TransactionsTable, SyncMutationsTable, SyncMetadataTable])
 final class GPAppDatabase extends _$GPAppDatabase {
   /// [name] is the file's: a benchmark run opens its own, so it never touches the real data (ADR-0026).
   GPAppDatabase({String name = 'pockit', GPAppLogger? logger}) : _logger = logger, super(openAppConnection(name: name));
@@ -24,7 +26,7 @@ final class GPAppDatabase extends _$GPAppDatabase {
 
   /// A bump needs a dump in `drift_schemas/`, a regenerated `database.steps.dart`, a `fromNToM` step and a migration test (§6, §9).
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -88,6 +90,13 @@ final Future<int> Function(int from, GeneratedDatabase database) _upgradeFrom = 
     await m.drop(schema.transactionsDestinationAccountIdOccurredAtId);
     await m.createIndex(schema.transactionsAccountIdOccurredAtId);
     await m.createIndex(schema.transactionsDestinationAccountIdOccurredAtId);
+  },
+  from5To6: (m, schema) async {
+    await m.createTable(schema.syncMutations);
+    await m.createIndex(schema.syncMutationsStatusNextAttemptAt);
+    await m.createIndex(schema.syncMutationsUnattemptedEntity);
+    await m.createIndex(schema.syncMutationsEntity);
+    await m.createTable(schema.syncMetadata);
   },
 );
 

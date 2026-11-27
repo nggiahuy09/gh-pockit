@@ -5,6 +5,8 @@
 Accepted — 2026-11-24 (W12 T6, started early). This writes down decisions C and D of the W12 plan, which you chose on 2026-11-15, plus the
 order of the steps. No schema change.
 
+Amended 2026-11-27 (W13 T5, ADR-0044): the count comes from the outbox, and the wipe empties it. See _Amended_ at the end.
+
 ## Context
 
 - Blueprint §33 recommends "logout wipes account-local data, then sync again after sign-in". T6 asks for the local data and the session
@@ -99,3 +101,19 @@ already covers "the same user signs back in".
 
 **Signing out first, then wiping.** A failed wipe would leave a signed-out device holding the previous user's data, owned by them, with no
 session to fix it from.
+
+## Amended — 2026-11-27 (W13 T5)
+
+The outbox exists now (ADR-0044), so decision 1's stand-in is replaced.
+
+- **The count.** It is the distinct entities with a mutation in `sync_mutations`, in any state: pending, in flight, conflicted or failed.
+  Each of those is a change the server may lack.
+- **What does not count.** A seeded category still exactly as seeded is left out, against `DefaultCategory`, as before: every device
+  seeds the same one. Its queued `create` is dropped with the rest.
+- **Accounts no longer always count.** Each is counted while it has a mutation. Until push exists (W14), every row the claim queued is
+  still there, so a device with data still cannot sign out.
+- **The wipe** deletes `sync_mutations` in the same transaction as the rows. The outbox belongs to the one owner (ADR-0040), and by then
+  it holds nothing but untouched seeds. `sync_metadata` is left alone; what a sign-out clears there is decided with its first key.
+- **The wipe re-checks (code review, 2026-11-27).** `wipeOwnerRows` counts the outbox again inside its own transaction, and deletes nothing
+  when anything beyond untouched seeds is queued. A write that lands between the sign-out's count and its wipe would otherwise go with
+  it. `releaseDevice` then returns `signOutUnsyncedChanges`, the same failure the count gives.

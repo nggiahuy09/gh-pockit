@@ -11,6 +11,7 @@ import 'package:ghpockit/features/categories/domain/entities/category_type.dart'
 import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
+import '../../../../helpers/sync_queue.dart';
 
 late GPAppDatabase _db;
 late CategoryDao _dao;
@@ -22,6 +23,7 @@ CategorySeeder _seeder([String ownerId = localOwnerId]) => CategorySeeder(
   dao: _dao,
   uuidGenerator: GPUuidGeneratorImpl(clock: _clock),
   ownerContext: FixedOwnerContext(ownerId),
+  syncQueue: syncQueueOn(_dao.attachedDatabase),
 );
 
 void main() {
@@ -82,6 +84,7 @@ void main() {
       dao: secondDao,
       uuidGenerator: GPUuidGeneratorImpl(clock: FakeClock()),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(secondDao.attachedDatabase),
     ).seedDefaults();
     final second = (await secondDevice.select(secondDevice.categoriesTable).get()).map((row) => row.id).toSet();
 
@@ -107,7 +110,13 @@ void main() {
   });
 
   test('stamps every row with one instant, read once from the clock', () async {
-    await CategorySeeder(clock: _clock, dao: _dao, uuidGenerator: FakeUuidGenerator(), ownerContext: FixedOwnerContext()).seedDefaults();
+    await CategorySeeder(
+      clock: _clock,
+      dao: _dao,
+      uuidGenerator: FakeUuidGenerator(),
+      ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(_dao.attachedDatabase),
+    ).seedDefaults();
 
     final stamps = (await _db.select(_db.categoriesTable).get()).map((row) => row.createdAt).toSet();
     expect(stamps, hasLength(1));

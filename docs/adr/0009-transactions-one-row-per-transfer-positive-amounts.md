@@ -10,6 +10,10 @@ later is a table rebuild. Implemented by W4 T2 (`TransactionEntity`) and W4 T3
 Narrowed 2026-11-01 by ADR-0022: §6's instant is never on a local day after
 today.
 
+Amended 2026-11-27 (W13 Flex, ADR-0045): decision 5's `sync_status` is on
+`TransactionEntity` now, for the badge, read as `localOnly` for a `'local'` row.
+There is still no `(sync_status)` index: the list query reads the column already.
+
 ## Context
 
 `transactions` is the table every number in the app is computed from: balances

@@ -14,6 +14,8 @@ import '../../core/logging/app_logger.dart';
 import '../../core/logging/developer_logger.dart';
 import '../../core/security/flutter_secure_store.dart';
 import '../../core/security/secure_store.dart';
+import '../../core/sync/drift_sync_queue_repository.dart';
+import '../../core/sync/sync_queue_repository.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/theme/drift_theme_preference_store.dart';
 import '../../core/theme/theme_preference_store.dart';
@@ -80,7 +82,15 @@ void configureCoreDependencies([GetIt? container]) {
       () => GPDriftThemePreferenceStore(clock: c.get<GPClock>(), database: c.get<GPAppDatabase>(), logger: c.get<GPAppLogger>()),
     )
     // Must stay a singleton, like the localization: `GPApp` repaints from it.
-    ..registerLazySingleton<GPAppearance>(() => GPAppearance(c.get<GPThemePreferenceStore>()));
+    ..registerLazySingleton<GPAppearance>(() => GPAppearance(c.get<GPThemePreferenceStore>()))
+    ..registerLazySingleton<GPSyncQueueRepository>(
+      () => GPDriftSyncQueueRepository(
+        database: c.get<GPAppDatabase>(),
+        clock: c.get<GPClock>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+        logger: c.get<GPAppLogger>(),
+      ),
+    );
 }
 
 /// The one place outside `data/` that names Supabase (ADR-0038).
@@ -97,6 +107,7 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
         ownerContext: c.get<GPSettingsOwnerContext>(),
         seeder: c.get<CategorySeeder>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 
@@ -140,6 +151,7 @@ void configureAccountsDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 }
@@ -150,7 +162,13 @@ void configureCategoriesDependencies([GetIt? container]) {
   c
     ..registerLazySingleton<CategoryDao>(() => CategoryDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<CategorySeeder>(
-      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), ownerContext: c.get<GPOwnerContext>(), uuidGenerator: c.get<GPUuidGenerator>()),
+      () => CategorySeeder(
+        clock: c.get<GPClock>(),
+        dao: c.get<CategoryDao>(),
+        ownerContext: c.get<GPOwnerContext>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
+      ),
     )
     ..registerLazySingleton<CategoryRepository>(
       () => CategoryRepositoryImpl(
@@ -159,6 +177,7 @@ void configureCategoriesDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 }
@@ -175,6 +194,7 @@ void configureTransactionsDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     )
     // Built only when a non-release run passes `--dart-define=DATASET`.

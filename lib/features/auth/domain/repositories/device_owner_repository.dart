@@ -10,6 +10,9 @@ abstract class DeviceOwnerRepository {
   /// Moves every `'local'` row to [userId] in one transaction; returns how many moved.
   Future<GPResult<int>> claimLocalData(String userId);
 
+  /// Queues the owner's rows once, on a device claimed before the outbox existed; returns how many (ADR-0044).
+  Future<GPResult<int>> backfillOutbox();
+
   /// Rows that are not on the server yet; a sign-out would lose them.
   Future<GPResult<int>> countUnsyncedChanges();
 

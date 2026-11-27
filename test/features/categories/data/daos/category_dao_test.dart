@@ -109,15 +109,15 @@ void main() {
     test('inserts everything on the first run and nothing on the second', () async {
       final rows = [_row(), _row(id: 'c2', nameKey: 'category.bills')];
 
-      expect(await dao.insertMissing(rows), 2);
-      expect(await dao.insertMissing(rows), 0);
+      expect(await dao.insertMissing(rows), ['c1', 'c2']);
+      expect(await dao.insertMissing(rows), isEmpty);
       expect(await db.select(db.categoriesTable).get(), hasLength(2));
     });
 
     test('leaves an existing row exactly as it is, renames included', () async {
       await dao.insertCategory(_row(name: 'Ăn uống của tôi'));
 
-      expect(await dao.insertMissing([_row()]), 0);
+      expect(await dao.insertMissing([_row()]), isEmpty);
       expect((await dao.findById('c1'))?.name, 'Ăn uống của tôi');
     });
 
@@ -125,19 +125,26 @@ void main() {
       await dao.insertMissing([_row()]);
       await dao.softDelete('c1', now: _t1);
 
-      expect(await dao.insertMissing([_row()]), 0);
+      expect(await dao.insertMissing([_row()]), isEmpty);
       expect((await dao.findById('c1'))?.deletedAt, _t1);
       expect(await dao.watchCategories(ownerId: localOwnerId).first, isEmpty);
     });
 
-    test('inserts only the rows that are missing', () async {
+    test('inserts only the rows that are missing, and returns their ids', () async {
       await dao.insertMissing([_row()]);
 
-      expect(await dao.insertMissing([_row(), _row(id: 'c2', nameKey: 'category.bills')]), 1);
+      expect(await dao.insertMissing([_row(), _row(id: 'c2', nameKey: 'category.bills')]), ['c2']);
     });
 
-    test('writes nothing and counts nothing for an empty list', () async {
-      expect(await dao.insertMissing([]), 0);
+    test('does not report a row the key collision skipped: the same owner and name key under another id', () async {
+      await dao.insertCategory(_row(id: 'c-old'));
+
+      expect(await dao.insertMissing([_row()]), isEmpty);
+      expect((await db.select(db.categoriesTable).get()).map((row) => row.id), ['c-old']);
+    });
+
+    test('writes nothing and returns nothing for an empty list', () async {
+      expect(await dao.insertMissing([]), isEmpty);
     });
   });
 

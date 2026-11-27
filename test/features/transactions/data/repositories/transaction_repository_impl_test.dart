@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +15,7 @@ import 'package:ghpockit/features/transactions/domain/entities/income_expense_to
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_sync_status.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
 import '../../../../helpers/fake_clock.dart';
@@ -20,6 +23,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 final _startedAt = DateTime.utc(2026, 9, 28, 9);
 final _occurredAt = DateTime.utc(2026, 9, 28, 5, 30);
@@ -253,7 +257,14 @@ void main() {
 
     test('reports not found for a live transaction, an unknown id, and one of another owner', () async {
       final created = okValue(await _create(repository));
-      final theirs = TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator('theirs'), ownerContext: FixedOwnerContext(_otherOwner));
+      final theirs = TransactionRepositoryImpl(
+        clock: clock,
+        dao: dao,
+        logger: logger,
+        uuidGenerator: FakeUuidGenerator('theirs'),
+        ownerContext: FixedOwnerContext(_otherOwner),
+        syncQueue: syncQueueOn(dao.attachedDatabase),
+      );
       final their = okValue(await theirs.createTransaction(amount: Money(1000, 'VND'), type: TransactionType.expense, occurredAt: _occurredAt, accountId: 'acc-theirs'));
       await theirs.deleteTransaction(their.id);
 
@@ -284,6 +295,94 @@ void main() {
       await repository.deleteTransaction(created.id);
 
       expect(await repository.restoreTransaction(created.id), const GPOk<void>(null));
+    });
+  });
+
+  group('the outbox (ADR-0044)', () {
+    const user = 'uid-1';
+    late TransactionRepositoryImpl signedIn;
+
+    setUp(() async {
+      signedIn = TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(user), syncQueue: syncQueueOn(db));
+      await _insertAccount(db, 'acc-mine', ownerId: user);
+    });
+
+    Future<List<SyncMutationRow>> queued() => (db.select(db.syncMutationsTable)..orderBy([(t) => OrderingTerm(expression: t.rowId)])).get();
+
+    test('a create queues the row as written, without the local sync_status', () async {
+      final created = okValue(await _create(signedIn, accountId: 'acc-mine', categoryId: null, note: 'Phở "đặc biệt"'));
+
+      final mutation = (await queued()).single;
+      expect([mutation.entityType, mutation.entityId, mutation.operation], ['transaction', created.id, 'create']);
+      expect(jsonDecode(mutation.payloadJson), {
+        'id': created.id,
+        'owner_id': user,
+        'type': 'expense',
+        'account_id': 'acc-mine',
+        'destination_account_id': null,
+        'category_id': null,
+        'amount_minor': 125000,
+        'currency_code': 'VND',
+        'occurred_at': _occurredAt.millisecondsSinceEpoch,
+        'note': 'Phở "đặc biệt"',
+        'created_at': _startedAt.millisecondsSinceEpoch,
+        'updated_at': _startedAt.millisecondsSinceEpoch,
+        'version': 1,
+        'deleted_at': null,
+      });
+    });
+
+    test('what a write returns equals what the list reads back: pending for an account, local only for an unclaimed device (ADR-0045)', () async {
+      final mine = okValue(await _create(signedIn, accountId: 'acc-mine', categoryId: null));
+      final local = okValue(await _create(repository));
+
+      expect(mine.syncStatus, TransactionSyncStatus.pending);
+      expect(await signedIn.watchTransaction(mine.id).first, mine);
+      expect(local.syncStatus, TransactionSyncStatus.localOnly);
+      expect(await repository.watchTransaction(local.id).first, local);
+    });
+
+    test('once the create is sent: a delete, then a restore, fold into one update of their own', () async {
+      final created = okValue(await _create(signedIn, accountId: 'acc-mine', categoryId: null));
+      await syncQueueOn(db).markSending((await queued()).single.id);
+
+      okValue(await signedIn.deleteTransaction(created.id));
+      okValue(await signedIn.restoreTransaction(created.id));
+
+      final all = await queued();
+      expect(all.map((row) => row.operation), ['create', 'update']);
+      expect(jsonDecode(all.last.payloadJson), containsPair('deleted_at', null));
+    });
+
+    test('an update folds into the unsent create and carries the new amount', () async {
+      final created = okValue(await _create(signedIn, accountId: 'acc-mine', categoryId: null));
+
+      okValue(await signedIn.updateTransaction(okValue(created.update(amount: Money(99000, 'VND')))));
+
+      final mutation = (await queued()).single;
+      expect(mutation.operation, 'create');
+      expect(jsonDecode(mutation.payloadJson), containsPair('amount_minor', 99000));
+    });
+
+    test('a write the account rules refuse queues nothing', () async {
+      await _softDeleteAccount(db, 'acc-mine');
+
+      expect(await _create(signedIn, accountId: 'acc-mine', categoryId: null), isA<GPErr<TransactionEntity>>());
+      expect(await queued(), isEmpty);
+    });
+
+    test("a 'local' write queues nothing: the claim queues it later", () async {
+      final created = okValue(await _create(repository));
+      okValue(await repository.deleteTransaction(created.id));
+
+      expect(await queued(), isEmpty);
+    });
+
+    test('a mutation that cannot be queued rolls the transaction back with it', () async {
+      await db.customStatement("CREATE TRIGGER refuse_queue BEFORE INSERT ON sync_mutations BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      expect(await _create(signedIn, accountId: 'acc-mine', categoryId: null), const GPErr<TransactionEntity>(GPDatabaseFailure()));
+      expect(await _storedRows(db), isEmpty);
     });
   });
 
@@ -662,7 +761,7 @@ Future<void> _insertAccount(GPAppDatabase db, String id, {String currencyCode = 
     );
 
 TransactionRepositoryImpl _repositoryOver(TransactionDao dao, {required FakeClock clock, required RecordingLogger logger, required FakeUuidGenerator uuid}) =>
-    TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    TransactionRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(), syncQueue: syncQueueOn(dao.attachedDatabase));
 
 Future<GPResult<TransactionEntity>> _create(
   TransactionRepositoryImpl repository, {

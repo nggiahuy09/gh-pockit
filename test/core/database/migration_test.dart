@@ -14,6 +14,7 @@ import 'generated/schema_v2.dart' as v2;
 import 'generated/schema_v3.dart' as v3;
 import 'generated/schema_v4.dart' as v4;
 import 'generated/schema_v5.dart' as v5;
+import 'generated/schema_v6.dart' as v6;
 
 late SchemaVerifier _verifier;
 
@@ -268,11 +269,73 @@ void main() {
     });
   });
 
-  group('v1 → v5 with rows written at every version', () {
-    // One file, upgraded a version at a time, each version writing the entity it introduced through its own typed fixture. The rows are read
-    // back at the version that wrote them, and must come out of v5 the same, column for column.
+  group('v5 → v6 (the outbox, ADR-0044)', () {
+    test('migrates into the schema a fresh v6 install has', () async {
+      final connection = await _verifier.startAt(5);
+      final db = GPAppDatabase.forTesting(connection);
 
-    test('every row written along the way reaches v5 unchanged', () async {
+      await _verifier.migrateAndValidate(db, 6);
+
+      await db.close();
+    });
+
+    test('carries every v5 row across untouched, and adds the two sync tables empty', () async {
+      final schema = await _verifier.schemaAt(5);
+      final written = <String, List<Map<String, Object?>>>{};
+      await _writeAt(v5.DatabaseAtV5(schema.newConnection()), (old) async {
+        await old.into(old.settings).insert(v5.SettingsCompanion.insert(key: 'owner.id', value: 'local', updatedAt: 1757800000000));
+        await old.into(old.accounts).insert(_v5Cash);
+        await old.into(old.transactions).insert(_v5Expense);
+        written['settings'] = _json(await old.select(old.settings).get());
+        written['accounts'] = _json(await old.select(old.accounts).get());
+        written['transactions'] = _json(await old.select(old.transactions).get());
+      });
+
+      await _migrateTo(schema.newConnection(), 6);
+
+      final now = v6.DatabaseAtV6(schema.newConnection());
+      expect(_json(await now.select(now.settings).get()), written['settings']);
+      expect(_json(await now.select(now.accounts).get()), written['accounts']);
+      expect(_json(await now.select(now.transactions).get()), written['transactions']);
+      // The step creates the outbox and backfills nothing: a pending row from before v6 gets its mutation outside the migration (ADR-0044).
+      expect(await now.select(now.syncMutations).get(), isEmpty);
+      expect(await now.select(now.syncMetadata).get(), isEmpty);
+      await now.close();
+    });
+
+    test('creates the three outbox indexes on the upgrade path', () async {
+      final connection = await _verifier.startAt(5);
+      final db = GPAppDatabase.forTesting(connection);
+
+      await _verifier.migrateAndValidate(db, 6);
+
+      // SQLite's own autoindexes (the TEXT key, the UNIQUE key) come with the table; the named one is the step's to create.
+      final indexes = await db.customSelect("SELECT name FROM sqlite_schema WHERE type = 'index' AND tbl_name = 'sync_mutations' AND name NOT LIKE 'sqlite_%'").get();
+      expect(
+        indexes.map((row) => row.read<String>('name')),
+        unorderedEquals(<String>['sync_mutations_status_next_attempt_at', 'sync_mutations_unattempted_entity', 'sync_mutations_entity']),
+      );
+
+      await db.close();
+    });
+
+    test('walks v4, v3, v2 and v1 → v6 for devices that skipped releases', () async {
+      for (final from in [4, 3, 2, 1]) {
+        final connection = await _verifier.startAt(from);
+        final db = GPAppDatabase.forTesting(connection);
+
+        await _verifier.migrateAndValidate(db, 6);
+
+        await db.close();
+      }
+    });
+  });
+
+  group('v1 → v6 with rows written at every version', () {
+    // One file, upgraded a version at a time, each version writing the entity it introduced through its own typed fixture. The rows are read
+    // back at the version that wrote them, and must come out of v6 the same, column for column. v5 changed only indexes, so it writes nothing.
+
+    test('every row written along the way reaches v6 unchanged', () async {
       final schema = await _verifier.schemaAt(1);
       final written = <String, List<Map<String, Object?>>>{};
 
@@ -299,12 +362,25 @@ void main() {
         written['transactions'] = _json(await old.select(old.transactions).get());
       });
       await _migrateTo(schema.newConnection(), 5);
+      await _migrateTo(schema.newConnection(), 6);
 
-      final now = v5.DatabaseAtV5(schema.newConnection());
+      await _writeAt(v6.DatabaseAtV6(schema.newConnection()), (old) async {
+        await old.batch((batch) {
+          batch
+            ..insertAll(old.syncMutations, _chainMutations)
+            ..insertAll(old.syncMetadata, _chainMetadata);
+        });
+        written['sync_mutations'] = _json(await old.select(old.syncMutations).get());
+        written['sync_metadata'] = _json(await old.select(old.syncMetadata).get());
+      });
+
+      final now = v6.DatabaseAtV6(schema.newConnection());
       expect(_json(await now.select(now.settings).get()), unorderedEquals(written['settings']!));
       expect(_json(await now.select(now.accounts).get()), unorderedEquals(written['accounts']!));
       expect(_json(await now.select(now.categories).get()), unorderedEquals(written['categories']!));
       expect(_json(await now.select(now.transactions).get()), unorderedEquals(written['transactions']!));
+      expect(_json(await now.select(now.syncMutations).get()), unorderedEquals(written['sync_mutations']!));
+      expect(_json(await now.select(now.syncMetadata).get()), unorderedEquals(written['sync_metadata']!));
       await now.close();
     });
 
@@ -317,9 +393,12 @@ void main() {
       await _writeAt(v3.DatabaseAtV3(schema.newConnection()), (old) => old.batch((batch) => batch.insertAll(old.categories, _chainCategories)));
       await _migrateTo(schema.newConnection(), 4);
       await _writeAt(v4.DatabaseAtV4(schema.newConnection()), (old) => old.batch((batch) => batch.insertAll(old.transactions, _chainTransactions)));
+      await _migrateTo(schema.newConnection(), 5);
+      await _migrateTo(schema.newConnection(), 6);
+      await _writeAt(v6.DatabaseAtV6(schema.newConnection()), (old) => old.batch((batch) => batch.insertAll(old.syncMutations, _chainMutations)));
 
       final db = GPAppDatabase.forTesting(schema.newConnection());
-      await _verifier.migrateAndValidate(db, 5);
+      await _verifier.migrateAndValidate(db, 6);
 
       // Through the app's own row classes, so an `INTEGER` flag or a NULL the mapping does not expect would throw here.
       final accounts = {for (final row in await db.select(db.accountsTable).get()) row.id: row};
@@ -327,6 +406,9 @@ void main() {
       expect(accounts['a-old']!.initialBalance, 1000000000000, reason: 'past 32 bits');
       expect(accounts['a-closed']!.deletedAt, 1760000000000);
       expect((await db.select(db.transactionsTable).get()).map((row) => row.note), contains('Phở bò "đặc biệt"\nquán cô Ba'));
+      final mutations = {for (final row in await db.select(db.syncMutationsTable).get()) row.id: row};
+      expect(mutations['m-retry']!.lastErrorCode, 'network');
+      expect(mutations['m-retry']!.payloadJson, r'{"id":"t-food","note":"Phở bò \"đặc biệt\""}');
 
       final balances = await TransactionDao(db).watchAccountBalances('local').first;
       expect(
@@ -347,28 +429,28 @@ void main() {
   });
 
   group('a file from a newer release (ADR-0030)', () {
-    // `user_version = 6` plus a table this build has never heard of: what a later release, a TestFlight build or a backup restored from a
+    // `user_version = 7` plus a table this build has never heard of: what a later release, a TestFlight build or a backup restored from a
     // newer phone leaves behind.
 
     test('is refused before any statement, and left exactly as found', () async {
-      final schema = await _verifier.schemaAt(5);
-      await _writeAt(v5.DatabaseAtV5(schema.newConnection()), (old) => old.into(old.accounts).insert(_v5Cash));
+      final schema = await _verifier.schemaAt(6);
+      await _writeAt(v6.DatabaseAtV6(schema.newConnection()), (old) => old.into(old.accounts).insert(_v6Cash));
       schema.rawDatabase
         ..execute('CREATE TABLE budgets (id TEXT NOT NULL PRIMARY KEY)')
-        ..userVersion = 6;
+        ..userVersion = 7;
       final before = schema.rawDatabase.select(_schemaSql).map((row) => row['sql']).toList();
 
       // Twice: a refused open must not leave anything that lets the next one through.
       for (var attempt = 1; attempt <= 2; attempt++) {
         await expectLater(
           _open(schema.newConnection()),
-          throwsA(isA<GPDatabaseTooNewException>().having((e) => e.fileVersion, 'fileVersion', 6).having((e) => e.appVersion, 'appVersion', 5)),
+          throwsA(isA<GPDatabaseTooNewException>().having((e) => e.fileVersion, 'fileVersion', 7).having((e) => e.appVersion, 'appVersion', 6)),
           reason: 'attempt $attempt',
         );
       }
 
-      // Before the guard, drift wrote `user_version = 5` over a schema it did not know.
-      expect(schema.rawDatabase.userVersion, 6);
+      // Before the guard, drift wrote `user_version = 6` over a schema it did not know.
+      expect(schema.rawDatabase.userVersion, 7);
       expect(schema.rawDatabase.select(_schemaSql).map((row) => row['sql']).toList(), before);
       expect(schema.rawDatabase.select('SELECT name FROM accounts').single['name'], 'Ví tiền mặt');
     });
@@ -558,6 +640,31 @@ final List<v4.TransactionsCompanion> _chainTransactions = [
   _chainTransaction('t-gone', 'expense', 'a-cash', 99000, categoryId: 'c-gone', deletedAt: 1790600000000),
 ];
 
+final List<v6.SyncMutationsCompanion> _chainMutations = [
+  _chainMutation('m-new', 't-coffee', 'k-new'),
+  _chainMutation('m-retry', 't-food', 'k-retry', payloadJson: r'{"id":"t-food","note":"Phở bò \"đặc biệt\""}', attemptCount: 3, lastErrorCode: 'network'),
+];
+
+final _chainMetadata = [
+  v6.SyncMetadataCompanion.insert(key: 'pull.cursor', value: 'MTc5MDU3MzQwMDAwMHx0LWZvb2Q='),
+  v6.SyncMetadataCompanion.insert(key: 'device.id', value: '0193f1a2-0000-7000-8000-000000000001'),
+];
+
+v6.SyncMutationsCompanion _chainMutation(String id, String entityId, String idempotencyKey, {String? payloadJson, int attemptCount = 0, String? lastErrorCode}) =>
+    v6.SyncMutationsCompanion.insert(
+      id: id,
+      entityType: 'transaction',
+      entityId: entityId,
+      operation: 'upsert',
+      payloadJson: payloadJson ?? '{"id":"$entityId"}',
+      idempotencyKey: idempotencyKey,
+      createdAt: 1795000000000,
+      attemptCount: attemptCount,
+      nextAttemptAt: 1795000000000 + attemptCount * 8000,
+      status: 'pending',
+      lastErrorCode: Value(lastErrorCode),
+    );
+
 v2.AccountsCompanion _chainAccount(
   String id,
   String name,
@@ -648,6 +755,34 @@ final _v2Cash = v2.AccountsCompanion.insert(
   createdAt: 1757800000000,
   updatedAt: 1757800000000,
   version: 1,
+);
+
+final _v6Cash = v6.AccountsCompanion.insert(
+  id: 'a1',
+  ownerId: 'local',
+  name: 'Ví tiền mặt',
+  type: 'cash',
+  currencyCode: 'VND',
+  initialBalance: 1500000,
+  isArchived: 0,
+  createdAt: 1757800000000,
+  updatedAt: 1757800000000,
+  version: 1,
+);
+
+final _v5Expense = v5.TransactionsCompanion.insert(
+  id: 't1',
+  ownerId: 'local',
+  type: 'expense',
+  accountId: 'a1',
+  amountMinor: 125000,
+  currencyCode: 'VND',
+  occurredAt: 1790573400000,
+  note: const Value('Phở bò'),
+  createdAt: 1790573400000,
+  updatedAt: 1790573400000,
+  version: 1,
+  syncStatus: 'pending',
 );
 
 final _v5Cash = v5.AccountsCompanion.insert(

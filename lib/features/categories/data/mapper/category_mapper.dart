@@ -71,5 +71,23 @@ extension CategoryEntityMapper on CategoryEntity {
   CategoriesTableCompanion toPatch() => CategoriesTableCompanion(name: Value(name), iconKey: Value(iconKey), colorKey: Value(colorKey));
 }
 
+extension CategoryRowSyncPayload on CategoryRow {
+  /// The row as the server's `categories` names it (ADR-0033), every column, so a retry resends exactly this (ADR-0044).
+  Map<String, Object?> toSyncPayload() => {
+    'id': id,
+    'owner_id': ownerId,
+    'name_key': nameKey,
+    'name': name,
+    'type': type,
+    'icon_key': iconKey,
+    'color_key': colorKey,
+    'is_system': isSystem,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'version': version,
+    'deleted_at': deletedAt,
+  };
+}
+
 /// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).
 enum CategoryMapperReason { unknownType, brokenDomainRule }

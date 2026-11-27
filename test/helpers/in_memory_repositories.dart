@@ -12,6 +12,7 @@ import 'fake_clock.dart';
 import 'fake_uuid_generator.dart';
 import 'fixed_owner_context.dart';
 import 'recording_logger.dart';
+import 'sync_queue.dart';
 
 /// The real account, category and transaction repositories over one in-memory database. No categories are seeded.
 final class InMemoryRepositories {
@@ -25,6 +26,7 @@ final class InMemoryRepositories {
       logger: logger,
       uuidGenerator: FakeUuidGenerator('acc'),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(db),
     );
     categories = CategoryRepositoryImpl(
       clock: this.clock,
@@ -32,6 +34,7 @@ final class InMemoryRepositories {
       logger: logger,
       uuidGenerator: FakeUuidGenerator('cat'),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(db),
     );
     transactions = TransactionRepositoryImpl(
       clock: this.clock,
@@ -39,6 +42,7 @@ final class InMemoryRepositories {
       logger: logger,
       uuidGenerator: FakeUuidGenerator('tx'),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(db),
     );
   }
 

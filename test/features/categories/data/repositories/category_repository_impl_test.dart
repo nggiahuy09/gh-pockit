@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart' show OrderingTerm, RowIdExtension;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghpockit/core/database/database.dart';
@@ -16,6 +19,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 final _startedAt = DateTime.utc(2026, 9, 22, 9);
 
@@ -41,8 +45,15 @@ void main() {
     clock = FakeClock(_startedAt);
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
-    repository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
-    seeder = CategorySeeder(clock: clock, dao: dao, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    repository = CategoryRepositoryImpl(
+      clock: clock,
+      dao: dao,
+      logger: logger,
+      uuidGenerator: uuid,
+      ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(dao.attachedDatabase),
+    );
+    seeder = CategorySeeder(clock: clock, dao: dao, uuidGenerator: uuid, ownerContext: FixedOwnerContext(), syncQueue: syncQueueOn(dao.attachedDatabase));
   });
 
   tearDown(() => db.close());
@@ -84,7 +95,14 @@ void main() {
 
     test('hides rows belonging to another owner', () async {
       await _create(repository);
-      final otherRepository = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext('someone-else'));
+      final otherRepository = CategoryRepositoryImpl(
+        clock: clock,
+        dao: dao,
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext('someone-else'),
+        syncQueue: syncQueueOn(dao.attachedDatabase),
+      );
 
       expect(await otherRepository.watchCategories().first, isEmpty);
     });
@@ -205,6 +223,64 @@ void main() {
     );
   });
 
+  group('the outbox (ADR-0044)', () {
+    const user = 'uid-1';
+    late CategoryRepositoryImpl signedIn;
+
+    setUp(() {
+      signedIn = CategoryRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(user), syncQueue: syncQueueOn(db));
+    });
+
+    Future<List<SyncMutationRow>> queued() => (db.select(db.syncMutationsTable)..orderBy([(t) => OrderingTerm(expression: t.rowId)])).get();
+
+    test("a create queues the row as written, in the server's column names", () async {
+      final created = okValue(await signedIn.createCategory(type: CategoryType.expense, name: 'Cà phê', iconKey: 'coffee'));
+
+      final mutation = (await queued()).single;
+      expect([mutation.entityType, mutation.entityId, mutation.operation], ['category', created.id, 'create']);
+      expect(jsonDecode(mutation.payloadJson), {
+        'id': created.id,
+        'owner_id': user,
+        'name_key': null,
+        'name': 'Cà phê',
+        'type': 'expense',
+        'icon_key': 'coffee',
+        'color_key': null,
+        'is_system': false,
+        'created_at': _startedAt.millisecondsSinceEpoch,
+        'updated_at': _startedAt.millisecondsSinceEpoch,
+        'version': 1,
+        'deleted_at': null,
+      });
+    });
+
+    test('a rename and a delete fold into the unsent create, so the server gets the tombstone once', () async {
+      final created = okValue(await signedIn.createCategory(type: CategoryType.expense, name: 'Cà phê'));
+
+      okValue(await signedIn.updateCategory(okValue(created.update(name: 'Trà'))));
+      okValue(await signedIn.deleteCategory(created.id));
+
+      final mutation = (await queued()).single;
+      expect(mutation.operation, 'create');
+      expect(jsonDecode(mutation.payloadJson), allOf(containsPair('name', 'Trà'), containsPair('deleted_at', isNotNull)));
+    });
+
+    test("a 'local' write queues nothing: the claim queues it later", () async {
+      final created = okValue(await repository.createCategory(type: CategoryType.expense, name: 'Cà phê'));
+      okValue(await repository.deleteCategory(created.id));
+
+      expect(await queued(), isEmpty);
+    });
+
+    test('a mutation that cannot be queued rolls the delete back with it', () async {
+      final created = okValue(await signedIn.createCategory(type: CategoryType.expense, name: 'Cà phê'));
+      await db.customStatement("CREATE TRIGGER refuse_queue BEFORE UPDATE ON sync_mutations BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      expect(await signedIn.deleteCategory(created.id), const GPErr<void>(GPDatabaseFailure()));
+      expect((await dao.findById(created.id))!.deletedAt, isNull);
+    });
+  });
+
   group('a read the database refuses', () {
     // Real SQL fails a read only wholesale, and never with an `Error`.
     late Object error;
@@ -218,6 +294,7 @@ void main() {
         logger: logger,
         uuidGenerator: uuid,
         ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
       );
     });
 

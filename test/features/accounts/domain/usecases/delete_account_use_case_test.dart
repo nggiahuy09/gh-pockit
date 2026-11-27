@@ -18,6 +18,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 const _refused = GPErr<void>(GPValidationFailure(GPValidationCode.accountHasTransactions));
 
@@ -49,8 +50,15 @@ void main() {
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
 
-    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
-    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(), syncQueue: syncQueueOn(db));
+    transactions = TransactionRepositoryImpl(
+      clock: clock,
+      dao: TransactionDao(db),
+      logger: logger,
+      uuidGenerator: uuid,
+      ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(db),
+    );
     deleteAccount = DeleteAccountUseCase(accounts, transactions);
 
     for (final id in ['acc-cash', 'acc-bank']) {
@@ -109,7 +117,14 @@ void main() {
   test('deletes nothing when the question cannot be answered', () async {
     final failing = DeleteAccountUseCase(
       accounts,
-      TransactionRepositoryImpl(clock: clock, dao: _LookupFailingTransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext()),
+      TransactionRepositoryImpl(
+        clock: clock,
+        dao: _LookupFailingTransactionDao(db),
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
+      ),
     );
 
     expect(await failing.execute(const DeleteAccountInput('acc-cash')), const GPErr<void>(GPDatabaseFailure()));

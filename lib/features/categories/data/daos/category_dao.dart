@@ -30,18 +30,31 @@ base class CategoryDao extends DatabaseAccessor<GPAppDatabase> with _$CategoryDa
 
   Future<void> insertCategory(CategoriesTableCompanion row) => into(categoriesTable).insert(row);
 
-  /// Returns how many rows it wrote. `INSERT OR IGNORE`, never `OR REPLACE`, which would undo a user's rename.
-  Future<int> insertMissing(List<CategoriesTableCompanion> rows) async {
-    if (rows.isEmpty) return 0;
+  /// Returns the ids it wrote. `INSERT OR IGNORE`, never `OR REPLACE`, which would undo a user's rename.
+  Future<List<String>> insertMissing(List<CategoriesTableCompanion> rows) async {
+    if (rows.isEmpty) return const [];
 
-    // One transaction around both counts and the batch, so no other write lands in between.
+    // One transaction around the lookup and the batch, so no other write lands in between.
     return transaction(() async {
-      final before = await _countAll();
+      final ids = [for (final row in rows) row.id.value];
+      final before = (await _existingIds(ids)).toSet();
       await batch((b) => b.insertAll(categoriesTable, rows, mode: InsertMode.insertOrIgnore));
 
-      return await _countAll() - before;
+      // Read back, not inferred: `OR IGNORE` also skips a row that collides on `(owner_id, name_key)` under another id.
+      final after = (await _existingIds(ids)).toSet();
+      return [
+        for (final id in ids)
+          if (after.contains(id) && !before.contains(id)) id,
+      ];
     });
   }
+
+  Future<List<String>> _existingIds(List<String> ids) =>
+      (selectOnly(categoriesTable)
+            ..addColumns([categoriesTable.id])
+            ..where(categoriesTable.id.isIn(ids)))
+          .map((row) => row.read(categoriesTable.id)!)
+          .get();
 
   /// Never writes `version`, which is the server's.
   Future<int> updateCategory(String id, {required CategoriesTableCompanion patch, required int baseVersion, required int now}) {
@@ -51,11 +64,5 @@ base class CategoryDao extends DatabaseAccessor<GPAppDatabase> with _$CategoryDa
   /// System rows too: the tombstone keeps the id, so re-seeding does not bring the row back.
   Future<int> softDelete(String id, {required int now}) {
     return (update(categoriesTable)..where((t) => t.id.equals(id) & t.deletedAt.isNull())).write(CategoriesTableCompanion(updatedAt: Value(now), deletedAt: Value(now)));
-  }
-
-  Future<int> _countAll() async {
-    final count = categoriesTable.id.count();
-
-    return (selectOnly(categoriesTable)..addColumns([count])).map((row) => row.read(count)!).getSingle();
   }
 }

@@ -73,6 +73,9 @@ final class GPLocaleViTransactions implements GPLocaleBaseTransactions {
   String get uncategorised => 'Chưa phân loại';
 
   @override
+  String get notSynced => 'Chưa đồng bộ';
+
+  @override
   String get save => 'Lưu';
 
   @override

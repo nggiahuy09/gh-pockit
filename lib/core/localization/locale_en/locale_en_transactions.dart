@@ -73,6 +73,9 @@ final class GPLocaleEnTransactions implements GPLocaleBaseTransactions {
   String get uncategorised => 'Uncategorised';
 
   @override
+  String get notSynced => 'Not synced yet';
+
+  @override
   String get save => 'Save';
 
   @override
