@@ -18,6 +18,14 @@ final class FakeDeviceOwnerRepository extends DeviceOwnerRepository {
   GPResult<void> releaseResult = const GPOk(null);
   int releases = 0;
 
+  int backfills = 0;
+
+  @override
+  Future<GPResult<int>> backfillOutbox() async {
+    backfills++;
+    return const GPOk(0);
+  }
+
   @override
   Future<GPResult<int>> countUnsyncedChanges() async => unsyncedResult;
 

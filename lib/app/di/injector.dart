@@ -107,6 +107,7 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
         ownerContext: c.get<GPSettingsOwnerContext>(),
         seeder: c.get<CategorySeeder>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 
@@ -150,6 +151,7 @@ void configureAccountsDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 }
@@ -160,7 +162,13 @@ void configureCategoriesDependencies([GetIt? container]) {
   c
     ..registerLazySingleton<CategoryDao>(() => CategoryDao(c.get<GPAppDatabase>()))
     ..registerLazySingleton<CategorySeeder>(
-      () => CategorySeeder(clock: c.get<GPClock>(), dao: c.get<CategoryDao>(), ownerContext: c.get<GPOwnerContext>(), uuidGenerator: c.get<GPUuidGenerator>()),
+      () => CategorySeeder(
+        clock: c.get<GPClock>(),
+        dao: c.get<CategoryDao>(),
+        ownerContext: c.get<GPOwnerContext>(),
+        uuidGenerator: c.get<GPUuidGenerator>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
+      ),
     )
     ..registerLazySingleton<CategoryRepository>(
       () => CategoryRepositoryImpl(
@@ -169,6 +177,7 @@ void configureCategoriesDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     );
 }
@@ -185,6 +194,7 @@ void configureTransactionsDependencies([GetIt? container]) {
         logger: c.get<GPAppLogger>(),
         uuidGenerator: c.get<GPUuidGenerator>(),
         ownerContext: c.get<GPOwnerContext>(),
+        syncQueue: c.get<GPSyncQueueRepository>(),
       ),
     )
     // Built only when a non-release run passes `--dart-define=DATASET`.

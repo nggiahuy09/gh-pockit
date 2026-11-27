@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,6 +19,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 final _startedAt = DateTime.utc(2026, 9, 18, 9);
 
@@ -56,7 +59,14 @@ void main() {
     clock = FakeClock(_startedAt);
     uuid = FakeUuidGenerator();
     logger = RecordingLogger(clock);
-    repository = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    repository = AccountRepositoryImpl(
+      clock: clock,
+      dao: dao,
+      logger: logger,
+      uuidGenerator: uuid,
+      ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(dao.attachedDatabase),
+    );
   });
 
   tearDown(() => db.close());
@@ -124,7 +134,14 @@ void main() {
 
     test('never shows another owner an account', () async {
       await _create(repository);
-      final otherOwner = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext('someone-else'));
+      final otherOwner = AccountRepositoryImpl(
+        clock: clock,
+        dao: dao,
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext('someone-else'),
+        syncQueue: syncQueueOn(dao.attachedDatabase),
+      );
 
       expect(await otherOwner.watchAccounts().first, isEmpty);
     });
@@ -280,6 +297,85 @@ void main() {
     });
   });
 
+  group('the outbox (ADR-0044)', () {
+    const user = 'uid-1';
+    late AccountRepositoryImpl signedIn;
+
+    setUp(() {
+      signedIn = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(user), syncQueue: syncQueueOn(db));
+    });
+
+    Future<List<SyncMutationRow>> queued() => (db.select(db.syncMutationsTable)..orderBy([(t) => OrderingTerm(expression: t.rowId)])).get();
+
+    test("a create queues the row as written, in the server's column names", () async {
+      final created = await _create(signedIn);
+
+      final mutation = (await queued()).single;
+      expect([mutation.entityType, mutation.entityId, mutation.operation, mutation.status], ['account', created.id, 'create', 'pending']);
+      expect(jsonDecode(mutation.payloadJson), {
+        'id': created.id,
+        'owner_id': user,
+        'name': 'Ví tiền mặt',
+        'type': 'cash',
+        'currency_code': 'VND',
+        'initial_balance': 1500000,
+        'is_archived': false,
+        'created_at': _startedAt.millisecondsSinceEpoch,
+        'updated_at': _startedAt.millisecondsSinceEpoch,
+        'version': 1,
+        'deleted_at': null,
+      });
+    });
+
+    test('an update, an archive and an unarchive fold into the unsent create, carrying the latest row', () async {
+      final created = await _create(signedIn);
+      clock.advance(const Duration(minutes: 1));
+
+      okValue(await signedIn.updateAccount(okValue(created.update(name: 'Ví chính'))));
+      okValue(await signedIn.archiveAccount(created.id));
+      okValue(await signedIn.unarchiveAccount(created.id));
+
+      final mutation = (await queued()).single;
+      expect(mutation.operation, 'create');
+      expect(jsonDecode(mutation.payloadJson), containsPair('name', 'Ví chính'));
+      expect(jsonDecode(mutation.payloadJson), containsPair('updated_at', _startedAt.add(const Duration(minutes: 1)).millisecondsSinceEpoch));
+    });
+
+    test('a delete after the create was sent queues a delete of its own', () async {
+      final created = await _create(signedIn);
+      final sent = (await queued()).single;
+      await syncQueueOn(db).markSending(sent.id);
+
+      okValue(await signedIn.deleteAccount(created.id));
+
+      final all = await queued();
+      expect(all.map((row) => row.operation), ['create', 'delete']);
+      expect(jsonDecode(all.last.payloadJson), containsPair('deleted_at', isNotNull));
+    });
+
+    test("a 'local' write queues nothing: the claim queues it later", () async {
+      final created = await _create(repository);
+      okValue(await repository.archiveAccount(created.id));
+
+      expect(await queued(), isEmpty);
+    });
+
+    test('a write that finds no row queues nothing', () async {
+      expect(await signedIn.archiveAccount('missing'), const GPErr<void>(GPNotFoundFailure()));
+
+      expect(await queued(), isEmpty);
+    });
+
+    test('a mutation that cannot be queued rolls the account write back with it', () async {
+      await db.customStatement("CREATE TRIGGER refuse_queue BEFORE INSERT ON sync_mutations BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      final result = await signedIn.createAccount(initialBalance: Money(0, 'VND'), type: AccountType.cash, name: 'Ví');
+
+      expect(result, const GPErr<AccountEntity>(GPDatabaseFailure()));
+      expect(await db.select(db.accountsTable).get(), isEmpty);
+    });
+  });
+
   group('a write the database refuses', () {
     // A real database does not fail on request, so the `catch` sites are reached through a DAO that throws.
     late Object thrown;
@@ -287,7 +383,14 @@ void main() {
 
     setUp(() {
       thrown = Exception('disk full');
-      failing = AccountRepositoryImpl(clock: clock, dao: _ThrowingAccountDao(db, () => thrown), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+      failing = AccountRepositoryImpl(
+        clock: clock,
+        dao: _ThrowingAccountDao(db, () => thrown),
+        logger: logger,
+        uuidGenerator: uuid,
+        ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
+      );
     });
 
     test('createAccount reports it and logs an id, not the row', () async {
@@ -314,7 +417,14 @@ void main() {
     test('a real primary-key collision is a database failure like any other', () async {
       await _create(repository);
       // A fresh FakeUuidGenerator mints the id the first repository already used.
-      final collides = AccountRepositoryImpl(clock: clock, dao: dao, logger: logger, uuidGenerator: FakeUuidGenerator(), ownerContext: FixedOwnerContext());
+      final collides = AccountRepositoryImpl(
+        clock: clock,
+        dao: dao,
+        logger: logger,
+        uuidGenerator: FakeUuidGenerator(),
+        ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(dao.attachedDatabase),
+      );
 
       final result = await collides.createAccount(initialBalance: Money.zero('VND'), type: AccountType.cash, name: 'Ví');
 
@@ -345,6 +455,7 @@ void main() {
         logger: logger,
         uuidGenerator: uuid,
         ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
       );
 
       await expectLater(failing.watchAccounts(), emitsError(const GPDatabaseFailure()));
@@ -359,6 +470,7 @@ void main() {
         logger: logger,
         uuidGenerator: uuid,
         ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
       );
 
       await expectLater(failing.watchAccount('a1'), emitsError(const GPDatabaseFailure()));
@@ -373,6 +485,7 @@ void main() {
         logger: logger,
         uuidGenerator: uuid,
         ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
       );
 
       await expectLater(failing.watchAccounts(), emitsError(same(bug)));

@@ -2,11 +2,15 @@ import 'dart:async';
 
 import '../../../../core/database/database.dart';
 import '../../../../core/database/owner_context.dart';
+import '../../../../core/database/owner_id.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/money/money.dart';
+import '../../../../core/sync/sync_entity_type.dart';
+import '../../../../core/sync/sync_operation.dart';
+import '../../../../core/sync/sync_queue_repository.dart';
 import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../domain/entities/account_entity.dart';
@@ -22,17 +26,20 @@ final class AccountRepositoryImpl implements AccountRepository {
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
     required GPOwnerContext ownerContext,
+    required GPSyncQueueRepository syncQueue,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerContext = ownerContext;
+       _ownerContext = ownerContext,
+       _syncQueue = syncQueue;
 
   final GPClock _clock;
   final AccountDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
   final GPOwnerContext _ownerContext;
+  final GPSyncQueueRepository _syncQueue;
 
   /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
   String get _ownerId => _ownerContext.current;
@@ -101,8 +108,11 @@ final class AccountRepositoryImpl implements AccountRepository {
         return created;
       case GPOk(:final value):
         try {
-          await _dao.insertAccount(value.toInsert(_ownerId));
-          return GPOk(value);
+          return await _dao.transaction(() async {
+            await _dao.insertAccount(value.toInsert(_ownerId));
+            await _enqueue(value.id, GPSyncOperation.create);
+            return GPOk(value);
+          });
         } on Exception catch (error, stackTrace) {
           return _databaseFailure(error: error, stackTrace: stackTrace, id: value.id, message: 'account insert failed');
         }
@@ -117,7 +127,10 @@ final class AccountRepositoryImpl implements AccountRepository {
     try {
       return await _dao.transaction(() async {
         final written = await _dao.updateAccount(stamped.id, patch: stamped.toPatch(), baseVersion: account.version, now: now.millisecondsSinceEpoch);
-        if (written == 1) return GPOk(stamped);
+        if (written == 1) {
+          await _enqueue(stamped.id, GPSyncOperation.update);
+          return GPOk(stamped);
+        }
 
         // Zero rows: a conflict, or no live row. Re-read inside the transaction, so a delete cannot land between the write and the lookup.
         final current = await _dao.findById(stamped.id);
@@ -134,6 +147,7 @@ final class AccountRepositoryImpl implements AccountRepository {
   Future<GPResult<void>> archiveAccount(String id) => _write(
     failureMessage: 'account archive failed',
     id: id,
+    operation: GPSyncOperation.update,
     write: (now) => _dao.archive(id, now: now),
   );
 
@@ -141,6 +155,7 @@ final class AccountRepositoryImpl implements AccountRepository {
   Future<GPResult<void>> unarchiveAccount(String id) => _write(
     failureMessage: 'account unarchive failed',
     id: id,
+    operation: GPSyncOperation.update,
     write: (now) => _dao.unarchive(id, now: now),
   );
 
@@ -148,19 +163,36 @@ final class AccountRepositoryImpl implements AccountRepository {
   Future<GPResult<void>> deleteAccount(String id) => _write(
     failureMessage: 'account delete failed',
     id: id,
+    operation: GPSyncOperation.delete,
     write: (now) => _dao.softDelete(id, now: now),
   );
 
   /// Unguarded writes: zero rows can only mean no live row.
-  Future<GPResult<void>> _write({required String failureMessage, required String id, required Future<int> Function(int now) write}) async {
+  Future<GPResult<void>> _write({
+    required String failureMessage,
+    required String id,
+    required GPSyncOperation operation,
+    required Future<int> Function(int now) write,
+  }) async {
     try {
-      final written = await write.call(_clock.nowEpochMillis());
-      if (written == 0) return const GPErr(GPNotFoundFailure());
+      return await _dao.transaction(() async {
+        final written = await write.call(_clock.nowEpochMillis());
+        if (written == 0) return const GPErr(GPNotFoundFailure());
 
-      return const GPOk(null);
+        await _enqueue(id, operation);
+        return const GPOk(null);
+      });
     } on Exception catch (error, stackTrace) {
       return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: failureMessage);
     }
+  }
+
+  /// Inside the write's transaction (golden rule 3), from the row as written. A `'local'` row has no account to push to; the claim queues it.
+  Future<void> _enqueue(String id, GPSyncOperation operation) async {
+    final row = await _dao.findById(id);
+    if (row == null || row.ownerId == localOwnerId) return;
+
+    await _syncQueue.enqueue(entityType: GPSyncEntityType.account, entityId: id, operation: operation, payload: row.toSyncPayload());
   }
 
   void _logRejectedRow(AccountMapperReason reason, String id) => _logger.error('account row could not be mapped', fields: {'entity': 'account', 'id': id, 'reason': reason.name});

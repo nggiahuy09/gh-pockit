@@ -79,5 +79,22 @@ extension AccountEntityMapper on AccountEntity {
   );
 }
 
+extension AccountRowSyncPayload on AccountRow {
+  /// The row as the server's `accounts` names it (ADR-0033), every column, so a retry resends exactly this (ADR-0044).
+  Map<String, Object?> toSyncPayload() => {
+    'id': id,
+    'owner_id': ownerId,
+    'name': name,
+    'type': type,
+    'currency_code': currencyCode,
+    'initial_balance': initialBalance,
+    'is_archived': isArchived,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'version': version,
+    'deleted_at': deletedAt,
+  };
+}
+
 /// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).
 enum AccountMapperReason { unknownType, malformedCurrencyCode, brokenDomainRule }

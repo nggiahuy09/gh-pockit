@@ -24,6 +24,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 const int _page = TransactionListBloc.pageSize;
 
@@ -371,6 +372,7 @@ void main() {
         logger: RecordingLogger(clock),
         uuidGenerator: FakeUuidGenerator(),
         ownerContext: FixedOwnerContext(),
+        syncQueue: syncQueueOn(db),
       );
       await db
           .into(db.accountsTable)

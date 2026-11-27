@@ -73,6 +73,9 @@ Future<void> bootstrap(Widget Function() builder) async {
   // No network call; also claims for a restored user whose last claim did not land (ADR-0039, ADR-0040).
   await RestoreSessionUseCase(getIt.get<AuthRepository>(), getIt.get<DeviceOwnerRepository>()).execute(const GPNoInput());
 
+  // After the restore's claim, which fills the outbox itself; this covers a device claimed before the outbox existed (ADR-0044).
+  await getIt.get<DeviceOwnerRepository>().backfillOutbox();
+
   // `DateFormat` throws for `vi` until these are loaded.
   await initializeDateFormatting();
 

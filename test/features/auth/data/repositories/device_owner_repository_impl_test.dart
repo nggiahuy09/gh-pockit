@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show DatabaseConnection, Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +28,7 @@ import '../../../../helpers/fake_clock.dart';
 import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 const _user = 'uid-1';
 
@@ -49,11 +52,19 @@ void main() {
     uuid = FakeUuidGenerator();
     owner = GPSettingsOwnerContext(database: db, logger: logger);
     await owner.load();
-    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner);
-    categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner);
-    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner);
-    seeder = CategorySeeder(clock: clock, dao: CategoryDao(db), ownerContext: owner, uuidGenerator: uuid);
-    deviceOwner = DeviceOwnerRepositoryImpl(clock: clock, dao: DeviceOwnerDao(db), logger: logger, ownerContext: owner, seeder: seeder, uuidGenerator: uuid);
+    accounts = AccountRepositoryImpl(clock: clock, dao: AccountDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner, syncQueue: syncQueueOn(db, clock));
+    categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner, syncQueue: syncQueueOn(db, clock));
+    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: owner, syncQueue: syncQueueOn(db, clock));
+    seeder = CategorySeeder(clock: clock, dao: CategoryDao(db), ownerContext: owner, uuidGenerator: uuid, syncQueue: syncQueueOn(db, clock));
+    deviceOwner = DeviceOwnerRepositoryImpl(
+      clock: clock,
+      dao: DeviceOwnerDao(db),
+      logger: logger,
+      ownerContext: owner,
+      seeder: seeder,
+      uuidGenerator: uuid,
+      syncQueue: syncQueueOn(db, clock),
+    );
   });
 
   tearDown(() async {
@@ -62,6 +73,12 @@ void main() {
   });
 
   Future<List<Map<String, Object?>>> rows(String table) async => (await db.customSelect('SELECT * FROM $table ORDER BY id').get()).map((row) => row.data).toList();
+
+  // In the order queued: the fake v7 ids do not sort past nine as real ones do, and the fake clock never moves on its own.
+  Future<List<Map<String, Object?>>> mutations() async => (await db.customSelect('SELECT * FROM sync_mutations ORDER BY rowid').get()).map((row) => row.data).toList();
+
+  Future<String?> metadata(String key) async =>
+      (await db.customSelect('SELECT value FROM sync_metadata WHERE key = ?', variables: [Variable.withString(key)]).getSingleOrNull())?.read<String>('value');
 
   Future<String> seededId(String ownerId, CategoryType type) async {
     final seeded =
@@ -255,23 +272,27 @@ void main() {
     expect(relaunched.current, _user);
   });
 
-  group('unsynced changes (ADR-0042)', () {
-    test('untouched seeded categories are not changes', () async {
+  group('unsynced changes (ADR-0042, counted from the outbox since ADR-0044)', () {
+    test('untouched seeded categories are not changes: every device seeds the same ones', () async {
       await seeder.seedDefaults();
+      okValue(await deviceOwner.claimLocalData(_user));
 
+      expect(await mutations(), isNotEmpty);
       expect(okValue(await deviceOwner.countUnsyncedChanges()), 0);
     });
 
-    test('every account, every own category and every pending transaction counts, deleted ones too', () async {
+    test('every row the claim queued counts, deleted ones too', () async {
       await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
 
-      // 2 accounts, 1 own category, 4 transactions (one deleted).
+      // 2 accounts, 1 own category, 4 transactions (one deleted); the seeds are queued but do not count.
       expect(okValue(await deviceOwner.countUnsyncedChanges()), 7);
     });
 
     test('a renamed or deleted seed counts', () async {
       await seeder.seedDefaults();
-      final foodId = await seededId(localOwnerId, CategoryType.expense);
+      okValue(await deviceOwner.claimLocalData(_user));
+      final foodId = await seededId(_user, CategoryType.expense);
       await db.customStatement("UPDATE categories SET name = 'Ăn uống' WHERE id = ?", [foodId]);
 
       expect(okValue(await deviceOwner.countUnsyncedChanges()), 1);
@@ -279,20 +300,156 @@ void main() {
 
     test('a seed with a new icon or colour counts', () async {
       await seeder.seedDefaults();
-      final foodId = await seededId(localOwnerId, CategoryType.expense);
-      final salaryId = await seededId(localOwnerId, CategoryType.income);
+      okValue(await deviceOwner.claimLocalData(_user));
+      final foodId = await seededId(_user, CategoryType.expense);
+      final salaryId = await seededId(_user, CategoryType.income);
       await db.customStatement("UPDATE categories SET icon_key = 'coffee' WHERE id = ?", [foodId]);
       await db.customStatement("UPDATE categories SET color_key = 'teal' WHERE id = ?", [salaryId]);
 
       expect(okValue(await deviceOwner.countUnsyncedChanges()), 2);
     });
 
-    test("only the device owner's rows count", () async {
+    test('a change the server acknowledged no longer counts', () async {
+      final offline = await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      final queue = syncQueueOn(db);
+      for (final mutation in await queue.getReadyMutations(limit: 100)) {
+        if (mutation.entityId == offline.cash.id) {
+          await queue.markSending(mutation.id);
+          await queue.complete(mutation.id);
+        }
+      }
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 6);
+    });
+
+    test('a mutation that failed or conflicted still counts: the server does not have the change', () async {
+      final offline = await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      final queue = syncQueueOn(db);
+      final cash = (await queue.getReadyMutations(limit: 100)).firstWhere((mutation) => mutation.entityId == offline.cash.id);
+      await queue.markSending(cash.id);
+      await queue.markFailed(cash.id, errorCode: 'validation');
+
+      expect(okValue(await deviceOwner.countUnsyncedChanges()), 7);
+    });
+  });
+
+  group('the outbox (ADR-0044)', () {
+    test("writes on an unclaimed device queue nothing: a 'local' row has no account to push to", () async {
+      await useOffline();
+
+      expect(await mutations(), isEmpty);
+    });
+
+    test('the claim queues a create for every row the user now holds, parents first, tombstones included', () async {
+      await useOffline();
+
+      okValue(await deviceOwner.claimLocalData(_user));
+
+      final queued = await mutations();
+      final categoryCount = (await rows('categories')).length;
+      expect(queued.map((row) => row['entity_type']).toList(), [
+        ...List.filled(2, 'account'),
+        ...List.filled(categoryCount, 'category'),
+        ...List.filled(4, 'transaction'),
+      ]);
+      expect(queued.map((row) => row['operation']).toSet(), {'create'});
+      expect(queued.map((row) => row['status']).toSet(), {'pending'});
+      // The payload carries the moved row: the user's id, the re-derived seed id, the delete.
+      final payloads = [for (final row in queued) jsonDecode(row['payload_json']! as String) as Map<String, Object?>];
+      expect(payloads.map((payload) => payload['owner_id']).toSet(), {_user});
+      expect(payloads.where((payload) => payload['deleted_at'] != null), hasLength(1));
+      expect(payloads.map((payload) => payload['category_id']), contains(await seededId(_user, CategoryType.expense)));
+      expect(await metadata(DeviceOwnerDao.outboxFilledKey), '1');
+    });
+
+    test('a write after the claim queues in the same transaction, and a second one folds into it', () async {
+      final offline = await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      final before = (await mutations()).length;
+
+      final spent = okValue(
+        await transactions.createTransaction(amount: Money(25000, 'VND'), type: TransactionType.expense, occurredAt: DateTime.utc(2026, 11, 10, 8), accountId: offline.cash.id),
+      );
+      okValue(await transactions.deleteTransaction(spent.id));
+
+      final queued = await mutations();
+      expect(queued, hasLength(before + 1));
+      final mine = queued.singleWhere((row) => row['entity_id'] == spent.id);
+      expect(mine['operation'], 'create', reason: 'the server never had it, so it gets the tombstone once');
+      expect((jsonDecode(mine['payload_json']! as String) as Map<String, Object?>)['deleted_at'], isNotNull);
+    });
+
+    test('a claim whose queueing fails rolls back whole, rows and mutations alike', () async {
+      await useOffline();
+      await db.customStatement("CREATE TRIGGER refuse_queue BEFORE INSERT ON sync_mutations WHEN NEW.entity_type = 'transaction' BEGIN SELECT RAISE(ABORT, 'refused'); END");
+
+      expect(await deviceOwner.claimLocalData(_user), const GPErr<int>(GPDatabaseFailure()));
+
+      expect(await mutations(), isEmpty);
+      expect((await rows('accounts')).map((row) => row['owner_id']).toSet(), {localOwnerId});
+      expect(await metadata(DeviceOwnerDao.outboxFilledKey), isNull);
+      expect(owner.current, localOwnerId);
+    });
+
+    test('the backfill queues a device claimed before the outbox once, and never again', () async {
       await useOffline();
       okValue(await deviceOwner.claimLocalData(_user));
+      final claimed = (await mutations()).length;
+      // What a build without the outbox left: the claim done, nothing queued.
+      await db.customStatement('DELETE FROM sync_mutations');
+      await db.customStatement('DELETE FROM sync_metadata');
+
+      expect(okValue(await deviceOwner.backfillOutbox()), claimed);
+      expect(await mutations(), hasLength(claimed));
+      expect(okValue(await deviceOwner.backfillOutbox()), 0);
+      expect(await mutations(), hasLength(claimed));
+      expect(logger.records.where((record) => record.message == 'outbox backfilled').single.fields, {'user_id': _user, 'count': claimed});
+    });
+
+    test('the backfill leaves a device that queued since its claim alone', () async {
+      await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      final queued = await mutations();
+
+      expect(okValue(await deviceOwner.backfillOutbox()), 0);
+      expect(await mutations(), queued);
+    });
+
+    test('the backfill queues nothing on an unclaimed device, and leaves it to the claim', () async {
+      await useOffline();
+
+      expect(okValue(await deviceOwner.backfillOutbox()), 0);
+      expect(await mutations(), isEmpty);
+      expect(await metadata(DeviceOwnerDao.outboxFilledKey), isNull);
+    });
+
+    test('the backfill skips a transaction the server already has', () async {
+      await useOffline();
+      okValue(await deviceOwner.claimLocalData(_user));
+      final claimed = (await mutations()).length;
+      await db.customStatement('DELETE FROM sync_mutations');
+      await db.customStatement('DELETE FROM sync_metadata');
       await db.customStatement("UPDATE transactions SET sync_status = 'synced'");
 
-      expect(okValue(await deviceOwner.countUnsyncedChanges()), 3);
+      expect(okValue(await deviceOwner.backfillOutbox()), claimed - 4);
+    });
+
+    test('a seed added for a signed-in user is queued with it; a seed for an unclaimed device is not', () async {
+      await seeder.seedDefaults();
+      expect(await mutations(), isEmpty);
+
+      okValue(await deviceOwner.claimLocalData(_user));
+      final afterClaim = (await mutations()).length;
+      await db.customStatement('DELETE FROM categories WHERE id = ?', [await seededId(_user, CategoryType.income)]);
+      await db.customStatement('DELETE FROM sync_mutations');
+
+      expect(await seeder.seedDefaults(), 1);
+      final queued = await mutations();
+      expect(queued.single['entity_id'], await seededId(_user, CategoryType.income));
+      expect(queued.single['operation'], 'create');
+      expect(afterClaim, greaterThan(1));
     });
   });
 
@@ -319,6 +476,7 @@ void main() {
       expect((await db.customSelect('SELECT key FROM settings').get()).map((row) => row.data['key']), isNot(contains('owner.id')));
       expect((await db.customSelect('SELECT key FROM settings').get()).map((row) => row.data['key']), contains('locale.selected'));
       expect(seen.last, isEmpty);
+      expect(await mutations(), isEmpty, reason: "the outbox was this owner's, and the reseed is local");
       expect(await db.customSelect('PRAGMA foreign_key_check').get(), isEmpty);
     });
 

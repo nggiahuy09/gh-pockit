@@ -13,6 +13,8 @@ Amended 2026-11-25 (W13 T3): the vocabulary the table leaves unchecked, and `bas
 
 Amended 2026-11-25 (W13 T4): v6 gains a partial unique index, and the queue's contract is fixed. See _Amended — T4_.
 
+Amended 2026-11-27 (W13 T5): every write path queues its mutation in its own transaction. See _Amended — T5_.
+
 ## Context
 
 - Golden rule 3 puts the entity write and its mutation in one transaction, so the outbox lives in the same database (ADR-0001).
@@ -180,3 +182,63 @@ entities apart, commit and rollback with the caller, a refused fold rolling the 
 the ready filter and order, `markSending` returning the folded payload, settling only in flight, retry timing, orphans, the count), the
 table test (a second unsent mutation refused, and allowed beside a sent one), the migration test (both indexes on the upgrade path) and
 `injector_test.dart`. With the in-flight guard removed, or with `scheduleRetry` counting again, 2 tests fail.
+
+## Amended — T5 (2026-11-27)
+
+This carries out decisions A, B, C and E of the W13 plan (locked on 2026-11-25). There is no schema change.
+
+1. **Every write enqueues inside its own transaction** (golden rule 3).
+   - **Which writes:**
+     - accounts: create, update, archive, unarchive and delete;
+     - categories: create, update and delete;
+     - transactions: create, update, delete and restore. A restore is an `update` (ADR-0017).
+   - **How:** each repository writes the row, reads it back with `findById`, and enqueues `toSyncPayload()` of what it read. The payload
+     therefore carries the stamped `updated_at` and the `version` the server checks.
+   - **Writes that gained a transaction:** an account create, archive, unarchive or delete; a category create or delete; a transaction
+     delete. Each now has one, so a failed enqueue rolls the entity write back. The repository already maps a database exception to
+     `GPDatabaseFailure`.
+2. **A `'local'` row queues nothing** (decision A). The check reads the row's own `owner_id`, not the owner context.
+   - The claim queues a `create` for every row the user now holds, in the same transaction as the move:
+     - parents first: accounts, then categories, then transactions, each in creation order;
+     - tombstones included;
+     - pending transactions only.
+   - It then writes `sync_metadata` key `outbox.filled`.
+   - A queueing failure rolls the whole claim back.
+3. **Backfill, once, at launch.** `DeviceOwnerRepository.backfillOutbox()` runs in the bootstrap, after the session restore. It queues
+   the same rows the claim does, for a device a build without the outbox had already claimed. It does nothing in three cases:
+   - the device is unclaimed;
+   - `outbox.filled` is already set;
+   - nothing to queue: a transaction already `synced` stays out.
+
+   It is not a migration step: it needs the owner and the payload mappers, and a step may use only `schema.*` (ADR-0029).
+4. **Seeds are pushed** (decision C). `CategoryDao.insertMissing` now returns the ids it wrote, and `CategorySeeder` queues a `create`
+   for each one when the owner is an account.
+5. **"Unsynced" means the outbox** (decision B). `countUnsynced` counts distinct entities with a mutation, in any state, except a
+   category that is still exactly as seeded. The sign-out wipe deletes `sync_mutations` with the rows. See ADR-0042, _Amended_.
+6. **`toSyncPayload()` lives on each row type**, in its feature's mapper (`AccountRowSyncPayload`, `CategoryRowSyncPayload`,
+   `TransactionRowSyncPayload`).
+   - The keys are the server's column names (ADR-0033). Booleans stay booleans.
+   - `transactions` leaves out `sync_status`, which the server lacks.
+7. **The benchmark seeder still writes past the repositories,** so it queues nothing (ADR-0025).
+
+**Open:**
+
+- The claim and the backfill enqueue one row at a time, a lookup plus an insert each. Their time at 50k is not measured yet (ADR-0026).
+- `resetOrphans` is not called at launch yet; nothing is ever `processing` before the W14 engine, which calls it first.
+
+**Validated by:**
+
+- The three repository suites (+16):
+  - the exact payload of a create;
+  - folding (an update, an archive and a rename fold into the create; a delete and then a restore after a send fold into one update);
+  - nothing queued for `'local'`, nothing for a write that is refused;
+  - a trigger refusing the mutation insert rolls the entity write back.
+- `device_owner_repository_impl_test.dart` (+10):
+  - the count, built from the outbox, with acknowledged, failed and seeded cases;
+  - the claim queueing parents first, payloads carrying the user and the re-derived seed;
+  - a claim whose queueing fails rolling back whole;
+  - backfill once, never again, never on an unclaimed device, skipping synced transactions;
+  - the seeder queueing for a user and not for `'local'`;
+  - the wipe emptying the outbox.
+- Two mutation checks. Without the transaction around a category delete, its rollback test fails. Without the `'local'` guard, the
+  `'local'` test fails.

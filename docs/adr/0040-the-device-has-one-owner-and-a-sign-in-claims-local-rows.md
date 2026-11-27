@@ -6,6 +6,9 @@ Accepted — 2026-11-16 (W12, the "claim `'local'`" step, started early). You ch
 2026-11-16 that the owner stays until an explicit sign-out. This carries out the step ADR-0001 named in W2 T3: claiming the rows is a
 sign-in step, not a migration. No schema change: the owner is a row in the key/value `settings` table.
 
+Amended 2026-11-27 (W13 T5, ADR-0044): the claim also queues a `create` for every row it moves, in the same transaction. A `'local'`
+row queues nothing until then.
+
 ## Context
 
 - Since W2 every synced row is written with `owner_id = 'local'` (ADR-0001). Each repository and seeder took that string as a constant in

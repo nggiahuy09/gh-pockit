@@ -20,6 +20,7 @@ import 'package:ghpockit/features/transactions/domain/entities/transaction_query
 
 import '../helpers/fixed_owner_context.dart';
 import '../helpers/recording_logger.dart';
+import '../helpers/sync_queue.dart';
 import 'benchmark_timing.dart';
 
 /// `sql` is the statement the DAO watches, read once with `get()`; `repository` is the first emission of the watch the bloc subscribes to.
@@ -98,6 +99,7 @@ void main() {
       dao: categoryDao,
       uuidGenerator: GPUuidGeneratorImpl(clock: clock),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(categoryDao.attachedDatabase),
     ).seedDefaults();
 
     final stopwatch = Stopwatch()..start();
@@ -119,6 +121,7 @@ void main() {
       logger: RecordingLogger(clock),
       uuidGenerator: GPUuidGeneratorImpl(clock: clock),
       ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(dao.attachedDatabase),
     );
     busiestAccountId = await _accountByTraffic(db, busiest: true);
     quietestAccountId = await _accountByTraffic(db, busiest: false);

@@ -90,6 +90,26 @@ extension TransactionEntityMapper on TransactionEntity {
   );
 }
 
+extension TransactionRowSyncPayload on TransactionRow {
+  /// The row as the server's `transactions` names it (ADR-0033): every column but `sync_status`, which the server does not have.
+  Map<String, Object?> toSyncPayload() => {
+    'id': id,
+    'owner_id': ownerId,
+    'type': type,
+    'account_id': accountId,
+    'destination_account_id': destinationAccountId,
+    'category_id': categoryId,
+    'amount_minor': amountMinor,
+    'currency_code': currencyCode,
+    'occurred_at': occurredAt,
+    'note': note,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'version': version,
+    'deleted_at': deletedAt,
+  };
+}
+
 /// Goes to the log, so a reason names a check and never a value from the row (golden rule 9).
 enum TransactionMapperReason {
   unknownType,

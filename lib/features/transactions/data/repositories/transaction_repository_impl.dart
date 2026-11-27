@@ -2,11 +2,15 @@ import 'dart:async';
 
 import '../../../../core/database/database.dart';
 import '../../../../core/database/owner_context.dart';
+import '../../../../core/database/owner_id.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/extensions/stream_extension.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/money/money.dart';
+import '../../../../core/sync/sync_entity_type.dart';
+import '../../../../core/sync/sync_operation.dart';
+import '../../../../core/sync/sync_queue_repository.dart';
 import '../../../../core/utils/clock.dart';
 import '../../../../core/utils/uuid_generator.dart';
 import '../../../accounts/data/mapper/account_mapper.dart';
@@ -32,17 +36,20 @@ final class TransactionRepositoryImpl implements TransactionRepository {
     required GPAppLogger logger,
     required GPUuidGenerator uuidGenerator,
     required GPOwnerContext ownerContext,
+    required GPSyncQueueRepository syncQueue,
   }) : _clock = clock,
        _dao = dao,
        _logger = logger,
        _uuidGenerator = uuidGenerator,
-       _ownerContext = ownerContext;
+       _ownerContext = ownerContext,
+       _syncQueue = syncQueue;
 
   final GPClock _clock;
   final TransactionDao _dao;
   final GPAppLogger _logger;
   final GPUuidGenerator _uuidGenerator;
   final GPOwnerContext _ownerContext;
+  final GPSyncQueueRepository _syncQueue;
 
   /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
   String get _ownerId => _ownerContext.current;
@@ -160,6 +167,7 @@ final class TransactionRepositoryImpl implements TransactionRepository {
             if (refused != null) return GPErr(refused);
 
             await _dao.insertTransaction(value.toInsert(_ownerId));
+            await _enqueue(value.id, GPSyncOperation.create);
             return GPOk(value);
           });
         } on Exception catch (error, stackTrace) {
@@ -179,7 +187,10 @@ final class TransactionRepositoryImpl implements TransactionRepository {
         if (refused != null) return GPErr(refused);
 
         final written = await _dao.updateTransaction(stamped.id, patch: stamped.toPatch(), baseVersion: transaction.version, now: now.millisecondsSinceEpoch);
-        if (written == 1) return GPOk(stamped);
+        if (written == 1) {
+          await _enqueue(stamped.id, GPSyncOperation.update);
+          return GPOk(stamped);
+        }
 
         // 0 rows: a stale version, a tombstone, or no row. Asked inside the transaction, so the answer still holds when it is returned.
         final current = await _dao.findById(stamped.id);
@@ -195,10 +206,13 @@ final class TransactionRepositoryImpl implements TransactionRepository {
   @override
   Future<GPResult<void>> deleteTransaction(String id) async {
     try {
-      final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
-      if (written == 0) return const GPErr(GPNotFoundFailure());
+      return await _dao.transaction(() async {
+        final written = await _dao.softDelete(id, now: _clock.nowEpochMillis());
+        if (written == 0) return const GPErr(GPNotFoundFailure());
 
-      return const GPOk(null);
+        await _enqueue(id, GPSyncOperation.delete);
+        return const GPOk(null);
+      });
     } on Exception catch (error, stackTrace) {
       return _databaseFailure(error: error, stackTrace: stackTrace, id: id, message: 'transaction delete failed');
     }
@@ -216,6 +230,8 @@ final class TransactionRepositoryImpl implements TransactionRepository {
         if (refused != null) return GPErr(refused);
 
         await _dao.restore(id, now: _clock.nowEpochMillis());
+        // A restore is an update that clears `deleted_at` (ADR-0017).
+        await _enqueue(id, GPSyncOperation.update);
         return const GPOk(null);
       });
     } on Exception catch (error, stackTrace) {
@@ -336,6 +352,14 @@ final class TransactionRepositoryImpl implements TransactionRepository {
     if (destinationCurrency != currency) return const GPValidationFailure(GPValidationCode.transactionTransferCurrenciesDiffer);
 
     return null;
+  }
+
+  /// Inside the write's transaction (golden rule 3), from the row as written. A `'local'` row has no account to push to; the claim queues it.
+  Future<void> _enqueue(String id, GPSyncOperation operation) async {
+    final row = await _dao.findById(id);
+    if (row == null || row.ownerId == localOwnerId) return;
+
+    await _syncQueue.enqueue(entityType: GPSyncEntityType.transaction, entityId: id, operation: operation, payload: row.toSyncPayload());
   }
 
   void _logRejectedRow(TransactionMapperReason reason, String id) =>

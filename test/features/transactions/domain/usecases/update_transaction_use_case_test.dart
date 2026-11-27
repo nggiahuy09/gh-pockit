@@ -19,6 +19,7 @@ import '../../../../helpers/fake_uuid_generator.dart';
 import '../../../../helpers/fixed_owner_context.dart';
 import '../../../../helpers/recording_logger.dart';
 import '../../../../helpers/results.dart';
+import '../../../../helpers/sync_queue.dart';
 
 const _mismatch = GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionCategoryTypeMismatch));
 const _ahead = GPErr<TransactionEntity>(GPValidationFailure(GPValidationCode.transactionDateInFuture));
@@ -37,8 +38,15 @@ void main() {
     final uuid = FakeUuidGenerator();
     final logger = RecordingLogger(clock);
 
-    categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
-    transactions = TransactionRepositoryImpl(clock: clock, dao: TransactionDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext());
+    categories = CategoryRepositoryImpl(clock: clock, dao: CategoryDao(db), logger: logger, uuidGenerator: uuid, ownerContext: FixedOwnerContext(), syncQueue: syncQueueOn(db));
+    transactions = TransactionRepositoryImpl(
+      clock: clock,
+      dao: TransactionDao(db),
+      logger: logger,
+      uuidGenerator: uuid,
+      ownerContext: FixedOwnerContext(),
+      syncQueue: syncQueueOn(db),
+    );
     updateTransaction = UpdateTransactionUseCase(categories, clock, transactions);
 
     for (final id in ['acc-cash', 'acc-bank']) {
