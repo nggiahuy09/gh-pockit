@@ -1582,7 +1582,7 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 | T4   | `SyncQueueRepository`: enqueue / getReadyMutations / complete / scheduleRetry / markConflict ✅ Done (25/11, làm sớm) — `GPSyncQueueRepository` + bản Drift, thêm `markSending` / `markFailed` / `resetOrphans` / `countUnsyncedEntities`; v6 có thêm index unique một phần "mỗi entity tối đa một mutation chưa gửi"; amendment ADR-0044; chi tiết ở _W13 T4_ dưới |
 | T5   | **Nối outbox vào repository write path**: insert entity + insert mutation trong CÙNG `database.transaction()` — kể cả `sync_status = 'pending'`; backfill mutation cho mọi row `pending` tạo trước W13 (ADR-0009) ✅ Done (27/11, làm sớm) — 12 đường ghi + seeder + claim enqueue trong cùng transaction, `'local'` không enqueue, backfill một lần lúc mở app, đếm đăng xuất theo outbox, wipe xoá outbox; amendment ADR-0044 / ADR-0042 / ADR-0040; chi tiết ở _W13 T5_ dưới |
 | T6   | Test invariant: entity tồn tại & cần sync ⇒ mutation tồn tại. Test crash giữa chừng (throw trong transaction → rollback cả hai) ✅ Done (27/11, làm sớm) — random walk 3 × 300 bước kiểm bất biến sau mỗi bước, crash giữa mutation và commit trên cả 14 đường ghi; hàng đợi giữ thứ tự mutation trong từng entity (bạn chốt), v6 thêm index `(entity_type, entity_id)`; chi tiết ở _W13 T6_ dưới |
-| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item — lúc này mới đưa `syncStatus` lên entity, và index `(sync_status)` nếu badge cần query (ADR-0009)                                                                                                                                                                                  |
+| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item — lúc này mới đưa `syncStatus` lên entity, và index `(sync_status)` nếu badge cần query (ADR-0009) ✅ ADR + badge xong (27/11) — ADR-0045 ngắn gom A–E + badge; `TransactionSyncStatus` (`localOnly` / `pending` / `synced`) trên entity, icon trong dòng phụ chỉ khi `pending`, không index; còn: đóng băng v6 + PR; chi tiết ở _W13 Flex_ dưới |
 
 ### Kế hoạch W13 (chốt 25/11)
 
@@ -1766,6 +1766,34 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
     - `syncQueueOn` từ chối đồng hồ thứ hai.
   - 1362 xanh + 1 skip.
 - **Còn mở cho W14:** con đến hạn khi cha còn chờ (T4) — trong từng entity đã có thứ tự, giữa các entity giờ là `next_attempt_at, rowid`.
+
+### W13 Flex — ADR outbox, badge đồng bộ (27/11, ADR-0045)
+
+- [x] **ADR-0045** (ngắn): outbox để làm gì, năm quyết định A–E và badge; chi tiết cài đặt / test vẫn ở ADR-0044. ADR-0009 có ghi chú
+      _Amended_.
+- [x] **`TransactionSyncStatus`** trên `TransactionEntity` (`localOnly` / `pending` / `synced`), đọc từ dòng, chỉ để hiển thị. Mapper:
+  - dòng `'local'` → `localOnly`, bất kể cột ghi gì;
+  - giá trị lạ → `unknownSyncStatus`.
+
+  Repository trả entity với đúng trạng thái dòng sẽ đọc ra, nên entity trả về bằng entity list đọc lại. `TransactionDao.syncedSyncStatus`
+  cho W14.
+- [x] **Badge:** icon tải lên nhỏ ở đầu dòng phụ, chỉ khi `pending`, nằm trong cùng `Text.rich` nên bị cắt cùng chữ — bản `Row` đầu tiên tràn
+      5,6 px ở chữ 130% với số tiền dài (test cũ bắt được). Trình đọc màn hình: "Chưa đồng bộ" / "Not synced yet". Không index `(sync_status)`.
+- [x] Test (+10): mapper 3, entity 1, repository 1 (trả về = đọc lại cho cả tài khoản lẫn `'local'`), widget 5 (badge khi `pending`, không khi
+      `synced` / `localOnly`, nhãn theo ngôn ngữ, dòng hẹp chữ 130% không tràn).
+- [x] **Chạy thật trên simulator** (27/11, iPhone 17 Pro iOS 26.2, flavor dev, file env local-only nên không có mạng). App dev còn từ W12:
+      DB v5, đã claim cho một uid, 5 tài khoản / 11 danh mục / 105 giao dịch `pending`, chưa có outbox. Sao lưu DB trước.
+  - Mở app: migration v5 → v6 (hai bảng, ba index). Backfill xếp 121 `create` — 5 tài khoản, rồi 11 danh mục, rồi 105 giao dịch (cha trước theo
+    rowid) — và ghi `outbox.filled`. Payload đúng tên cột server, owner là uid ở cả 121, 121 key khác nhau. Trang chủ y nguyên.
+  - Danh sách giao dịch: badge trên mọi dòng, dòng phụ cắt "…" cùng badge.
+  - Vuốt xoá "Cà phê sáng" → vẫn 121 mutation, `create` của nó mang tombstone; Hoàn tác → vẫn `create`, payload là dòng sống (`updated_at`
+    khớp).
+  - Lần đầu bấm Hoàn tác trượt (snackbar đã đi, bấm vào dòng "Đổ xăng" mở form sửa, thoát không lưu) → khôi phục bản sao v5 rồi mở lại: migration +
+    backfill chạy lại cho đúng 121, rồi làm lại xoá → hoàn tác thành công. Dữ liệu simulator như trước, trừ `updated_at` của "Cà phê sáng".
+- [ ] **Còn lại:**
+  - đóng băng v6;
+  - PR `task/W13` → `dev` (nên mở draft sớm vì tuần này đụng codegen);
+  - đăng nhập / claim mới trên máy thật — cần Supabase local, chưa chạy.
 
 ## W14 · 07–13/12 🔴 Push
 

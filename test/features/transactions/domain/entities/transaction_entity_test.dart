@@ -3,6 +3,7 @@ import 'package:ghpockit/core/error/failure.dart';
 import 'package:ghpockit/core/error/result.dart';
 import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_sync_status.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
 import '../../../../helpers/results.dart';
@@ -142,6 +143,28 @@ void main() {
       expect(transaction.categoryId, 'cat-food');
       expect(transaction.note, 'Phở bò');
       expect(transaction.version, 1);
+    });
+
+    test('a new transaction waits for its push, and an edit or a new timestamp keeps the status read from the row', () {
+      final created = okValue(_build());
+      expect(created.syncStatus, TransactionSyncStatus.pending);
+
+      final synced = okValue(
+        TransactionEntity.create(
+          amount: Money(125000, 'VND'),
+          type: TransactionType.expense,
+          createdAt: _createdAt,
+          occurredAt: _occurredAt,
+          updatedAt: _updatedAt,
+          accountId: 'acc-cash',
+          id: 'tx-1',
+          syncStatus: TransactionSyncStatus.synced,
+        ),
+      );
+      expect(okValue(synced.update(note: 'Bún chả')).syncStatus, TransactionSyncStatus.synced);
+      expect(synced.withUpdatedAt(_updatedAt.add(const Duration(minutes: 1))).syncStatus, TransactionSyncStatus.synced);
+      expect(synced.withSyncStatus(TransactionSyncStatus.pending).syncStatus, TransactionSyncStatus.pending);
+      expect(created == synced, isFalse, reason: 'the status is part of equality');
     });
 
     test("does not move updatedAt — that is the repository's job", () {

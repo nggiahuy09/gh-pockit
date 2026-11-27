@@ -7,6 +7,7 @@ import 'package:ghpockit/core/money/money.dart';
 import 'package:ghpockit/features/transactions/data/daos/transaction_dao.dart';
 import 'package:ghpockit/features/transactions/data/mapper/transaction_mapper.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_sync_status.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
 import '../../../../helpers/results.dart';
@@ -27,6 +28,21 @@ void main() {
       expect(transaction.amount, Money(125000, 'VND'));
       expect(transaction.note, 'Phở bò');
       expect(transaction.version, 3);
+    });
+
+    group('sync status (ADR-0045)', () {
+      test("an account's row reads its column", () {
+        expect(_mapped(_row(ownerId: 'uid-1', syncStatus: TransactionDao.pendingSyncStatus)).syncStatus, TransactionSyncStatus.pending);
+        expect(_mapped(_row(ownerId: 'uid-1')).syncStatus, TransactionSyncStatus.synced);
+      });
+
+      test("a 'local' row is local only, whatever the column says: nothing pushes it before a claim", () {
+        expect(_mapped(_row(syncStatus: TransactionDao.pendingSyncStatus)).syncStatus, TransactionSyncStatus.localOnly);
+      });
+
+      test('an unknown value is refused, not guessed', () {
+        expect(_refusal(_row(ownerId: 'uid-1', syncStatus: 'sent')), TransactionMapperReason.unknownSyncStatus);
+      });
     });
 
     test('reads every timestamp as a UTC instant', () {
@@ -128,9 +144,11 @@ TransactionRow _row({
   String type = 'expense',
   int amountMinor = 125000,
   int? deletedAt,
+  String ownerId = localOwnerId,
+  String syncStatus = 'synced',
 }) => TransactionRow(
   id: 'tx-1',
-  ownerId: localOwnerId,
+  ownerId: ownerId,
   type: type,
   accountId: 'acc-cash',
   destinationAccountId: destinationAccountId,
@@ -143,7 +161,7 @@ TransactionRow _row({
   updatedAt: _createdAt,
   version: 3,
   deletedAt: deletedAt,
-  syncStatus: 'synced',
+  syncStatus: syncStatus,
 );
 
 TransactionEntity _mapped(TransactionRow row) => switch (row.toDomain()) {

@@ -4,6 +4,7 @@ import 'package:meta/meta.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/money/money.dart';
+import 'transaction_sync_status.dart';
 import 'transaction_type.dart';
 
 /// Validates only its own fields. Rules that need the account or category row live in the repository and the use cases (ADR-0010).
@@ -21,6 +22,7 @@ final class TransactionEntity with Equatable {
     required this.id,
     required this.note,
     required this.version,
+    required this.syncStatus,
   });
 
   /// A transfer's category and a non-transfer's destination are dropped, not refused: a form leaves them behind when the type is switched. Checks run
@@ -37,6 +39,7 @@ final class TransactionEntity with Equatable {
     required String id,
     String? note,
     int version = 1,
+    TransactionSyncStatus syncStatus = TransactionSyncStatus.pending,
   }) {
     if (!amount.isPositive) return const GPErr(GPValidationFailure(GPValidationCode.transactionAmountNotPositive));
 
@@ -61,6 +64,7 @@ final class TransactionEntity with Equatable {
         id: id,
         note: normalizedNote,
         version: version,
+        syncStatus: syncStatus,
       ),
     );
   }
@@ -84,10 +88,13 @@ final class TransactionEntity with Equatable {
   /// The server's optimistic-concurrency token: the client never increments it.
   final int version;
 
+  /// Display only: the outbox, not this field, decides what is pushed (ADR-0044).
+  final TransactionSyncStatus syncStatus;
+
   static const noteMaxLength = 500;
 
   @override
-  List<Object?> get props => [amount, type, createdAt, occurredAt, updatedAt, accountId, categoryId, destinationAccountId, id, note, version];
+  List<Object?> get props => [amount, type, createdAt, occurredAt, updatedAt, accountId, categoryId, destinationAccountId, id, note, version, syncStatus];
 
   /// Null keeps a field: clear the category and the destination with the flags, the note by passing `''`.
   GPResult<TransactionEntity> update({
@@ -113,6 +120,7 @@ final class TransactionEntity with Equatable {
     id: id,
     note: note ?? this.note,
     version: version ?? this.version,
+    syncStatus: syncStatus,
   );
 
   TransactionEntity withUpdatedAt(DateTime updatedAt) => TransactionEntity._(
@@ -127,6 +135,22 @@ final class TransactionEntity with Equatable {
     id: id,
     note: note,
     version: version,
+    syncStatus: syncStatus,
+  );
+
+  TransactionEntity withSyncStatus(TransactionSyncStatus syncStatus) => TransactionEntity._(
+    amount: amount,
+    type: type,
+    createdAt: createdAt,
+    occurredAt: occurredAt,
+    updatedAt: updatedAt,
+    accountId: accountId,
+    categoryId: categoryId,
+    destinationAccountId: destinationAccountId,
+    id: id,
+    note: note,
+    version: version,
+    syncStatus: syncStatus,
   );
 
   /// No amount or note: entities end up in logs (golden rule 9).

@@ -49,6 +49,9 @@ abstract class GPLocaleBaseTransactions {
 
   String get uncategorised;
 
+  /// The badge on a row the server does not have yet.
+  String get notSynced;
+
   String get save;
 
   String get delete;

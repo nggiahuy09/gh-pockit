@@ -23,6 +23,7 @@ import '../../domain/entities/transaction_entity.dart';
 import '../../domain/entities/transaction_list_item.dart';
 import '../../domain/entities/transaction_list_snapshot.dart';
 import '../../domain/entities/transaction_query.dart';
+import '../../domain/entities/transaction_sync_status.dart';
 import '../../domain/entities/transaction_type.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../daos/transaction_dao.dart';
@@ -53,6 +54,9 @@ final class TransactionRepositoryImpl implements TransactionRepository {
 
   /// For writes and one-shot reads; a watch follows [GPOwnerContext.watch] instead.
   String get _ownerId => _ownerContext.current;
+
+  /// What the row reads back as once written, so a returned entity equals the one the list maps (ADR-0045).
+  TransactionSyncStatus get _writtenStatus => _ownerId == localOwnerId ? TransactionSyncStatus.localOnly : TransactionSyncStatus.pending;
 
   @override
   Stream<TransactionListSnapshot> watchTransactions(TransactionQuery query) {
@@ -155,6 +159,7 @@ final class TransactionRepositoryImpl implements TransactionRepository {
       destinationAccountId: destinationAccountId,
       id: _uuidGenerator.v7(),
       note: note,
+      syncStatus: _writtenStatus,
     );
 
     switch (created) {
@@ -179,7 +184,7 @@ final class TransactionRepositoryImpl implements TransactionRepository {
   @override
   Future<GPResult<TransactionEntity>> updateTransaction(TransactionEntity transaction) async {
     final now = _clock.nowUtc();
-    final stamped = transaction.withUpdatedAt(now);
+    final stamped = transaction.withUpdatedAt(now).withSyncStatus(_writtenStatus);
 
     try {
       return await _dao.transaction(() async {

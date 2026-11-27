@@ -19,6 +19,9 @@ base class TransactionDao extends DatabaseAccessor<GPAppDatabase> with _$Transac
   /// Public only because `toInsert` must fill the required companion field; every write overwrites it anyway.
   static const pendingSyncStatus = 'pending';
 
+  /// Written only by the sync engine, once the server has acknowledged the write (ADR-0009).
+  static const syncedSyncStatus = 'synced';
+
   /// The unary `+` keeps `owner_id` out of index selection: with no statistics SQLite would walk the owner's whole history for an account with no
   /// transactions. With it the plan is one seek per account index, pinned by the plan test. `?1` is the owner, `?2` the account.
   @visibleForTesting

@@ -8,6 +8,7 @@ import '../../../categories/presentation/category_entity_extension.dart';
 import '../../../categories/presentation/widgets/category_icon_widget.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../../domain/entities/transaction_list_item.dart';
+import '../../domain/entities/transaction_sync_status.dart';
 import '../transaction_entity_extension.dart';
 
 /// Stays pinned while its day is on screen, so the rows under it always say which day they belong to.
@@ -240,8 +241,22 @@ final class TransactionRowWidget extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    _subtitleOf(context),
+                  // Inline, not a Row: on a narrow row at a large text size the badge is cut with the text instead of overflowing it.
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        // Only a write waiting for its push: a `'local'` row has no account to wait for (ADR-0045).
+                        if (transaction.syncStatus == TransactionSyncStatus.pending)
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: EdgeInsetsDirectional.only(end: spacing.xs),
+                              child: Icon(Icons.cloud_upload_outlined, size: 14.0, color: colors.onSurfaceVariant, semanticLabel: context.l10n.transactions.notSynced),
+                            ),
+                          ),
+                        TextSpan(text: _subtitleOf(context)),
+                      ],
+                    ),
                     style: context.text.bodySmall.copyWith(color: colors.onSurfaceVariant),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

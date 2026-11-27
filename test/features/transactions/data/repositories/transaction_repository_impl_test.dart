@@ -15,6 +15,7 @@ import 'package:ghpockit/features/transactions/domain/entities/income_expense_to
 import 'package:ghpockit/features/transactions/domain/entities/transaction_entity.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_list_snapshot.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_query.dart';
+import 'package:ghpockit/features/transactions/domain/entities/transaction_sync_status.dart';
 import 'package:ghpockit/features/transactions/domain/entities/transaction_type.dart';
 
 import '../../../../helpers/fake_clock.dart';
@@ -329,6 +330,16 @@ void main() {
         'version': 1,
         'deleted_at': null,
       });
+    });
+
+    test('what a write returns equals what the list reads back: pending for an account, local only for an unclaimed device (ADR-0045)', () async {
+      final mine = okValue(await _create(signedIn, accountId: 'acc-mine', categoryId: null));
+      final local = okValue(await _create(repository));
+
+      expect(mine.syncStatus, TransactionSyncStatus.pending);
+      expect(await signedIn.watchTransaction(mine.id).first, mine);
+      expect(local.syncStatus, TransactionSyncStatus.localOnly);
+      expect(await repository.watchTransaction(local.id).first, local);
     });
 
     test('once the create is sent: a delete, then a restore, fold into one update of their own', () async {
