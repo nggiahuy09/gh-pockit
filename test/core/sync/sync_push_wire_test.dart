@@ -39,6 +39,13 @@ void main() {
       expect(() => encodePushRequest([queuedMutation('m-1')]), throwsArgumentError);
     });
 
+    test('refuses a batch longer than the server takes, and takes one exactly at it', () {
+      final full = [for (var i = 0; i < maxPushBatchSize; i++) sendableMutation('m-$i')];
+
+      expect(encodePushRequest(full), hasLength(maxPushBatchSize));
+      expect(() => encodePushRequest([...full, sendableMutation('m-over')]), throwsArgumentError);
+    });
+
     test('refuses a batch holding one mutation twice', () {
       expect(() => encodePushRequest([sendableMutation('m-1'), sendableMutation('m-1')]), throwsArgumentError);
     });

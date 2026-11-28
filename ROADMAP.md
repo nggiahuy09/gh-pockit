@@ -1804,7 +1804,7 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 | Ngày | Task                                                                                                                                                                                                                                                                                                                                             |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | T2   | `SyncRemoteDataSource.push(mutation)` qua Supabase RPC hoặc Edge Function ✅ Done (28/11, làm sớm) — `GPSyncRemoteDataSource.push(List)`: một RPC `push_mutations` mỗi lô, mỗi mutation đúng một câu trả lời `applied` / `conflict` / `rejected`, câu trả lời lạ bị từ chối cả lô, không retry, timeout 30 s; ADR-0046; chi tiết ở _W14 T2_ dưới |
-| T3   | Server-side upsert function nhận `baseVersion`, trả `applied` / `conflict`                                                                                                                                                                                                                                                                       |
+| T3   | Server-side upsert function nhận `baseVersion`, trả `applied` / `conflict` ✅ Done (28/11, làm sớm, chỉ local) — `public.push_mutations(jsonb)`: `create` chèn-nếu-chưa-có rồi rơi về update theo `payload.version`, update chỉ ghi cột `toPatch`, savepoint mỗi mutation, lỗi lớp 22 / 23 → `rejected` theo tên, tối đa 64; 34 pgTAP + chạy thật qua client; amendment ADR-0046; chi tiết ở _W14 T3_ dưới |
 | T4   | `SyncEngine.synchronize()` v0: chỉ push, xử lý result, xoá mutation khi thành công — xoá mutation + set `sync_status = 'synced'` trong cùng transaction (ADR-0009)                                                                                                                                                                               |
 | T5   | Phân loại lỗi: retryable vs non-retryable, map sang `Failure`                                                                                                                                                                                                                                                                                    |
 | T6   | Test push với fake remote: success / network error / 4xx                                                                                                                                                                                                                                                                                         |
@@ -1840,6 +1840,30 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
       DI 1 (+ local-only không đăng ký). Format / analyze sạch; 1398 xanh + 1 skip.
 - **Cho T3:** hàm trả mảng JSON, mỗi phần tử input một object; bắt lỗi constraint theo từng mutation (savepoint), không thì một dòng hỏng biến cả
   lô thành lỗi transport. `deviceId` của §6.2 chưa gửi — chưa gì trên server đọc nó.
+
+### W14 T3 — hàm push trên server (28/11, làm sớm, amendment ADR-0046)
+
+- [x] **`public.push_mutations(mutations jsonb) returns jsonb`**, migration `20261128035216_push_mutations.sql`. `SECURITY INVOKER`, EXECUTE chỉ cho
+      `authenticated`; không token → `42501`. Một thân hàm: caller không có quyền vào schema `private`.
+- [x] **Hỏng cả lô** (không ghi gì): không phải mảng, phần tử thiếu `mutation_id`, quá 64 phần tử, và mọi lỗi ngoài lớp 22 / 23 (deadlock, bị huỷ —
+      đáng retry, không đáng từ chối). Client cũng chặn > 64 (`maxPushBatchSize`, +1 test).
+- [x] **Khoá owner lấy trước mutation đầu tiên** (ADR-0036).
+- [x] **Envelope kiểm trước khi ghi:** `unknown_entity_type`, `unknown_operation`, `invalid_payload` (không phải object, `payload.id` ≠ `entity_id`,
+      `version` không phải số, `delete` không có `deleted_at`), `owner_mismatch` — từ chối chứ không ghi đè owner.
+- [x] **`create` chèn-nếu-chưa-có** (`on conflict (owner_id, id) do nothing`); có rồi (seed máy khác đẩy trước, hoặc lần thử trước mất câu trả lời)
+      thì đi tiếp như update với base `payload.version`: dòng chưa đổi → `applied`, dòng đã đổi → `conflict`. **Update / delete:** `where version =
+      base`, chỉ ghi cột `toPatch` → cột cố định giữ giá trị server (seed giữ `created_at` của máy đầu). Không dòng nào → `conflict` + `remote`
+      nếu caller có dòng đó, không thì `not_found` (kể cả id của owner khác).
+- [x] **Savepoint mỗi mutation:** lớp 23 → tên constraint, hoặc `<bảng>_<cột>_not_null`; lớp 22 → `invalid_payload`. Chỉ mutation đó rollback.
+- [x] Cùng một phép kiểm version cho mọi entity — LWW / server-wins của §7 là cách client xử lý `conflict` (W16).
+- [x] Test: `push_mutations.test.sql` 34 assertion (tổng server 122). **Có cắn:** bỏ kiểm version → 4 đỏ; bỏ savepoint → dừng ở 22/34; bỏ kiểm owner →
+      dừng ở 29; bỏ kiểm tombstone → 2 đỏ; update ghi `created_at` → test seed đỏ.
+- [x] **Chạy thật một lần** trên stack local (`supabase start`) qua `GPSupabaseSyncRemoteDataSource` với user local mới đăng ký: 2 create
+      `applied`, transfer thiếu đích → `transactions_destination_iff_transfer`; update → v2, update tiếp ở v1 → `conflict` có `name = Pocket`;
+      đăng xuất → `42501`. Không giữ thành test (CI không có stack cho `flutter test`).
+- **Chưa làm:** đẩy migration lên `pockit-dev` (`supabase db push --remote`) — đẩy rồi thì đóng băng, đợi bạn duyệt.
+- **Cho T4:** trước W18 (`processed_mutations`), `update` gửi lại sau khi lần đầu đã tới server sẽ `conflict` với chính nó (base đã tăng);
+  `create` gửi lại thì `applied` lần nữa. Engine nên coi `conflict` mà `remote` khớp payload là đã áp dụng — hoặc để W18.
 
 ## W15 · 14–20/12 🔴 Pull
 

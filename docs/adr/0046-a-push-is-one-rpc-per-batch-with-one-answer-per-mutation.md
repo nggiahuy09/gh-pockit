@@ -5,6 +5,8 @@
 Accepted — 2026-11-28 (W14 T2, started early). This fixes the client half of the push contract. T3 writes the Postgres function that
 answers it and amends this ADR with the server's rules (owner lock, `not_found`, how a rejection is caught per mutation).
 
+Amended 2026-11-28 (W14 T3): the server function. See _Amended — T3_ at the end.
+
 ## Context
 
 ADR-0037 §3 already chose the transport: push and pull are Postgres functions called over RPC, `SECURITY INVOKER`, so RLS (ADR-0034)
@@ -62,3 +64,53 @@ how many mutations a request carries, what each answer looks like, and what the 
   need logic on the server.
 - **An Edge Function.** Nothing here needs more than SQL, and ADR-0037 keeps Edge Functions for what Postgres cannot do.
 - **Completing the mutations a malformed response did answer.** Half-reading an answer this build does not understand is a guess.
+
+## Amended — T3 (2026-11-28)
+
+`public.push_mutations(mutations jsonb) returns jsonb` (migration `20261128035216_push_mutations.sql`) answers the contract above.
+
+1. **Who may call it.** `SECURITY INVOKER`, `search_path = ''`; EXECUTE revoked from `public` and `anon`, granted to `authenticated`.
+   A caller with no `auth.uid()` gets `42501` before anything is read. Everything is one function body: the caller has no usage on
+   `private`, so a helper there could not be called.
+2. **What fails the whole call** (nothing is written, the client retries or fixes the batch): not an array (`22023`), an element with no
+   `mutation_id` (`22023`, there is nothing to answer it by), more than 64 elements (`54000`, decision 6), and any error outside
+   classes 22 and 23 — a deadlock or a cancelled statement is worth a retry, not a rejection. The client refuses a batch over 64 too
+   (`maxPushBatchSize`).
+3. **The owner's lock is taken first,** before the first mutation (ADR-0036), and held to commit. The statement triggers take it again,
+   which is free.
+4. **The envelope is checked before anything is written**, each failure a `rejected` with its own code: `unknown_entity_type`,
+   `unknown_operation`, `invalid_payload` (not an object, `payload.id` ≠ `entity_id`, `version` not a number, a `delete` whose
+   `deleted_at` is not a number), and `owner_mismatch` when `payload.owner_id` is not the caller. Refused rather than rewritten: no write
+   lands under a guessed owner.
+5. **`create` inserts if absent; otherwise every operation is an update at the payload's base.**
+   - The insert is `on conflict (owner_id, id) do nothing`. When the row is already there it is a seed another device pushed first (one
+     v5 id, ADR-0045 C) or this create's own earlier attempt whose answer was lost. Either way it goes on as an update at base
+     `payload.version`: an untouched row is applied, a row that moved on conflicts. No duplicate, and no overwrite.
+   - The update is `… where owner_id = auth.uid() and id = … and version = base`. It writes only the columns the local `toPatch`
+     writes, so the fixed columns keep the server's value (a seed keeps the first device's `created_at`) and `refuse_fixed_columns` never
+     fires. `version` and `updated_at` come from the stamping trigger.
+   - A `delete` is that same update, carrying the tombstone. Nothing is hard-deleted.
+   - No row updated: the server's row, if the caller has one, comes back as `conflict` with `remote = to_jsonb(row)` (flat: uuids as
+     strings, bigints as numbers). Otherwise `rejected` / `not_found`, including another owner's id, which the caller cannot see.
+6. **One savepoint per mutation** (a `begin … exception` block). Class 23 is `rejected` with the constraint's name
+   (`transactions_account_id_owner_id_fkey`, `accounts_type_check`), or `<table>_<column>_not_null` for a missing column; class 22 is
+   `invalid_payload`. Only that mutation rolls back; the rest of the batch stands. A child whose parent was refused earlier in the batch
+   is rejected on its foreign key.
+7. **The same version check for every entity.** System-design §7 gives accounts last-write-wins and categories server-wins; that is a
+   resolution of the `conflict` answer, on the client (W16), not a different check here.
+8. **Not here yet:** the idempotency key is carried and ignored until `processed_mutations` (W18). Until then a resent `update` whose
+   first attempt landed conflicts with its own write (the base moved on), where a resent `create` is applied again (5).
+
+### How it is validated
+
+- `supabase/tests/database/push_mutations.test.sql`, 34 pgTAP assertions on the local stack: the grants and `SECURITY INVOKER`; each
+  whole-call failure; a batch of parent and children applied in order; stamps from the trigger, not the payload; the lock held;
+  update applied, stale update conflicting with the whole flat row; fixed columns unchanged; `not_found`, also for another owner's id;
+  a seed and a resent create applied, a create whose row moved on conflicting; a foreign key, a check, a missing column and a wrong
+  type each rejected by name while the rest of the batch is written; every envelope code; a delete keeping its tombstone.
+- They bite: without the version check four fail, without the savepoint the file stops at 22 of 34, without the owner check at 29,
+  without the tombstone check two fail, and an update that writes `created_at` fails the seed test.
+- End to end, once, against the local stack through the real client (`GPSupabaseSyncRemoteDataSource`, a signed-up local user): two
+  creates applied and a transfer with no destination rejected as `transactions_destination_iff_transfer`; an update applied at v2, the
+  next one at v1 a conflict carrying `name = Pocket`; signed out, `42501`. Not kept as a test: CI has no stack for `flutter test`.
+

@@ -8,9 +8,13 @@ const String pushFunctionName = 'push_mutations';
 /// Its one argument: the batch as a JSON array.
 const String pushMutationsParam = 'mutations';
 
+/// The function refuses a longer batch: one savepoint per mutation, and Postgres slows past 64 in one transaction (ADR-0046).
+const int maxPushBatchSize = 64;
+
 /// No `base_version`: the base is the payload's `version` (ADR-0044, Amended — T3), and a second copy could only disagree with it.
 /// No `owner_id` beside the payload's: the server takes the owner from the token (ADR-0034).
 List<Map<String, Object?>> encodePushRequest(List<GPSyncMutation> mutations) {
+  if (mutations.length > maxPushBatchSize) throw ArgumentError('a push carries at most $maxPushBatchSize mutations, not ${mutations.length}');
   final ids = <String>{};
   for (final mutation in mutations) {
     // Only what `markSending` returned goes out: counted as an attempt before it leaves (ADR-0044).
