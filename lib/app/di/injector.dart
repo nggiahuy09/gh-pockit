@@ -15,7 +15,9 @@ import '../../core/logging/developer_logger.dart';
 import '../../core/security/flutter_secure_store.dart';
 import '../../core/security/secure_store.dart';
 import '../../core/sync/drift_sync_queue_repository.dart';
+import '../../core/sync/supabase_sync_remote_data_source.dart';
 import '../../core/sync/sync_queue_repository.dart';
+import '../../core/sync/sync_remote_data_source.dart';
 import '../../core/theme/appearance.dart';
 import '../../core/theme/drift_theme_preference_store.dart';
 import '../../core/theme/theme_preference_store.dart';
@@ -93,7 +95,7 @@ void configureCoreDependencies([GetIt? container]) {
     );
 }
 
-/// The one place outside `data/` that names Supabase (ADR-0038).
+/// The one place outside `data/` and `core/sync/` that names Supabase (ADR-0038, ADR-0046). Local-only registers no sync remote: nothing pushes.
 void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
   final c = container ?? getIt;
 
@@ -131,7 +133,8 @@ void configureAuthDependencies(GPBackendConfig config, [GetIt? container]) {
         )
         ..registerLazySingleton<AuthRepository>(
           () => SupabaseAuthRepository(auth: c.get<SupabaseClient>().auth, keeper: c.get<SupabaseSessionKeeper>(), logger: c.get<GPAppLogger>()),
-        );
+        )
+        ..registerLazySingleton<GPSyncRemoteDataSource>(() => GPSupabaseSyncRemoteDataSource(rest: c.get<SupabaseClient>().rest));
     case GPLocalOnlyBackendConfig():
       c.registerLazySingleton<AuthRepository>(LocalOnlyAuthRepository.new);
     case GPInvalidBackendConfig(:final problem):

@@ -1575,14 +1575,14 @@ currency_code`, `categories.type` (ADR-0010); `categories.name_key`, `is_system`
 
 ## W13 · 30/11–06/12 🔴 Outbox
 
-| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| T2   | Drift table `sync_mutations` + index `(status, next_attempt_at)`; table `sync_metadata` ✅ Done (25/11, làm sớm) — schema v6; `next_attempt_at` NOT NULL, `idempotency_key` UNIQUE, không `owner_id`; `sync_metadata` tách khỏi `settings`; ADR-0044; chi tiết ở _W13 T2_ dưới                                                                                      |
-| T3   | `SyncMutation` model: entityType, entityId, operation, payload*json, idempotencyKey, attemptCount, status ✅ Done (25/11, làm sớm) — `GPSyncMutation` + ba enum trong `core/sync/`, mapper từ chối giá trị lạ, luật gộp `followedBy`, `baseVersion` = `version` trong payload; amendment ADR-0044; chi tiết ở \_W13 T3* dưới                                        |
-| T4   | `SyncQueueRepository`: enqueue / getReadyMutations / complete / scheduleRetry / markConflict ✅ Done (25/11, làm sớm) — `GPSyncQueueRepository` + bản Drift, thêm `markSending` / `markFailed` / `resetOrphans` / `countUnsyncedEntities`; v6 có thêm index unique một phần "mỗi entity tối đa một mutation chưa gửi"; amendment ADR-0044; chi tiết ở _W13 T4_ dưới |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T2   | Drift table `sync_mutations` + index `(status, next_attempt_at)`; table `sync_metadata` ✅ Done (25/11, làm sớm) — schema v6; `next_attempt_at` NOT NULL, `idempotency_key` UNIQUE, không `owner_id`; `sync_metadata` tách khỏi `settings`; ADR-0044; chi tiết ở _W13 T2_ dưới                                                                                                                                                                                                  |
+| T3   | `SyncMutation` model: entityType, entityId, operation, payload*json, idempotencyKey, attemptCount, status ✅ Done (25/11, làm sớm) — `GPSyncMutation` + ba enum trong `core/sync/`, mapper từ chối giá trị lạ, luật gộp `followedBy`, `baseVersion` = `version` trong payload; amendment ADR-0044; chi tiết ở \_W13 T3* dưới                                                                                                                                                    |
+| T4   | `SyncQueueRepository`: enqueue / getReadyMutations / complete / scheduleRetry / markConflict ✅ Done (25/11, làm sớm) — `GPSyncQueueRepository` + bản Drift, thêm `markSending` / `markFailed` / `resetOrphans` / `countUnsyncedEntities`; v6 có thêm index unique một phần "mỗi entity tối đa một mutation chưa gửi"; amendment ADR-0044; chi tiết ở _W13 T4_ dưới                                                                                                             |
 | T5   | **Nối outbox vào repository write path**: insert entity + insert mutation trong CÙNG `database.transaction()` — kể cả `sync_status = 'pending'`; backfill mutation cho mọi row `pending` tạo trước W13 (ADR-0009) ✅ Done (27/11, làm sớm) — 12 đường ghi + seeder + claim enqueue trong cùng transaction, `'local'` không enqueue, backfill một lần lúc mở app, đếm đăng xuất theo outbox, wipe xoá outbox; amendment ADR-0044 / ADR-0042 / ADR-0040; chi tiết ở _W13 T5_ dưới |
-| T6   | Test invariant: entity tồn tại & cần sync ⇒ mutation tồn tại. Test crash giữa chừng (throw trong transaction → rollback cả hai) ✅ Done (27/11, làm sớm) — random walk 3 × 300 bước kiểm bất biến sau mỗi bước, crash giữa mutation và commit trên cả 14 đường ghi; hàng đợi giữ thứ tự mutation trong từng entity (bạn chốt), v6 thêm index `(entity_type, entity_id)`; chi tiết ở _W13 T6_ dưới |
-| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item — lúc này mới đưa `syncStatus` lên entity, và index `(sync_status)` nếu badge cần query (ADR-0009) ✅ ADR + badge xong (27/11) — ADR-0045 ngắn gom A–E + badge; `TransactionSyncStatus` (`localOnly` / `pending` / `synced`) trên entity, icon trong dòng phụ chỉ khi `pending`, không index; còn: đóng băng v6 + PR; chi tiết ở _W13 Flex_ dưới |
+| T6   | Test invariant: entity tồn tại & cần sync ⇒ mutation tồn tại. Test crash giữa chừng (throw trong transaction → rollback cả hai) ✅ Done (27/11, làm sớm) — random walk 3 × 300 bước kiểm bất biến sau mỗi bước, crash giữa mutation và commit trên cả 14 đường ghi; hàng đợi giữ thứ tự mutation trong từng entity (bạn chốt), v6 thêm index `(entity_type, entity_id)`; chi tiết ở _W13 T6_ dưới                                                                               |
+| Flex | ADR _Use outbox for local mutations_. `sync_status` badge trên transaction item — lúc này mới đưa `syncStatus` lên entity, và index `(sync_status)` nếu badge cần query (ADR-0009) ✅ ADR + badge xong (27/11) — ADR-0045 ngắn gom A–E + badge; `TransactionSyncStatus` (`localOnly` / `pending` / `synced`) trên entity, icon trong dòng phụ chỉ khi `pending`, không index; còn: đóng băng v6 + PR; chi tiết ở _W13 Flex_ dưới                                                |
 
 ### Kế hoạch W13 (chốt 25/11)
 
@@ -1706,6 +1706,7 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 
   Ghi xong thì đọc lại dòng (`findById`) và enqueue `toSyncPayload()` của chính dòng đó. Bảy đường trước đây chưa có transaction thì giờ có;
   enqueue hỏng → rollback lần ghi entity.
+
 - [x] **`toSyncPayload()` trên từng Row** (mapper của từng feature): tên cột của server, bool giữ là bool; `transactions` bỏ `sync_status`.
 - [x] **`'local'` không enqueue** (A), xét theo `owner_id` của dòng. **Claim** enqueue `create` cho mọi dòng của user trong cùng transaction:
       cha trước (accounts → categories → transactions, theo thứ tự tạo), kể cả tombstone, rồi ghi `sync_metadata` `outbox.filled`. Enqueue hỏng →
@@ -1722,6 +1723,7 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 
   Helper `syncQueueOn(db)`: một queue mỗi DB, giống app. Bỏ transaction quanh xoá danh mục → test rollback đỏ; bỏ guard `'local'` → test
   `'local'` đỏ. Format / analyze sạch; 1334 xanh + 1 skip.
+
 - **Còn mở:**
   - Claim / backfill enqueue từng dòng (một lần đọc + một lần ghi), chưa đo ở 50k (ADR-0026).
   - `resetOrphans` chưa gọi lúc mở app — chưa gì `processing` trước engine W14.
@@ -1737,6 +1739,7 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
   - không mutation nào trỏ vào dòng không tồn tại.
 
   Walk tự kiểm đã đi qua đủ 15 loại bước.
+
 - [x] **Crash giữa mutation và commit** (`outbox_crash_test.dart`): queue giả ghi thật rồi ném lỗi — bước cuối trong transaction của mỗi lần
       ghi. Cả 12 đường ghi + seeder + claim: sáu bảng y nguyên từng dòng. `Error` (bug) cũng rollback; lần ghi đối chứng không crash thì commit cả
       hai. Bỏ transaction quanh archive / unarchive / delete account → đúng 3 test đó đỏ.
@@ -1777,6 +1780,7 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 
   Repository trả entity với đúng trạng thái dòng sẽ đọc ra, nên entity trả về bằng entity list đọc lại. `TransactionDao.syncedSyncStatus`
   cho W14.
+
 - [x] **Badge:** icon tải lên nhỏ ở đầu dòng phụ, chỉ khi `pending`, nằm trong cùng `Text.rich` nên bị cắt cùng chữ — bản `Row` đầu tiên tràn
       5,6 px ở chữ 130% với số tiền dài (test cũ bắt được). Trình đọc màn hình: "Chưa đồng bộ" / "Not synced yet". Không index `(sync_status)`.
 - [x] Test (+10): mapper 3, entity 1, repository 1 (trả về = đọc lại cho cả tài khoản lẫn `'local'`), widget 5 (badge khi `pending`, không khi
@@ -1797,20 +1801,45 @@ created_at`; `isUnattempted`; `coalescedWith(operation, payload)` giữ id / key
 
 ## W14 · 07–13/12 🔴 Push
 
-| Ngày | Task                                                                                                                                                               |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| T2   | `SyncRemoteDataSource.push(mutation)` qua Supabase RPC hoặc Edge Function                                                                                          |
-| T3   | Server-side upsert function nhận `baseVersion`, trả `applied` / `conflict`                                                                                         |
-| T4   | `SyncEngine.synchronize()` v0: chỉ push, xử lý result, xoá mutation khi thành công — xoá mutation + set `sync_status = 'synced'` trong cùng transaction (ADR-0009) |
-| T5   | Phân loại lỗi: retryable vs non-retryable, map sang `Failure`                                                                                                      |
-| T6   | Test push với fake remote: success / network error / 4xx                                                                                                           |
-| Flex | Manual test: tắt mạng → tạo 3 transaction → bật mạng → bấm sync → check bảng Supabase                                                                              |
+| Ngày | Task                                                                                                                                                                                                                                                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T2   | `SyncRemoteDataSource.push(mutation)` qua Supabase RPC hoặc Edge Function ✅ Done (28/11, làm sớm) — `GPSyncRemoteDataSource.push(List)`: một RPC `push_mutations` mỗi lô, mỗi mutation đúng một câu trả lời `applied` / `conflict` / `rejected`, câu trả lời lạ bị từ chối cả lô, không retry, timeout 30 s; ADR-0046; chi tiết ở _W14 T2_ dưới |
+| T3   | Server-side upsert function nhận `baseVersion`, trả `applied` / `conflict`                                                                                                                                                                                                                                                                       |
+| T4   | `SyncEngine.synchronize()` v0: chỉ push, xử lý result, xoá mutation khi thành công — xoá mutation + set `sync_status = 'synced'` trong cùng transaction (ADR-0009)                                                                                                                                                                               |
+| T5   | Phân loại lỗi: retryable vs non-retryable, map sang `Failure`                                                                                                                                                                                                                                                                                    |
+| T6   | Test push với fake remote: success / network error / 4xx                                                                                                                                                                                                                                                                                         |
+| Flex | Manual test: tắt mạng → tạo 3 transaction → bật mạng → bấm sync → check bảng Supabase                                                                                                                                                                                                                                                            |
 
 > **Mang sang từ W13 T6 (27/11, bạn chốt để W14):**
+>
 > - Claim / backfill 50k còn 4,9 s (host), chủ yếu do sinh uuid: 2,6 s key v4 + 1,2 s id v7. Cần chốt cách sinh idempotency key rẻ hơn
 >   (PRNG nhanh có seed từ nguồn an toàn, hay key suy ra từ id) rồi đo lại trên máy thật.
 > - Con đến hạn khi cha còn chờ backoff: trong từng entity đã có thứ tự, giữa các entity chưa.
 > - Gọi `resetOrphans` lúc mở app, trước lần push đầu.
+
+### W14 T2 — push qua một RPC mỗi lô (28/11, làm sớm, ADR-0046)
+
+- [x] **RPC, không Edge Function** — ADR-0037 §3 đã chốt; T2 chốt hình dạng phía client, T3 viết hàm Postgres trả lời đúng hình đó.
+- [x] **Một lô mỗi request, không một mutation mỗi request** (dòng ROADMAP ghi `push(mutation)`): một khoá owner cho cả lô (ADR-0036), cha và con
+      cùng lô vào server trong một transaction, đúng thứ tự hàng đợi. Lô rỗng không gửi gì.
+- [x] **Request = dòng đã xếp hàng, không suy ra gì:** `mutation_id`, `entity_type`, `entity_id`, `operation`, `idempotency_key`, `payload`.
+  - không `base_version` (đã nằm trong `payload.version`, ADR-0044 T3);
+  - không owner riêng — server lấy từ token;
+  - chỉ mã hoá mutation `processing` (thứ `markSending` trả về), id trùng trong lô → `ArgumentError`.
+- [x] **Mỗi mutation đúng một câu trả lời:** `applied` (`server_version`, `server_updated_at` epoch ms), `conflict` (`remote` — dòng server,
+      phẳng), `rejected` (`code` — tên constraint hoặc `not_found`). Trả về theo thứ tự đã gửi.
+- [x] **Câu trả lời không hiểu → `GPMalformedPushResponse` cho cả lô:** status lạ, thiếu / thừa trường, giờ ISO, trả lời cho mutation không gửi,
+      trùng, thiếu. Chỉ ghi tên phép kiểm, không ghi body.
+- [x] **Data source không retry, không phân loại lỗi:** lỗi transport ném nguyên cho T5. Tắt retry của postgrest cho RPC (hiện nó chỉ retry
+      `GET`, nhưng không dựa vào mặc định đó). Timeout 30 s mỗi lần thử — postgrest mặc định không có, socket treo sẽ giữ khoá sync; hết giờ
+      thì abort request và ném `TimeoutException`.
+- [x] Nằm ở `core/sync/` (`GPSyncRemoteDataSource`, `GPSupabaseSyncRemoteDataSource`, `sync_push_wire.dart`, `sync_push_result.dart`), nhận
+      `SupabaseClient.rest`. DI chỉ đăng ký khi config remote.
+- [x] Test (+26): codec 19 (mã hoá, thứ tự, ba status, body kiểu `dynamic` của `jsonDecode`, 12 kiểu body hỏng, log không có dòng remote),
+      data source 6 (`MockClient`: URL + body RPC, lô rỗng, 503 một lần, lỗi DB nguyên vẹn, 200 thiếu câu trả lời, treo → abort + timeout),
+      DI 1 (+ local-only không đăng ký). Format / analyze sạch; 1398 xanh + 1 skip.
+- **Cho T3:** hàm trả mảng JSON, mỗi phần tử input một object; bắt lỗi constraint theo từng mutation (savepoint), không thì một dòng hỏng biến cả
+  lô thành lỗi transport. `deviceId` của §6.2 chưa gửi — chưa gì trên server đọc nó.
 
 ## W15 · 14–20/12 🔴 Pull
 

@@ -13,7 +13,9 @@ import 'package:ghpockit/core/logging/developer_logger.dart';
 import 'package:ghpockit/core/security/flutter_secure_store.dart';
 import 'package:ghpockit/core/security/secure_store.dart';
 import 'package:ghpockit/core/sync/drift_sync_queue_repository.dart';
+import 'package:ghpockit/core/sync/supabase_sync_remote_data_source.dart';
 import 'package:ghpockit/core/sync/sync_queue_repository.dart';
+import 'package:ghpockit/core/sync/sync_remote_data_source.dart';
 import 'package:ghpockit/core/theme/appearance.dart';
 import 'package:ghpockit/core/theme/drift_theme_preference_store.dart';
 import 'package:ghpockit/core/theme/theme_preference_store.dart';
@@ -218,6 +220,13 @@ void main() {
       expect(container.isRegistered<SupabaseAuthRepository>(), isFalse);
     });
 
+    test('a remote config binds the Supabase sync remote, behind its interface', () {
+      configureAuthDependencies(const GPRemoteBackendConfig(url: 'http://127.0.0.1:54321', publishableKey: 'sb_publishable_test'), container);
+
+      expect(container.get<GPSyncRemoteDataSource>(), isA<GPSupabaseSyncRemoteDataSource>());
+      expect(container.isRegistered<GPSupabaseSyncRemoteDataSource>(), isFalse);
+    });
+
     test('both configs bind the device owner repository, on the one owner context the repositories read', () {
       configureAuthDependencies(const GPLocalOnlyBackendConfig(), container);
 
@@ -231,6 +240,7 @@ void main() {
       expect(container.get<AuthRepository>(), isA<LocalOnlyAuthRepository>());
       expect(container.isRegistered<SupabaseClient>(), isFalse);
       expect(container.isRegistered<SupabaseSessionKeeper>(), isFalse);
+      expect(container.isRegistered<GPSyncRemoteDataSource>(), isFalse);
     });
 
     test('an invalid config never reaches DI', () {
